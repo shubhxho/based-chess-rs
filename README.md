@@ -8,7 +8,8 @@ libc call anywhere in the source — every kernel interaction is a hand-written
 `svc #0x80` trap. libSystem is linked only because Mach-O requires it for the
 process entry stub.
 
-The whole thing, network included, is a **215 KB binary**.
+The whole thing, network included, is a **248 KB binary** — 6% of the 4 MB
+budget it was built to fit in.
 
 ```
 cargo build --release
@@ -83,12 +84,34 @@ directly (`vmovl_s8`, `vmlal_s16`, `vaddvq_s32`).
 It is **additive**: the network predicts a correction to the hand-crafted
 evaluation rather than replacing it.
 
-That choice was measured, not assumed. A replacement network of this size scores
-**−165 ± 69 Elo** against the hand-crafted evaluation — 24 KB over plain
-piece-square features simply cannot represent mobility or king safety, which
-depend on where pieces can *go*, not where they are. Asking the same network for
-only the residual keeps everything the hand-crafted terms already know and spends
-the entire parameter budget on what they miss.
+That choice was measured, not assumed:
+
+| Setup | Size | vs hand-crafted baseline |
+|---|---|---|
+| Network **replaces** hand-crafted eval | 24.1 KB | **−165 ± 69 Elo** (200 games) |
+| Network **corrects** hand-crafted eval | 24.1 KB | **+55 ± 31 Elo** (500 games) |
+| ... with material-bucketed output | 24.6 KB | **+57 ± 28 Elo** (600 games) |
+
+A network of this size over plain piece-square features simply cannot represent
+mobility or king safety — those depend on where pieces can *go*, not where they
+are. A replacement network throws that knowledge away and lacks the capacity to
+rediscover it. Predicting only the residual keeps everything the hand-crafted
+terms already know and spends the whole parameter budget on what they miss.
+
+Fit against the teacher, measured on the *quantised* network:
+
+| Predictor | r | MAE | RMSE |
+|---|---|---|---|
+| hand-crafted alone | 0.9369 | 96.3 cp | 191.6 cp |
+| + network, single output | 0.9551 | 93.5 cp | 167.3 cp |
+| + network, 8 output buckets | 0.9553 | 90.3 cp | **161.3 cp** |
+
+Hidden width was swept from 16 to 128 neurons and the fit plateaus at every
+width — the bottleneck is the feature set, not capacity. That is why the last
+480 bytes went into output buckets rather than a wider hidden layer.
+
+All matches run at a fixed 20,000 nodes per move, so results do not depend on
+machine load, with colours swapped on every opening pair.
 
 ### Distillation
 
@@ -123,6 +146,7 @@ against remembered constants:
 | Oracle-verified edge cases (castling, ep pins, promotion races) | 20/20 exact |
 | Randomised fuzz, depth 4 | 119/119 exact |
 | Rust NEON inference vs NumPy reference | 60/60 identical |
+| Insufficient-material positions evaluate to exactly 0 | K vs K, K+N vs K |
 
 ```
 perft 6                       # from any position
@@ -130,8 +154,13 @@ bench 13                      # fixed node count, deterministic
 python arena.py A B 400 "nodes 20000" 8
 ```
 
-`bench 13` searches 1,321,821 nodes — bit-identical across runs, which is what
-makes it usable as a refactoring guard.
+`bench 13` is bit-identical across runs, which is what makes it usable as a
+refactoring guard: removing the redundant transposition-move legality check left
+the node count at exactly 1,321,821, proving the change was a pure speedup and
+not a behaviour change.
+
+Throughput is ~2.6 Mnps single-threaded on an M-series core; the network costs
+about 15% of that.
 
 ---
 
