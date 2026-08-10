@@ -124,6 +124,10 @@ impl Tt {
         None
     }
 
+    /// Clippy objects to the arity; the alternative is a parameter struct that
+    /// exists only to be destructured at the single call site. The names are
+    /// unambiguous and this is the hot path, so it stays as it is.
+    #[allow(clippy::too_many_arguments)]
     pub fn store(&mut self, key: u64, mv: Move, score: i32, eval: i32, depth: i32, bound: u8, ply: usize) {
         if self.clusters == 0 {
             return;
@@ -141,7 +145,7 @@ impl Tt {
             }
             // Depth is the main currency; entries from older searches are
             // discounted so a long game does not fossilise the table.
-            let age = ((self.gen as i32 + 64 - (e.gen_bound >> 2) as i32) & 0x3F) as i32;
+            let age = (self.gen as i32 + 64 - (e.gen_bound >> 2) as i32) & 0x3F;
             let val = e.depth as i32 - age * 4;
             if val < best_val {
                 best_val = val;

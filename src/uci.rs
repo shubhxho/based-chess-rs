@@ -236,11 +236,7 @@ pub fn run() -> ! {
     p.set_startpos();
     tt().resize(64);
 
-    loop {
-        let line = match read_line(&mut out) {
-            Some(l) => l,
-            None => break,
-        };
+    while let Some(line) = read_line(&mut out) {
         let mut t = Tokens::new(&line);
         let cmd = match t.next() {
             Some(c) => c,
@@ -375,11 +371,7 @@ pub fn run() -> ! {
                 // is silently wrong.
                 use crate::net::{bucket_of, features, IN as NET_IN, MAX_F};
                 const REC: usize = MAX_F * 4 + 2;
-                loop {
-                    let line = match read_line(&mut out) {
-                        Some(l) => l,
-                        None => break,
-                    };
+                while let Some(line) = read_line(&mut out) {
                     let end = line
                         .iter()
                         .position(|&c| c == 0 || c == b'\r')
@@ -393,10 +385,10 @@ pub fn run() -> ! {
                     let mut f = [0u16; MAX_F];
                     for (side, half) in [(p.stm, 0usize), (p.stm ^ 1, 1usize)] {
                         let n = features(p, side, &mut f);
-                        for i in 0..MAX_F {
+                        for (i, slot) in f.iter().enumerate() {
                             // Unused slots point at the zero row, so every
                             // record is the same width.
-                            let v = if i < n { f[i] } else { NET_IN as u16 };
+                            let v = if i < n { *slot } else { NET_IN as u16 };
                             let o = (half * MAX_F + i) * 2;
                             rec[o] = v as u8;
                             rec[o + 1] = (v >> 8) as u8;

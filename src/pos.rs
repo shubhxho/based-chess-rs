@@ -25,6 +25,7 @@ pub const BQ: u8 = 8;
 // ---------------------------------------------------------------------------
 
 #[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(test, derive(Debug))]
 pub struct Move(pub u16);
 
 pub const F_QUIET: u16 = 0;

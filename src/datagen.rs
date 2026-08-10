@@ -51,7 +51,7 @@ static GAME: SyncCell<[Rec; MAX_GAME]> = SyncCell::new([Rec { fen: [0; 96], len:
 
 /// Serialise a position as FEN. Written by hand because the trainer needs to
 /// read these with an off-the-shelf parser.
-fn write_fen(pos: &Position, buf: &mut [u8; 96]) -> usize {
+pub fn write_fen(pos: &Position, buf: &mut [u8; 96]) -> usize {
     const CH: &[u8; 12] = b"PNBRQKpnbrqk";
     let mut n = 0;
     for r in (0..8).rev() {
