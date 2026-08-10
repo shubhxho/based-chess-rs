@@ -244,7 +244,7 @@ pub fn run() -> ! {
 
         match cmd {
             b"uci" => {
-                out.s(b"id name Sable 1.1").nl();
+                out.s(b"id name Sable 1.2").nl();
                 out.s(b"id author built with Claude Code").nl();
                 out.s(b"option name Hash type spin default 64 min 1 max 4096").nl();
                 out.s(b"option name Threads type spin default 1 min 1 max 1").nl();

@@ -140,6 +140,7 @@ pub struct Undo {
     pub captured: u8,
     pub key: u64,
     pub pawn_key: u64,
+    pub np_key: u64,
     pub checkers: Bb,
 }
 
@@ -158,6 +159,9 @@ pub struct Position {
     pub ply: usize,
     pub key: u64,
     pub pawn_key: u64,
+    /// Zobrist over everything that is not a pawn. Pairs with `pawn_key` to
+    /// index the search's static-eval correction tables.
+    pub np_key: u64,
     pub checkers: Bb,
     pub stack: [Undo; MAX_PLY + 8],
     /// Position keys of the whole game, for repetition detection.
@@ -180,8 +184,18 @@ impl Position {
             ply: 0,
             key: 0,
             pawn_key: 0,
+            np_key: 0,
             checkers: 0,
-            stack: [Undo { castle: 0, ep: 64, halfmove: 0, captured: NONE, key: 0, pawn_key: 0, checkers: 0 };
+            stack: [Undo {
+                castle: 0,
+                ep: 64,
+                halfmove: 0,
+                captured: NONE,
+                key: 0,
+                pawn_key: 0,
+                np_key: 0,
+                checkers: 0,
+            };
                 MAX_PLY + 8],
             hist: [0; HIST],
             hist_len: 0,
@@ -224,6 +238,8 @@ impl Position {
         self.key ^= zob().psq[c][p][sq];
         if p == PAWN_P {
             self.pawn_key ^= zob().psq[c][p][sq];
+        } else {
+            self.np_key ^= zob().psq[c][p][sq];
         }
     }
     #[inline(always)]
@@ -235,6 +251,8 @@ impl Position {
         self.key ^= zob().psq[c][p][sq];
         if p == PAWN_P {
             self.pawn_key ^= zob().psq[c][p][sq];
+        } else {
+            self.np_key ^= zob().psq[c][p][sq];
         }
     }
     #[inline(always)]
@@ -248,6 +266,8 @@ impl Position {
         self.key ^= k;
         if p == PAWN_P {
             self.pawn_key ^= k;
+        } else {
+            self.np_key ^= k;
         }
     }
 
@@ -324,6 +344,7 @@ impl Position {
         u.halfmove = self.halfmove;
         u.key = self.key;
         u.pawn_key = self.pawn_key;
+        u.np_key = self.np_key;
         u.checkers = self.checkers;
         u.captured = NONE;
 
@@ -446,6 +467,7 @@ impl Position {
         self.halfmove = u.halfmove;
         self.key = u.key;
         self.pawn_key = u.pawn_key;
+        self.np_key = u.np_key;
         self.checkers = u.checkers;
     }
 
@@ -474,6 +496,7 @@ impl Position {
         u.halfmove = self.halfmove;
         u.key = self.key;
         u.pawn_key = self.pawn_key;
+        u.np_key = self.np_key;
         u.checkers = self.checkers;
         u.captured = NONE;
 
@@ -560,6 +583,7 @@ impl Position {
         self.ply = 0;
         self.key = 0;
         self.pawn_key = 0;
+        self.np_key = 0;
         self.hist_len = 0;
         self.root_ply = 0;
 

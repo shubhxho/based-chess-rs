@@ -123,7 +123,7 @@ fn unmake_restores_the_position_exactly() {
             let before_piece = p.piece;
             let before_color = p.color;
             let before_mailbox = p.mailbox;
-            let (key, pawn_key) = (p.key, p.pawn_key);
+            let (key, pawn_key, np_key) = (p.key, p.pawn_key, p.np_key);
             let (castle, ep, half) = (p.castle, p.ep, p.halfmove);
             let checkers = p.checkers;
 
@@ -142,6 +142,7 @@ fn unmake_restores_the_position_exactly() {
                 assert_eq!(p.mailbox, before_mailbox, "mailbox not restored");
                 assert_eq!(p.key, key, "zobrist key not restored");
                 assert_eq!(p.pawn_key, pawn_key, "pawn key not restored");
+                assert_eq!(p.np_key, np_key, "non-pawn key not restored");
                 assert_eq!((p.castle, p.ep, p.halfmove), (castle, ep, half));
                 assert_eq!(p.checkers, checkers, "checkers not restored");
             }
@@ -170,6 +171,14 @@ fn incremental_zobrist_matches_a_fresh_parse() {
             assert_eq!(
                 p.key, scratch.key,
                 "incremental key diverged from a fresh parse of the same position"
+            );
+            assert_eq!(
+                p.pawn_key, scratch.pawn_key,
+                "incremental pawn key diverged from a fresh parse of the same position"
+            );
+            assert_eq!(
+                p.np_key, scratch.np_key,
+                "incremental non-pawn key diverged from a fresh parse of the same position"
             );
             assert_eq!(p.checkers, scratch.checkers, "checkers diverged");
             if depth > 1 {

@@ -98,9 +98,19 @@ impl Tt {
             return;
         }
         let p = self.cluster(key) as *const u8;
+        // One hint per architecture, and nothing at all on the ones we have no
+        // instruction for. The probe that follows is correct either way; this
+        // only decides whether the cache line is already on its way.
+        #[cfg(target_arch = "aarch64")]
         unsafe {
             core::arch::asm!("prfm pldl1keep, [{0}]", in(reg) p, options(nostack, readonly));
         }
+        #[cfg(target_arch = "x86_64")]
+        unsafe {
+            core::arch::asm!("prefetcht0 [{0}]", in(reg) p, options(nostack, readonly));
+        }
+        #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+        let _ = p;
     }
 
     pub fn probe(&self, key: u64, ply: usize) -> Option<Hit> {

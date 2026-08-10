@@ -103,7 +103,7 @@ which was a bug in the reference.
 | Board | Bitboards, 12 piece planes plus a mailbox, incremental Zobrist |
 | Attacks | Magic bitboards; the magics are *searched* at startup, so they validate themselves |
 | Movegen | Fully legal — pins, check evasions and en-passant discovery all resolved during generation |
-| Search | Fail-soft PVS with TT, null move, LMR, singular extensions, SEE pruning |
+| Search | Fail-soft PVS with TT, null move, LMR, singular extensions, SEE and history pruning, static-eval correction history |
 | Eval | 934 -> 32 -> 1, int8, eight output buckets by material, NEON inference |
 | I/O | Raw `read` / `write` / `poll` / `mmap`, hand-rolled integer formatting |
 
@@ -137,9 +137,10 @@ iterative deepening
   └ aspiration window, widened on each fail
       └ negamax (PVS)
           ├ transposition cutoff
+          ├ static eval, corrected by the search's own past residuals
           ├ whole-node pruning: reverse futility, razoring, null move
           ├ move loop
-          │   ├ per-move pruning: late-move, futility, SEE
+          │   ├ per-move pruning: late-move, futility, SEE, history
           │   ├ extensions: check, singular (with multi-cut)
           │   └ late-move reduction + re-search ladder
           └ quiescence at the horizon
@@ -150,6 +151,26 @@ rules: TT move first, then captures classified by static exchange evaluation,
 killers, the counter-move, and finally quiets ranked by butterfly history plus
 two plies of continuation history. Every history table uses gravity updates, so
 it still responds to new information after millions of increments.
+
+### The search corrects its own evaluation
+
+A static evaluation is wrong in *patterns*, not at random: the same pawn
+structure fools it the same way every time it appears. So the search records the
+residual. Whenever a node returns a score the static evaluation did not predict —
+and the bound actually proves the disagreement, and no capture decided it — the
+difference is blended into three tables, indexed by pawn structure, by the
+non-pawn piece layout, and by the move that led to the node. Later nodes add the
+remembered residual back before pruning on it.
+
+Nothing is stored: the correction is re-derived on every probe, and the
+transposition table keeps the *uncorrected* evaluation, so a stale correction
+cannot outlive the table that produced it. The combined nudge is capped at 72
+centipawns — it is a correction, not a second evaluator.
+
+Time management follows the same instinct. The soft budget stretches while the
+root move is still changing and shrinks once it has held for several iterations,
+and stretches again when the score is falling — a score in motion is a score
+worth more time.
 
 One trap worth writing down. The 2.4 MB continuation-history table lives in a
 static of its own rather than as a field of the searcher. A global only lands in
@@ -179,10 +200,28 @@ guard. When I removed a redundant legality check on the transposition move, the
 node count stayed at exactly 1,321,821 — proof the change was a pure speedup and
 not a silent behaviour change.
 
-Throughput is around 2.6 Mnps on a single M-series core.
+Throughput is around 2.7 Mnps on a single M-series core.
 
 Matches are run at a fixed node count rather than a fixed time, so results don't
-shift with machine load, and colours are swapped on every opening pair:
+shift with machine load, and colours are swapped on every opening pair. Every
+result below is 20,000 nodes per move, self-play from randomised openings:
+
+| Opponent | Games | Score | Elo |
+|---|---|---|---|
+| 1.1 (before correction history and the time-management rework) | 800 | 0.546 | **+32 ±24** |
+| 1.1, at 100,000 nodes per move | 300 | 0.533 | +23 ±39 |
+| `sable-std` (1.0 network build) | 200 | 0.578 | +54 ±49 |
+| `sable-net` (first network release) | 200 | 0.573 | +51 ±49 |
+| `sable-hce` (same search, no network) | 200 | 0.635 | +96 ±50 |
+
+The search change also pays for itself in nodes: `bench 12` reaches the same
+depth on 759k nodes where 1.1 needed 854k, an 11% reduction.
+
+One reduction rule did not survive this process. Reducing late quiet moves
+harder when the static evaluation sat well below alpha cut the bench node count
+by a further 10% — and lost the 800-game match that tested it. Fewer nodes is
+not the same thing as more strength, which is the entire reason the matches get
+run.
 
 ```bash
 cargo test --release     # 18 unit tests, ~0.2s

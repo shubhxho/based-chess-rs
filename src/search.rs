@@ -8,9 +8,10 @@
 //!     └ aspiration window, widened on each fail
 //!         └ negamax (PVS)
 //!             ├ transposition cutoff
+//!             ├ static eval, corrected by the search's own past residuals
 //!             ├ whole-node pruning: reverse futility, razoring, null move
 //!             ├ move loop
-//!             │   ├ per-move pruning: late-move, futility, SEE
+//!             │   ├ per-move pruning: late-move, futility, SEE, history
 //!             │   ├ extensions: check, singular
 //!             │   └ late-move reduction + re-search ladder
 //!             └ quiescence at the horizon
@@ -131,9 +132,65 @@ fn cont() -> &'static mut [[[i16; CONT_N]; CONT_N]; 2] {
     unsafe { CONT.as_mut() }
 }
 
+/// Static-eval correction history.
+///
+/// The search is its own teacher here: whenever a node's true score disagrees
+/// with what the static evaluation claimed, the residual is remembered and
+/// applied the next time a position indexes the same entry.
+///
+/// Three tables, three views of the same residual -- pawn structure, the
+/// non-pawn material layout, and the move that led here. They disagree often
+/// enough to be worth keeping apart: a structure that flatters the evaluation
+/// does not flatter it in every piece configuration.
+///
+/// Units are 1/`CORR_GRAIN` centipawns. Statics of their own rather than
+/// `Searcher` fields for the same reason as `CONT`: an all-zero initialiser
+/// stays in BSS.
+const CORR_N: usize = 16_384;
+const CORR_GRAIN: i32 = 256;
+/// Ceiling on one table's entry, in centipawns times the grain. Each table is a
+/// nudge, never a replacement for the evaluation.
+const CORR_MAX: i32 = CORR_GRAIN * 48;
+/// Ceiling on the three of them combined, in centipawns.
+const CORR_CLAMP: i32 = 72;
+static CORR_PAWN: SyncCell<[[i32; CORR_N]; 2]> = SyncCell::new([[0; CORR_N]; 2]);
+static CORR_NP: SyncCell<[[i32; CORR_N]; 2]> = SyncCell::new([[0; CORR_N]; 2]);
+static CORR_CONT: SyncCell<[[i32; CONT_N]; 2]> = SyncCell::new([[0; CONT_N]; 2]);
+
+#[inline(always)]
+fn corr_pawn() -> &'static mut [[i32; CORR_N]; 2] {
+    unsafe { CORR_PAWN.as_mut() }
+}
+#[inline(always)]
+fn corr_np() -> &'static mut [[i32; CORR_N]; 2] {
+    unsafe { CORR_NP.as_mut() }
+}
+#[inline(always)]
+fn corr_cont() -> &'static mut [[i32; CONT_N]; 2] {
+    unsafe { CORR_CONT.as_mut() }
+}
+
 #[inline(always)]
 pub fn searcher() -> &'static mut Searcher {
     unsafe { SEARCHER.as_mut() }
+}
+
+/// Scale a millisecond budget by a per-mille factor. `u64::MAX` means "no
+/// limit" and has to survive scaling as itself; a saturating multiply would
+/// turn it into a large but finite budget and quietly cap an infinite search.
+#[inline(always)]
+fn scale_ms(ms: u64, per_mille: u64) -> u64 {
+    if ms == u64::MAX {
+        return ms;
+    }
+    // Overflow means the budget was already beyond anything a search will
+    // reach, so clamping it there loses nothing. (128-bit division is avoided
+    // on purpose: it would pull the unwinding personality into a binary that
+    // has no unwinder.)
+    match ms.checked_mul(per_mille) {
+        Some(v) => v / 1000,
+        None => u64::MAX,
+    }
 }
 
 /// `ln(x) * 1024`, integer only. Accurate to a few percent, which is all the
@@ -174,6 +231,53 @@ impl Searcher {
         for t in cont().iter_mut() {
             for r in t.iter_mut() {
                 r.fill(0);
+            }
+        }
+        for t in corr_pawn().iter_mut() {
+            t.fill(0);
+        }
+        for t in corr_np().iter_mut() {
+            t.fill(0);
+        }
+        for t in corr_cont().iter_mut() {
+            t.fill(0);
+        }
+    }
+
+    /// The static evaluation after the correction tables have had their say.
+    /// Pawn structure carries the most signal, so it carries the most weight.
+    #[inline(always)]
+    fn corrected_eval(&self, pos: &Position, ply: usize, raw: i32) -> i32 {
+        let stm = pos.stm;
+        let mut c = corr_pawn()[stm][pos.pawn_key as usize & (CORR_N - 1)] * 3 / 2;
+        c += corr_np()[stm][pos.np_key as usize & (CORR_N - 1)];
+        if ply > 0 {
+            let prev = self.stack[ply - 1].piece_to;
+            if prev != NO_PIECE_TO {
+                c += corr_cont()[stm][prev];
+            }
+        }
+        let c = (c / (CORR_GRAIN * 2)).clamp(-CORR_CLAMP, CORR_CLAMP);
+        (raw + c).clamp(-MATE_IN_MAX + 1, MATE_IN_MAX - 1)
+    }
+
+    /// Blend this node's residual into every table that indexed it. Deeper
+    /// searches were more certain about their score, so they move entries
+    /// further; the gravity term keeps a saturated entry responsive.
+    #[inline(always)]
+    fn update_corr(&mut self, pos: &Position, ply: usize, diff: i32, depth: i32) {
+        let weight = (depth + 1).min(16);
+        let scaled = diff.clamp(-256, 256) * CORR_GRAIN;
+        let blend = |e: &mut i32| {
+            *e = ((*e * (256 - weight) + scaled * weight) / 256).clamp(-CORR_MAX, CORR_MAX);
+        };
+        let stm = pos.stm;
+        blend(&mut corr_pawn()[stm][pos.pawn_key as usize & (CORR_N - 1)]);
+        blend(&mut corr_np()[stm][pos.np_key as usize & (CORR_N - 1)]);
+        if ply > 0 {
+            let prev = self.stack[ply - 1].piece_to;
+            if prev != NO_PIECE_TO {
+                blend(&mut corr_cont()[stm][prev]);
             }
         }
     }
@@ -263,6 +367,13 @@ impl Searcher {
 
         let mut score = 0i32;
         let max_depth = self.limits.depth.min(MAX_DEPTH);
+        // Time is spent where the answer is still in doubt. A root move that has
+        // survived several iterations rarely changes on the next one, so the
+        // soft budget shrinks as it settles and stretches while it flaps.
+        const STABILITY: [u64; 7] = [1500, 1300, 1150, 1050, 1000, 950, 900];
+        let mut stability = 0usize;
+        let mut prev_best = Move::NULL;
+        let mut prev_score = 0i32;
 
         for depth in 1..=max_depth {
             let mut delta = 10 + (score * score) / 12_000;
@@ -310,9 +421,23 @@ impl Searcher {
             if self.stop {
                 break;
             }
+            if self.best == prev_best {
+                stability = (stability + 1).min(STABILITY.len() - 1);
+            } else {
+                stability = 0;
+            }
+            prev_best = self.best;
+
+            // A score that just fell is a score that is still moving; buy time
+            // to find out where it lands, up to half as much again.
+            let fall =
+                if depth == 1 { 1000 } else { 1000 + (prev_score - score).clamp(0, 200) as u64 * 5 / 2 };
+            prev_score = score;
+
             // Starting depth d+1 costs roughly 1.5x what depth d did; if that
             // would not fit in the soft budget, stop while we are ahead.
-            if !self.limits.infinite && self.limits.movetime == 0 && self.elapsed() * 3 / 2 >= self.soft {
+            let soft = scale_ms(scale_ms(self.soft, STABILITY[stability]), fall);
+            if !self.limits.infinite && self.limits.movetime == 0 && self.elapsed() * 3 / 2 >= soft {
                 break;
             }
             if self.limits.movetime > 0 && self.elapsed() >= self.soft {
@@ -453,20 +578,24 @@ impl Searcher {
         } else {
             evaluate(pos)
         };
+        // What the correction table makes of it. `raw_eval` is what goes into
+        // the transposition table -- the correction is re-derived on every
+        // probe, so storing it would freeze a stale version of it.
+        let corrected = if in_check { -INF } else { self.corrected_eval(pos, ply, raw_eval) };
         // The table's score is a better estimate than the static eval when it
         // is on the right side of it.
         let eval = if !in_check
             && tt_bound != BOUND_NONE
             && tt_score.abs() < MATE_IN_MAX
-            && ((tt_bound == BOUND_LOWER && tt_score > raw_eval)
-                || (tt_bound == BOUND_UPPER && tt_score < raw_eval)
+            && ((tt_bound == BOUND_LOWER && tt_score > corrected)
+                || (tt_bound == BOUND_UPPER && tt_score < corrected)
                 || tt_bound == BOUND_EXACT)
         {
             tt_score
         } else {
-            raw_eval
+            corrected
         };
-        self.stack[ply].eval = raw_eval;
+        self.stack[ply].eval = corrected;
         self.stack[ply].in_check = in_check;
 
         // "Improving": is our position better than it was two plies ago? If
@@ -474,9 +603,9 @@ impl Searcher {
         let improving = if in_check {
             false
         } else if ply >= 2 && self.stack[ply - 2].eval != -INF {
-            raw_eval > self.stack[ply - 2].eval
+            corrected > self.stack[ply - 2].eval
         } else if ply >= 4 && self.stack[ply - 4].eval != -INF {
-            raw_eval > self.stack[ply - 4].eval
+            corrected > self.stack[ply - 4].eval
         } else {
             true
         };
@@ -580,6 +709,14 @@ impl Searcher {
                     if lmr_depth < 7 && !see_ge(pos, m, -25 * lmr_depth * lmr_depth) {
                         continue;
                     }
+                    // History pruning: a move the tables have watched fail this
+                    // often, this close to the horizon, is not worth a node.
+                    if lmr_depth <= 3
+                        && (self.history_of(pos, m, ply, moved, to, false) as i32)
+                            < -3200 * lmr_depth.max(1)
+                    {
+                        continue;
+                    }
                 } else if depth < 8 && !see_ge(pos, m, -95 * depth) {
                     continue;
                 }
@@ -655,6 +792,11 @@ impl Searcher {
                     if noisy {
                         r -= 1024;
                     }
+                    // No table move means the ordering here is guesswork, so
+                    // the tail of the list is worth even less than usual.
+                    if tt_move.is_null() {
+                        r += 1024;
+                    }
                     // Moves with a good history are reduced less, and vice
                     // versa; this is where ordering pays for the pruning.
                     let h = self.history_of(pos, m, ply, moved, to, noisy) as i32;
@@ -716,6 +858,18 @@ impl Searcher {
 
         if excluded.is_null() {
             tt().store(pos.key, best_move, best, raw_eval, depth, bound, ply);
+            // Feed the residual back, but only from nodes that actually measured
+            // it: not in check, not decided by a capture (whose score says more
+            // about material than about the structure), and not from a bound
+            // that points the wrong way to contradict the static eval.
+            if !in_check
+                && best.abs() < MATE_IN_MAX
+                && (best_move.is_null() || !pos_is_noisy(pos, best_move))
+                && !(bound == BOUND_LOWER && best <= corrected)
+                && !(bound == BOUND_UPPER && best >= corrected)
+            {
+                self.update_corr(pos, ply, best - corrected, depth);
+            }
         }
         best
     }
@@ -758,13 +912,16 @@ impl Searcher {
 
         let mut best;
         let raw_eval;
+        let stand;
         if in_check {
             // In check there is no stand-pat: every evasion must be searched.
             best = -INF;
             raw_eval = -INF;
+            stand = -INF;
         } else {
             raw_eval = if tt_eval != i32::MIN { tt_eval } else { evaluate(pos) };
-            best = raw_eval;
+            stand = self.corrected_eval(pos, ply, raw_eval);
+            best = stand;
             if best >= beta {
                 tt().store(pos.key, Move::NULL, best, raw_eval, 0, BOUND_LOWER, ply);
                 return best;
@@ -790,7 +947,7 @@ impl Searcher {
                 // alpha, so the whole branch is pointless.
                 let gain = if m.is_ep() { SEE_VAL[PAWN_P] } else { SEE_VAL[pos.piece_at(m.to()) as usize] }
                     + if m.is_promo() { SEE_VAL[m.promo()] - SEE_VAL[PAWN_P] } else { 0 };
-                if raw_eval + gain + 150 < alpha {
+                if stand + gain + 150 < alpha {
                     continue;
                 }
                 if !see_ge(pos, m, 0) {
