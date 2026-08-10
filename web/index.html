@@ -241,6 +241,14 @@ function newGame(color) {
   document.querySelectorAll('.sq-last').forEach(e => e.classList.remove('sq-last'));
   if (color === 'b') engineMove();
 }
+fetch('/api/meta').then(r => r.json()).then(j => {
+  const name = (j.engine || []).find(s => s.startsWith('name '));
+  if (name) {
+    const [n, v] = name.slice(5).split(' ');
+    document.querySelector('h1').innerHTML = `${n.toUpperCase()} <span class="v">${v || ''}</span>`;
+  }
+}).catch(() => {});
+
 $id('new').onclick = () => newGame('w');
 $id('flip').onclick = () => newGame('b');
 $id('undo').onclick = () => {

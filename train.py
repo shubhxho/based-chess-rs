@@ -199,13 +199,26 @@ def main():
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else None
     epochs = int(sys.argv[2]) if len(sys.argv) > 2 else 15
 
+    seed = int(os.environ.get("SEED", "42"))
+    np.random.seed(seed)
+    mx.random.seed(seed)
+
     fens, sc, wdl = read_labels(shards, limit)
     feats = dump_features(fens, f"data/feat_{limit or 'all'}.bin")
     n = len(sc)
     us = feats[:, :MAX_F].astype(np.int32)
     them = feats[:, MAX_F : 2 * MAX_F].astype(np.int32)
     buckets = feats[:, 2 * MAX_F].astype(np.int32)
-    print(f"{n} positions, {epochs} epochs, {feats.nbytes/1e6:.0f} MB of features")
+    print(f"{n} positions, {epochs} epochs, {feats.nbytes/1e6:.0f} MB of features, seed {seed}")
+
+    # Held-out positions never touched by the optimiser. The exported network
+    # is the epoch that did best here, not whatever the last epoch happened
+    # to land on.
+    val_n = min(200_000, n // 20)
+    val_idx = np.random.permutation(n)[:val_n]
+    train_mask = np.ones(n, bool)
+    train_mask[val_idx] = False
+    train_idx = np.flatnonzero(train_mask)
 
     # Blend the teacher's score with the game result. The score is precise but
     # only as good as the search; the result is noisy but grounded in truth.
@@ -216,8 +229,9 @@ def main():
     model = Net()
     mx.eval(model.parameters())
     batch = 16384
-    steps = n // batch
-    opt = optim.AdamW(learning_rate=1e-2, weight_decay=0.0)
+    steps = len(train_idx) // batch
+    base_lr = float(os.environ.get("LR", "1e-2"))
+    opt = optim.AdamW(learning_rate=base_lr, weight_decay=0.0)
 
     def loss_fn(model, u, t, bk, y):
         # SCALE / SIGMOID_K converts network units into the sigmoid's argument.
@@ -225,11 +239,34 @@ def main():
 
     grad_fn = nn.value_and_grad(model, loss_fn)
 
+    def val_loss():
+        total, m = 0.0, 0
+        for i in range(0, val_n, batch):
+            idx = val_idx[i : i + batch]
+            total += float(
+                loss_fn(
+                    model,
+                    mx.array(us[idx]),
+                    mx.array(them[idx]),
+                    mx.array(buckets[idx]),
+                    mx.array(target[idx]),
+                )
+            ) * len(idx)
+            m += len(idx)
+        return total / m
+
+    best = (float("inf"), None)
+    warmup = 1
     for ep in range(epochs):
-        # Decay: the late epochs are about settling into the quantisation grid,
-        # not exploring.
-        opt.learning_rate = 1e-2 * (0.78 ** ep)
-        perm = np.random.permutation(n)
+        # One linear warmup epoch, then cosine to ~0: early steps explore,
+        # late steps settle into the quantisation grid.
+        if ep < warmup:
+            opt.learning_rate = base_lr * (ep + 1) / warmup
+        else:
+            import math
+            t = (ep - warmup) / max(1, epochs - warmup - 1)
+            opt.learning_rate = base_lr * 0.5 * (1 + math.cos(math.pi * t))
+        perm = train_idx[np.random.permutation(len(train_idx))]
         total, t0 = 0.0, time.time()
         for i in range(steps):
             idx = perm[i * batch : (i + 1) * batch]
@@ -244,18 +281,27 @@ def main():
             mx.eval(model.parameters(), opt.state)
             clip_weights(model)
             total += float(loss)
+        vl = val_loss()
+        star = ""
+        if vl < best[0]:
+            best = (vl, [mx.array(p) for p in (model.ft, model.ft_b, model.out, model.out_b)])
+            star = " *"
         print(
-            f"epoch {ep+1:2d}/{epochs}  loss {total/steps:.5f}  "
+            f"epoch {ep+1:2d}/{epochs}  loss {total/steps:.5f}  val {vl:.5f}{star}  "
             f"lr {opt.learning_rate.item():.5f}  {time.time()-t0:.0f}s",
             flush=True,
         )
 
+    if best[1] is not None:
+        model.ft, model.ft_b, model.out, model.out_b = best[1]
+        print(f"exporting best-val checkpoint (val {best[0]:.5f})")
     ftq, fbq, oq, obq = export(model)
 
     # How well does the quantised network track the teacher it was distilled
     # from? Reported on the quantised weights, since those are what ship.
-    k = min(6000, n)
-    pick = np.random.choice(n, k, replace=False)
+    # Reported on held-out positions: this is generalisation, not memorisation.
+    k = min(6000, val_n)
+    pick = np.random.choice(val_idx, k, replace=False)
     pred = np.array(
         [quantised_eval(ftq, fbq, oq, obq, us[i], them[i], buckets[i]) for i in pick]
     )
