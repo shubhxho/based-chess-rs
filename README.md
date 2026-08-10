@@ -185,7 +185,20 @@ Matches are run at a fixed node count rather than a fixed time, so results don't
 shift with machine load, and colours are swapped on every opening pair:
 
 ```bash
-bash tests/run_all.sh                                    # everything above
+bash tests/run_all.sh    # all of the above; the python-chess passes take a while
+```
+
+To compare two evaluations you need two binaries. The network is embedded at
+compile time, so "no network" is just a build with a header the loader rejects:
+
+```bash
+cargo build --release && cp target/release/sable sable-std      # with the network
+
+cp net.bin /tmp/net.keep
+printf '\0\0\0\0\0\0\0\0' > net.bin                       # invalid header
+cargo build --release && cp target/release/sable sable-hce      # falls back to
+cp /tmp/net.keep net.bin && cargo build --release               # hand-crafted eval
+
 python arena.py ./sable-std ./sable-hce 400 "nodes 20000" 9
 ```
 
