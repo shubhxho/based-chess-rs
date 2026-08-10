@@ -147,8 +147,8 @@ fn passed_mask(c: usize, sq: usize) -> Bb {
 /// Both views describe the same board; only the index arithmetic differs
 /// (whose pieces count as "mine", and whether squares are mirrored). Computing
 /// the expensive part — mobility, king attackers, pawn structure — once and
-/// emitting two indices from it is worth roughly 20% of evaluation time over
-/// walking the board twice.
+/// emitting two indices from it measured between 3% and 13% more nodes per
+/// second across repeated runs, against walking the board twice.
 ///
 /// Colours are relative: block 0 is always "mine", block 1 always "theirs", and
 /// squares are mirrored for black. One weight matrix therefore serves both
