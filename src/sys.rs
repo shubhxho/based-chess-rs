@@ -89,17 +89,8 @@ const MAP_PRIVATE_ANON: u64 = 0x0002 | 0x1000;
 
 /// Anonymous private mapping. Null on failure.
 pub fn mmap(len: usize) -> *mut u8 {
-    let (p, err) = unsafe {
-        sc6(
-            SYS_MMAP,
-            0,
-            len as u64,
-            PROT_READ_WRITE,
-            MAP_PRIVATE_ANON,
-            (-1i64) as u64,
-            0,
-        )
-    };
+    let (p, err) =
+        unsafe { sc6(SYS_MMAP, 0, len as u64, PROT_READ_WRITE, MAP_PRIVATE_ANON, (-1i64) as u64, 0) };
     if err {
         core::ptr::null_mut()
     } else {

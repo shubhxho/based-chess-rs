@@ -91,12 +91,8 @@ pub struct Zobrist {
     pub ep: [u64; 8],
     pub side: u64,
 }
-static ZOB: SyncCell<Zobrist> = SyncCell::new(Zobrist {
-    psq: [[[0; 64]; 6]; 2],
-    castle: [0; 16],
-    ep: [0; 8],
-    side: 0,
-});
+static ZOB: SyncCell<Zobrist> =
+    SyncCell::new(Zobrist { psq: [[[0; 64]; 6]; 2], castle: [0; 16], ep: [0; 8], side: 0 });
 
 #[inline(always)]
 fn zob() -> &'static Zobrist {
@@ -185,15 +181,8 @@ impl Position {
             key: 0,
             pawn_key: 0,
             checkers: 0,
-            stack: [Undo {
-                castle: 0,
-                ep: 64,
-                halfmove: 0,
-                captured: NONE,
-                key: 0,
-                pawn_key: 0,
-                checkers: 0,
-            }; MAX_PLY + 8],
+            stack: [Undo { castle: 0, ep: 64, halfmove: 0, captured: NONE, key: 0, pawn_key: 0, checkers: 0 };
+                MAX_PLY + 8],
             hist: [0; HIST],
             hist_len: 0,
             root_ply: 0,

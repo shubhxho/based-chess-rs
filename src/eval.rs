@@ -307,11 +307,7 @@ fn pawn_shield_attacks(pawns: Bb, side: usize) -> Bb {
 fn passed_mask(c: usize, sq: usize) -> Bb {
     let f = file_of(sq);
     let files = file_bb(f) | (file_bb(f) & !FILE_A) >> 1 | (file_bb(f) & !FILE_H) << 1;
-    let ahead = if c == WHITE {
-        !0u64 << ((rank_of(sq) + 1) * 8)
-    } else {
-        (1u64 << (rank_of(sq) * 8)) - 1
-    };
+    let ahead = if c == WHITE { !0u64 << ((rank_of(sq) + 1) * 8) } else { (1u64 << (rank_of(sq) * 8)) - 1 };
     files & ahead
 }
 
@@ -319,12 +315,8 @@ fn passed_mask(c: usize, sq: usize) -> Bb {
 fn scale_drawish(pos: &Position, score: i32) -> i32 {
     let strong = if score > 0 { WHITE } else { BLACK };
     if pos.pieces(strong, PAWN_P) == 0 {
-        let mat: i32 = (1..5)
-            .map(|p| EG_VAL[p] * popcount(pos.pieces(strong, p)) as i32)
-            .sum();
-        let their: i32 = (1..5)
-            .map(|p| EG_VAL[p] * popcount(pos.pieces(strong ^ 1, p)) as i32)
-            .sum();
+        let mat: i32 = (1..5).map(|p| EG_VAL[p] * popcount(pos.pieces(strong, p)) as i32).sum();
+        let their: i32 = (1..5).map(|p| EG_VAL[p] * popcount(pos.pieces(strong ^ 1, p)) as i32).sum();
         if mat - their < EG_VAL[ROOK_P] {
             return score / 4;
         }

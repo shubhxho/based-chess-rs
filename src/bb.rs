@@ -286,16 +286,7 @@ pub fn init() {
         for sq in 0..64usize {
             let (f, r) = (file_of(sq) as i32, rank_of(sq) as i32);
             let mut n = 0u64;
-            for &(df, dr) in &[
-                (1, 2),
-                (2, 1),
-                (2, -1),
-                (1, -2),
-                (-1, -2),
-                (-2, -1),
-                (-2, 1),
-                (-1, 2),
-            ] {
+            for &(df, dr) in &[(1, 2), (2, 1), (2, -1), (1, -2), (-1, -2), (-2, -1), (-2, 1), (-1, 2)] {
                 let (nf, nr) = (f + df, r + dr);
                 if (0..8).contains(&nf) && (0..8).contains(&nr) {
                     n |= bit((nr * 8 + nf) as usize);

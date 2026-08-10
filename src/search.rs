@@ -110,13 +110,8 @@ pub static SEARCHER: SyncCell<Searcher> = SyncCell::new(Searcher {
     history: [[[0; 64]; 64]; 2],
     capt_hist: [[[0; 7]; 64]; 12],
     counter: [[Move::NULL; 64]; 12],
-    stack: [Node {
-        mv: Move::NULL,
-        piece_to: NO_PIECE_TO,
-        eval: 0,
-        excluded: Move::NULL,
-        in_check: false,
-    }; MAX_PLY + 8],
+    stack: [Node { mv: Move::NULL, piece_to: NO_PIECE_TO, eval: 0, excluded: Move::NULL, in_check: false };
+        MAX_PLY + 8],
     pv: [[Move::NULL; MAX_PLY]; MAX_PLY],
     pv_len: [0; MAX_PLY],
     lmr: [[0; 64]; 64],
@@ -271,11 +266,8 @@ impl Searcher {
 
         for depth in 1..=max_depth {
             let mut delta = 10 + (score * score) / 12_000;
-            let (mut alpha, mut beta) = if depth < 4 {
-                (-INF, INF)
-            } else {
-                ((score - delta).max(-INF), (score + delta).min(INF))
-            };
+            let (mut alpha, mut beta) =
+                if depth < 4 { (-INF, INF) } else { ((score - delta).max(-INF), (score + delta).min(INF)) };
             let mut cur = depth;
 
             loop {
@@ -577,7 +569,9 @@ impl Searcher {
                         continue;
                     }
                     // Futility: a quiet move cannot swing the score this far.
-                    let lmr_depth = (depth - (self.lmr[depth.min(63) as usize][(moves_played as usize).min(63)] >> 10)).max(0);
+                    let lmr_depth = (depth
+                        - (self.lmr[depth.min(63) as usize][(moves_played as usize).min(63)] >> 10))
+                        .max(0);
                     if lmr_depth < 8 && eval + 120 + 110 * lmr_depth <= alpha {
                         skip_quiets = true;
                         continue;
@@ -711,7 +705,13 @@ impl Searcher {
         if moves_played == 0 {
             // Every move was the excluded one: report the window edge rather
             // than a mate score, which would be a lie.
-            return if !excluded.is_null() { alpha } else if in_check { -MATE + ply as i32 } else { 0 };
+            return if !excluded.is_null() {
+                alpha
+            } else if in_check {
+                -MATE + ply as i32
+            } else {
+                0
+            };
         }
 
         if excluded.is_null() {
@@ -788,11 +788,8 @@ impl Searcher {
             if !in_check {
                 // Delta pruning: even winning this material would not reach
                 // alpha, so the whole branch is pointless.
-                let gain = if m.is_ep() {
-                    SEE_VAL[PAWN_P]
-                } else {
-                    SEE_VAL[pos.piece_at(m.to()) as usize]
-                } + if m.is_promo() { SEE_VAL[m.promo()] - SEE_VAL[PAWN_P] } else { 0 };
+                let gain = if m.is_ep() { SEE_VAL[PAWN_P] } else { SEE_VAL[pos.piece_at(m.to()) as usize] }
+                    + if m.is_promo() { SEE_VAL[m.promo()] - SEE_VAL[PAWN_P] } else { 0 };
                 if raw_eval + gain + 150 < alpha {
                     continue;
                 }
@@ -831,7 +828,8 @@ impl Searcher {
         let stm = pos.stm;
         let prev = if ply > 0 { self.stack[ply - 1].piece_to } else { NO_PIECE_TO };
         let prev2 = if ply > 1 { self.stack[ply - 2].piece_to } else { NO_PIECE_TO };
-        let counter = if prev != NO_PIECE_TO { self.counter[(prev - 1) / 64][(prev - 1) % 64] } else { Move::NULL };
+        let counter =
+            if prev != NO_PIECE_TO { self.counter[(prev - 1) / 64][(prev - 1) % 64] } else { Move::NULL };
 
         for i in 0..list.n {
             let m = list.mv[i];

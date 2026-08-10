@@ -185,8 +185,25 @@ Matches are run at a fixed node count rather than a fixed time, so results don't
 shift with machine load, and colours are swapped on every opening pair:
 
 ```bash
-bash tests/run_all.sh    # all of the above; the python-chess passes take a while
+cargo test --release     # 18 unit tests, ~0.2s
+bash tests/run_all.sh    # the above plus the python-chess cross-checks
 ```
+
+`cargo test` works because `no_std` and `no_main` are conditional on not
+building tests — a `no_main` binary has nowhere to put a test harness. The
+shipped binary is unaffected; a test build is a different binary entirely.
+
+The unit tests cover the invariants that are cheap to state and miserable to
+debug once broken: perft counts, that unmake restores every field rather than
+just the hash, that the incremental Zobrist key matches a fresh parse, that
+magic attacks agree with a naive ray walk, SEE on known exchanges, and that
+mirroring a position leaves its features and its evaluation unchanged.
+
+That last one is worth a note. It first compared the *scores* of hand-mirrored
+FEN constants — and failed, because one of my constants had a pawn on the wrong
+side. It now mirrors programmatically and compares the feature multisets before
+the scores, over 160+ positions, so it cannot be wrong about its own data and a
+failure says which layer broke.
 
 To compare two evaluations you need two binaries. The network is embedded at
 compile time, so "no network" is just a build with a header the loader rejects:
@@ -220,7 +237,9 @@ src/uci.rs       protocol, perft, bench, featdump
 train.py         MLX trainer and quantised exporter
 arena.py         match runner with Elo confidence intervals
 publish_hf.py    uploads the network to the Hugging Face Hub
+src/tests.rs     unit tests (cargo test)
 tests/           perft suites, the python-chess oracle, inference verification
+.github/         CI: fmt, clippy -D warnings, tests, perft, size budget
 ```
 
 The network is on the Hub at

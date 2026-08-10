@@ -1,0 +1,85 @@
+name: CI
+
+# The engine issues arm64 Darwin syscalls directly and uses NEON intrinsics, so
+# it only builds on Apple silicon. GitHub's macos-14+ runners are arm64.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          rustup update stable --no-self-update
+          rustup component add clippy rustfmt
+          rustc --version
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --release --all-targets -- -D warnings
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Unit tests
+        run: cargo test --release
+
+      - name: Perft (classic positions)
+        run: bash tests/perft_suite.sh
+
+      - name: Bench is deterministic
+        # The node count is a behaviour fingerprint: two runs that disagree mean
+        # something in the search is reading uninitialised or time-dependent
+        # state, which is exactly the kind of bug that hides until it matters.
+        run: |
+          a=$(printf 'bench 13\n' | ./target/release/sable | awk '/Total nodes/ {print $4}')
+          b=$(printf 'bench 13\n' | ./target/release/sable | awk '/Total nodes/ {print $4}')
+          echo "run 1: $a nodes"
+          echo "run 2: $b nodes"
+          test "$a" = "$b"
+
+      - name: Binary size budget
+        # The whole point of the project is that it stays small. 512 KB is
+        # generous against the current ~265 KB; blowing through it means
+        # something large landed in the image instead of BSS.
+        run: |
+          size=$(stat -f%z target/release/sable)
+          echo "binary: $size bytes"
+          test "$size" -lt 524288
+
+  oracle:
+    # The python-chess cross-check is slower and independent of the Rust build,
+    # so it runs as its own job rather than holding up the fast feedback.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependencies
+        # mlx too: verify_net.py imports the trainer's reference implementation
+        # on purpose, so the check proves engine and trainer agree rather than
+        # engine and some third copy of the maths.
+        run: pip install chess numpy mlx
+      - name: Build
+        run: cargo build --release
+      - name: Perft against python-chess
+        run: |
+          python tests/perft_oracle.py | tee /tmp/oracle.txt
+          grep -q "failures: 0" /tmp/oracle.txt
+      - name: Randomised perft
+        run: |
+          python tests/perft_fuzz.py | tee /tmp/fuzz.txt
+          grep -q "0 mismatches" /tmp/fuzz.txt
+      - name: Network inference matches the NumPy reference
+        run: |
+          python tests/verify_net.py | tee /tmp/net.txt
+          grep -q "0 mismatches" /tmp/net.txt

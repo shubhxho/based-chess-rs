@@ -304,13 +304,7 @@ fn mirror_fen(fen: &str) -> String {
     } else {
         castle
             .chars()
-            .map(|c| {
-                if c.is_ascii_uppercase() {
-                    c.to_ascii_lowercase()
-                } else {
-                    c.to_ascii_uppercase()
-                }
-            })
+            .map(|c| if c.is_ascii_uppercase() { c.to_ascii_lowercase() } else { c.to_ascii_uppercase() })
             .collect()
     };
     let new_ep = if ep == "-" {
@@ -325,55 +319,80 @@ fn mirror_fen(fen: &str) -> String {
     format!("{} {} {} {} 0 1", flipped.join("/"), new_stm, new_castle, new_ep)
 }
 
-/// Evaluation must not care which colour is which. An asymmetry means a
-/// perspective bug in the feature map or the hand-crafted terms.
+/// Sorted feature indices for the side to move and the opponent.
+///
+/// Comparing these directly is much sharper than comparing evaluations: a
+/// score can come out symmetric while the underlying features are wrong, and a
+/// score mismatch tells you nothing about *which* feature is at fault.
+fn feature_sets(p: &Position) -> (Vec<u16>, Vec<u16>) {
+    let mut us = [0u16; net::MAX_F];
+    let mut them = [0u16; net::MAX_F];
+    let n = net::features_both(p, p.stm, &mut us, &mut them);
+    let mut a = us[..n].to_vec();
+    let mut b = them[..n].to_vec();
+    // The board is walked white-first, so mirroring permutes the order.
+    a.sort_unstable();
+    b.sort_unstable();
+    (a, b)
+}
+
+/// Neither the features nor the evaluation may care which colour is which.
+///
+/// Checked at three levels, narrowest first, so a failure says where the bug
+/// is rather than just that one exists: the feature map, the hand-crafted
+/// terms, and the network output.
 #[test]
 fn evaluation_is_colour_symmetric() {
     setup();
-    let mut checked = 0;
-    for fen in [STARTPOS, KIWIPETE, POS3, POS4, POS5, POS6] {
-        let text = core::str::from_utf8(fen).unwrap();
+
+    let mut check = |text: &str| {
         let mirrored = mirror_fen(text);
-        let a = pos_from(fen);
+        let a = pos_from(text.as_bytes());
         let b = pos_from(mirrored.as_bytes());
+
+        let (a_us, a_them) = feature_sets(&a);
+        let (b_us, b_them) = feature_sets(&b);
+        assert_eq!(a_us, b_us, "side-to-move features differ under mirroring\n  {text}\n  {mirrored}");
+        assert_eq!(a_them, b_them, "opponent features differ under mirroring\n  {text}\n  {mirrored}");
         assert_eq!(
-            evaluate(&a),
-            evaluate(&b),
-            "evaluation is not colour-symmetric\n  {text}\n  {mirrored}"
+            net::bucket_of(popcount(a.occ()) as usize),
+            net::bucket_of(popcount(b.occ()) as usize),
+            "output bucket differs under mirroring"
         );
         assert_eq!(
             hand_crafted(&a),
             hand_crafted(&b),
             "hand-crafted evaluation is not colour-symmetric\n  {text}\n  {mirrored}"
         );
+        assert_eq!(evaluate(&a), evaluate(&b), "evaluation is not colour-symmetric\n  {text}\n  {mirrored}");
+    };
+
+    let mut checked = 0;
+    for fen in [STARTPOS, KIWIPETE, POS3, POS4, POS5, POS6] {
+        check(core::str::from_utf8(fen).unwrap());
         checked += 1;
     }
 
-    // And over positions reached by actual play, not just the standard set.
-    let mut p = pos_from(STARTPOS);
+    // And over positions reached by play, which is where the odd material
+    // configurations and lost castling rights actually turn up.
     let mut buf = [0u8; 96];
-    for step in 0..40 {
-        let mut list = MoveList::new();
-        generate(&p, &mut list, GenKind::All);
-        if list.n == 0 {
-            break;
+    for (seed, start) in [(3usize, STARTPOS), (5, KIWIPETE), (11, POS6), (17, POS4)] {
+        let mut p = pos_from(start);
+        for step in 0..40 {
+            let mut list = MoveList::new();
+            generate(&p, &mut list, GenKind::All);
+            if list.n == 0 {
+                break;
+            }
+            // Deterministic but varied: no RNG, so a failure always reproduces.
+            p.make(list.mv[(step * seed + 3) % list.n]);
+            p.ply = 0;
+            let n = crate::datagen::write_fen(&p, &mut buf);
+            check(core::str::from_utf8(&buf[..n]).unwrap());
+            checked += 1;
         }
-        // Deterministic walk through the move list, varied by step.
-        p.make(list.mv[(step * 7 + 3) % list.n]);
-        p.ply = 0;
-        let n = crate::datagen::write_fen(&p, &mut buf);
-        let text = core::str::from_utf8(&buf[..n]).unwrap().to_string();
-        let mirrored = mirror_fen(&text);
-        let a = pos_from(text.as_bytes());
-        let b = pos_from(mirrored.as_bytes());
-        assert_eq!(
-            evaluate(&a),
-            evaluate(&b),
-            "evaluation is not colour-symmetric\n  {text}\n  {mirrored}"
-        );
-        checked += 1;
     }
-    assert!(checked > 20, "symmetry test covered too little");
+    assert!(checked > 100, "symmetry test covered only {checked} positions");
 }
 
 /// The accumulator indexes weights without bounds checks, so the extractor's
@@ -499,11 +518,8 @@ fn magic_attacks_match_the_naive_ray_walk() {
 }
 
 fn naive(sq: usize, occ: u64, rook: bool) -> u64 {
-    let dirs: [(i32, i32); 4] = if rook {
-        [(0, 1), (0, -1), (1, 0), (-1, 0)]
-    } else {
-        [(1, 1), (1, -1), (-1, 1), (-1, -1)]
-    };
+    let dirs: [(i32, i32); 4] =
+        if rook { [(0, 1), (0, -1), (1, 0), (-1, 0)] } else { [(1, 1), (1, -1), (-1, 1), (-1, -1)] };
     let (f0, r0) = (file_of(sq) as i32, rank_of(sq) as i32);
     let mut out = 0u64;
     for (df, dr) in dirs {

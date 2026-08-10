@@ -22,13 +22,8 @@ struct InBuf {
     eof: bool,
     stop: bool,
 }
-static IN: SyncCell<InBuf> = SyncCell::new(InBuf {
-    buf: [0; IN_CAP],
-    len: 0,
-    scanned: 0,
-    eof: false,
-    stop: false,
-});
+static IN: SyncCell<InBuf> =
+    SyncCell::new(InBuf { buf: [0; IN_CAP], len: 0, scanned: 0, eof: false, stop: false });
 
 fn inbuf() -> &'static mut InBuf {
     unsafe { IN.as_mut() }
@@ -120,7 +115,11 @@ impl<'a> Tokens<'a> {
             return None;
         }
         let start = self.i;
-        while self.i < self.s.len() && self.s[self.i] != b' ' && self.s[self.i] != b'\r' && self.s[self.i] != 0 {
+        while self.i < self.s.len()
+            && self.s[self.i] != b' '
+            && self.s[self.i] != b'\r'
+            && self.s[self.i] != 0
+        {
             self.i += 1;
         }
         Some(&self.s[start..self.i])
@@ -372,10 +371,7 @@ pub fn run() -> ! {
                 use crate::net::{bucket_of, features, IN as NET_IN, MAX_F};
                 const REC: usize = MAX_F * 4 + 2;
                 while let Some(line) = read_line(&mut out) {
-                    let end = line
-                        .iter()
-                        .position(|&c| c == 0 || c == b'\r')
-                        .unwrap_or(line.len());
+                    let end = line.iter().position(|&c| c == 0 || c == b'\r').unwrap_or(line.len());
                     if end == 0 {
                         continue;
                     }

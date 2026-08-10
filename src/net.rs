@@ -95,8 +95,7 @@ pub fn init() {
     if BLOB.len() < need {
         return;
     }
-    let rd32 =
-        |o: usize| u32::from_le_bytes([BLOB[o], BLOB[o + 1], BLOB[o + 2], BLOB[o + 3]]) as usize;
+    let rd32 = |o: usize| u32::from_le_bytes([BLOB[o], BLOB[o + 1], BLOB[o + 2], BLOB[o + 3]]) as usize;
     if rd32(0) != MAGIC || rd32(4) != IN || rd32(8) != H || rd32(12) != BUCKETS {
         return;
     }
@@ -133,11 +132,7 @@ pub fn init() {
 fn passed_mask(c: usize, sq: usize) -> Bb {
     let f = file_of(sq);
     let files = file_bb(f) | (file_bb(f) & !FILE_A) >> 1 | (file_bb(f) & !FILE_H) << 1;
-    let ahead = if c == WHITE {
-        !0u64 << ((rank_of(sq) + 1) * 8)
-    } else {
-        (1u64 << (rank_of(sq) * 8)) - 1
-    };
+    let ahead = if c == WHITE { !0u64 << ((rank_of(sq) + 1) * 8) } else { (1u64 << (rank_of(sq) * 8)) - 1 };
     files & ahead
 }
 
@@ -154,12 +149,7 @@ fn passed_mask(c: usize, sq: usize) -> Bb {
 /// squares are mirrored for black. One weight matrix therefore serves both
 /// sides, and the network learns a single function of "my position" rather than
 /// two functions of "white's position".
-pub fn features_both(
-    pos: &Position,
-    persp: usize,
-    a: &mut [u16; MAX_F],
-    b: &mut [u16; MAX_F],
-) -> usize {
+pub fn features_both(pos: &Position, persp: usize, a: &mut [u16; MAX_F], b: &mut [u16; MAX_F]) -> usize {
     let mut n = 0usize;
     let occ = pos.occ();
 

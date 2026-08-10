@@ -142,11 +142,7 @@ pub fn generate(pos: &Position, list: &mut MoveList, kind: GenKind) {
 
         // Captures.
         for shift_e in [true, false] {
-            let targets = if shift_e {
-                push(east(pawns), us) & cap_t
-            } else {
-                push(west(pawns), us) & cap_t
-            };
+            let targets = if shift_e { push(east(pawns), us) & cap_t } else { push(west(pawns), us) & cap_t };
             let mut t = targets;
             while t != 0 {
                 let to = pop_lsb(&mut t);
