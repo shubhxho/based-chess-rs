@@ -13,9 +13,10 @@ pub const SYS_EXIT: u64 = 1;
 pub const SYS_READ: u64 = 3;
 pub const SYS_WRITE: u64 = 4;
 pub const SYS_MUNMAP: u64 = 73;
-pub const SYS_GETTIMEOFDAY: u64 = 116;
 pub const SYS_MMAP: u64 = 197;
 pub const SYS_POLL: u64 = 230;
+
+const EINTR: i64 = 4;
 
 /// Returns (value, is_error). `is_error` mirrors the carry flag.
 #[inline(always)]
@@ -43,26 +44,36 @@ unsafe fn sc3(n: u64, a0: u64, a1: u64, a2: u64) -> (i64, bool) {
     sc6(n, a0, a1, a2, 0, 0, 0)
 }
 
-/// Write the whole buffer to `fd`, retrying short writes.
+/// Write the whole buffer to `fd`, retrying short writes and EINTR.
 pub fn write(fd: i32, buf: &[u8]) {
     let mut off = 0usize;
     while off < buf.len() {
         let (n, err) =
             unsafe { sc3(SYS_WRITE, fd as u64, buf.as_ptr().add(off) as u64, (buf.len() - off) as u64) };
-        if err || n <= 0 {
+        if err {
+            if n == EINTR {
+                continue;
+            }
+            return;
+        }
+        if n <= 0 {
             return;
         }
         off += n as usize;
     }
 }
 
-/// Read once. `None` on EOF or error.
+/// Read once, retrying EINTR. `None` on EOF or error.
 pub fn read(fd: i32, buf: &mut [u8]) -> Option<usize> {
-    let (n, err) = unsafe { sc3(SYS_READ, fd as u64, buf.as_mut_ptr() as u64, buf.len() as u64) };
-    if err || n <= 0 {
-        None
-    } else {
-        Some(n as usize)
+    loop {
+        let (n, err) = unsafe { sc3(SYS_READ, fd as u64, buf.as_mut_ptr() as u64, buf.len() as u64) };
+        if err {
+            if n == EINTR {
+                continue;
+            }
+            return None;
+        }
+        return if n <= 0 { None } else { Some(n as usize) };
     }
 }
 
@@ -104,28 +115,27 @@ pub fn munmap(p: *mut u8, len: usize) {
     }
 }
 
-/// Milliseconds since the epoch.
+/// Milliseconds from an arbitrary monotonic origin.
 ///
-/// Darwin's `gettimeofday` trap also returns seconds in x0 and microseconds in
-/// x1, so the struct write is belt-and-braces: whichever path the kernel took,
-/// one of them is populated.
+/// Reads the arm64 generic-timer registers directly: `cntvct_el0` ticking at
+/// `cntfrq_el0` Hz (24 MHz on Apple silicon), both EL0-readable on Darwin.
+/// No kernel trap — the search polls this in its time check — and immune to
+/// wall-clock steps (NTP) mid-search. The `isb` orders the counter read
+/// against surrounding instructions, as `mach_absolute_time` does.
 pub fn now_ms() -> u64 {
-    #[repr(C)]
-    struct Timeval {
-        sec: i64,
-        usec: i32,
-        _pad: i32,
+    let cnt: u64;
+    let frq: u64;
+    unsafe {
+        asm!(
+            "isb",
+            "mrs {cnt}, cntvct_el0",
+            "mrs {frq}, cntfrq_el0",
+            cnt = out(reg) cnt,
+            frq = out(reg) frq,
+            options(nomem, nostack)
+        );
     }
-    let mut tv = Timeval { sec: 0, usec: 0, _pad: 0 };
-    let (r0, err) = unsafe { sc3(SYS_GETTIMEOFDAY, &mut tv as *mut Timeval as u64, 0, 0) };
-    if err {
-        return 0;
-    }
-    if tv.sec != 0 {
-        return tv.sec as u64 * 1000 + (tv.usec as u64) / 1000;
-    }
-    // Register-return form: seconds landed in x0.
-    r0 as u64 * 1000
+    cnt / (frq / 1000)
 }
 
 /// Non-destructive check for pending bytes on `fd`. Used to notice `stop` /
@@ -139,8 +149,13 @@ pub fn readable(fd: i32) -> bool {
     }
     const POLLIN: i16 = 0x0001;
     let mut p = PollFd { fd, events: POLLIN, revents: 0 };
-    let (n, err) = unsafe { sc3(SYS_POLL, &mut p as *mut PollFd as u64, 1, 0) };
-    !err && n > 0 && (p.revents & POLLIN) != 0
+    loop {
+        let (n, err) = unsafe { sc3(SYS_POLL, &mut p as *mut PollFd as u64, 1, 0) };
+        if err && n == EINTR {
+            continue;
+        }
+        return !err && n > 0 && (p.revents & POLLIN) != 0;
+    }
 }
 
 /// `static mut` with the unsafety made explicit and the aliasing rules left to

@@ -30,7 +30,17 @@
   .white-1e1d7 { background: var(--bone) !important; color: var(--walnut) !important; }
   .black-3c85d { background: var(--walnut) !important; color: var(--bone) !important; }
   .board-b72b1 { border: none !important; }
-  .highlight-src { box-shadow: inset 0 0 0 3px var(--amber) !important; }
+  .sq-last { box-shadow: inset 0 0 0 3px var(--amber) !important; }
+  .boardwrap { display: flex; gap: 10px; align-items: stretch; }
+  #evalbar {
+    width: 14px; background: #3a3430; border: 1px solid var(--line);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  #evalbar .w {
+    background: var(--bone); width: 100%; height: 50%; margin-top: auto;
+    transition: height .6s cubic-bezier(.4,0,.2,1);
+  }
+  @media (prefers-reduced-motion: reduce) { #evalbar .w { transition: none; } }
   .panel { background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; }
   .label { color: var(--dim); font-size: 10px; letter-spacing: .22em; text-transform: uppercase; margin-bottom: 8px; }
   #status { font-size: 13px; min-height: 20px; }
@@ -53,11 +63,14 @@
 </style>
 
 <div class="app">
-  <div id="board"></div>
+  <div class="boardwrap">
+    <div id="evalbar" aria-hidden="true"><div class="w"></div></div>
+    <div id="board"></div>
+  </div>
   <div class="side">
     <div>
       <h1>SABLE <span class="v">1.0</span></h1>
-      <div class="sub">no_std &middot; no libc &middot; raw syscalls &middot; 248&thinsp;KB<br>you play white</div>
+      <div class="sub">no_std &middot; no libc &middot; raw syscalls &middot; 248&thinsp;KB<br>drag to move</div>
     </div>
     <div class="panel">
       <div class="label">status</div>
@@ -78,6 +91,7 @@
     </div>
     <div class="row">
       <button id="new">New game</button>
+      <button id="flip">Play black</button>
       <select id="mt" aria-label="engine think time">
         <option value="250">250 ms</option>
         <option value="1000" selected>1 s</option>
@@ -94,13 +108,14 @@
 <script>
 const game = new Chess();
 let thinking = false;
+let myColor = 'w';
 
 const board = Chessboard('board', {
   position: 'start',
   draggable: true,
   pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
   onDragStart: (src, piece) =>
-    !thinking && !game.game_over() && game.turn() === 'w' && piece[0] === 'w',
+    !thinking && !game.game_over() && game.turn() === myColor && piece[0] === myColor,
   onDrop: (src, dst) => {
     const mv = game.move({ from: src, to: dst, promotion: 'q' });
     if (!mv) return 'snapback';
@@ -114,7 +129,24 @@ const $id = id => document.getElementById(id);
 const uciMoves = () =>
   game.history({ verbose: true }).map(m => m.from + m.to + (m.promotion || ''));
 
+function markLast() {
+  document.querySelectorAll('.sq-last').forEach(e => e.classList.remove('sq-last'));
+  const h = game.history({ verbose: true });
+  const m = h[h.length - 1];
+  if (m) [m.from, m.to].forEach(sq => {
+    const el = document.querySelector(`#board .square-${sq}`);
+    if (el) el.classList.add('sq-last');
+  });
+}
+
+function setEvalBar(cpWhite) {
+  // logistic squash: +-800cp ~ full bar
+  const p = 1 / (1 + Math.pow(10, -cpWhite / 400));
+  document.querySelector('#evalbar .w').style.height = (p * 100).toFixed(1) + '%';
+}
+
 function afterMove() {
+  markLast();
   const h = game.history();
   $id('moves').innerHTML = h.map((m, i) =>
     i % 2 ? ` <b>${m}</b> ` : `${Math.floor(i / 2) + 1}. ${m}`).join('') || '&nbsp;';
@@ -144,6 +176,10 @@ function showInfo(lines) {
   if (n) $id('s-nps').textContent = Math.round(+n / 1000);
   if (mate) $id('s-eval').textContent = '#' + mate;
   else if (cp) $id('s-eval').textContent = (cp >= 0 ? '+' : '') + (cp / 100).toFixed(2);
+  // info scores are from the side-to-move (engine) perspective; bar is white-up
+  const engineIsWhite = myColor === 'b';
+  if (mate) setEvalBar((engineIsWhite ? +mate : -mate) > 0 ? 10000 : -10000);
+  else if (cp) setEvalBar(engineIsWhite ? +cp : -cp);
 }
 
 async function engineMove() {
@@ -170,11 +206,17 @@ async function engineMove() {
   thinking = false;
 }
 
-$id('new').onclick = () => {
-  game.reset(); board.start();
+function newGame(color) {
+  myColor = color;
+  game.reset(); board.orientation(color === 'w' ? 'white' : 'black'); board.start();
   thinking = false;
   $id('status').className = ''; $id('status').textContent = 'your move';
   $id('moves').innerHTML = '&nbsp;'; $id('tel').innerHTML = '';
   ['s-depth', 's-eval', 's-nps'].forEach(i => $id(i).textContent = '–');
-};
+  setEvalBar(0);
+  document.querySelectorAll('.sq-last').forEach(e => e.classList.remove('sq-last'));
+  if (color === 'b') engineMove();
+}
+$id('new').onclick = () => newGame('w');
+$id('flip').onclick = () => newGame('b');
 </script>
