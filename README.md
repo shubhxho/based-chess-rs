@@ -52,6 +52,10 @@ That was the whole difference:
 Same 32 neurons. Same optimiser. Same data. Five kilobytes of extra input beat
 four times the hidden width.
 
+Nor was it data-starved: retraining on 3.36M positions instead of 2M moves the
+fit by nothing (r 0.970 → 0.968). Width didn't matter, data didn't matter, the
+input set was the whole thing.
+
 ---
 
 ## How it's trained
