@@ -8,3 +8,5 @@ sable-net
 .DS_Store
 __pycache__/
 *.pyc
+sable-net-v1
+sable*.bin
