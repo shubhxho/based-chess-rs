@@ -26,7 +26,7 @@ cargo build --release
 | Attacks | Magic bitboards, magics *searched* at startup and self-validated |
 | Movegen | Fully legal — pins, check evasions and en-passant discovery resolved during generation |
 | Search | Fail-soft PVS, TT, null move, LMR, singular extensions, SEE pruning |
-| Eval | Tapered hand-crafted terms **plus** a 24 KB distilled network |
+| Eval | Tapered hand-crafted terms **plus** a 25 KB distilled network |
 | I/O | Raw `read`/`write`/`poll`/`mmap` syscalls, hand-rolled integer formatting |
 
 ### Kernel interface
@@ -44,9 +44,13 @@ asm!(
 );
 ```
 
-`read`, `write`, `poll`, `mmap`, `munmap`, `gettimeofday`, `exit`. That is the
-complete list. The transposition table is a raw `mmap` region; `poll` on fd 0 is
-how `stop` is noticed mid-search without ever blocking the search.
+`read`, `write`, `poll`, `mmap`, `munmap`, `exit`. That is the complete list.
+The transposition table is a raw `mmap` region, and `poll` on fd 0 is how `stop`
+is noticed mid-search without ever blocking the search.
+
+The clock does not even trap: it reads the arm64 generic timer registers
+(`cntvct_el0` / `cntfrq_el0`) directly, which is monotonic, immune to NTP steps
+mid-search, and free enough that the search can poll it constantly.
 
 ### Search
 
@@ -78,7 +82,8 @@ it out is the difference between a 2.6 MB binary and a 215 KB one.
 ## The network
 
 `768 → 32 → 1`, both perspectives sharing one weight matrix, int8 weights,
-clipped ReLU, **24,716 bytes**. Inference is written against ARM NEON intrinsics
+clipped ReLU, and 8 output layers selected by remaining material —
+**25,196 bytes** total. Inference is written against ARM NEON intrinsics
 directly (`vmovl_s8`, `vmlal_s16`, `vaddvq_s32`).
 
 It is **additive**: the network predicts a correction to the hand-crafted
@@ -179,4 +184,9 @@ src/datagen.rs   self-play data generation
 src/uci.rs       protocol, perft, bench
 train.py         MLX trainer and quantised exporter
 arena.py         head-to-head match runner with Elo confidence intervals
+publish_hf.py    uploads the network and trainer to the Hugging Face Hub
 ```
+
+The network is on the Hub at
+[`shubhxho/sable-chess-net`](https://huggingface.co/shubhxho/sable-chess-net),
+with the blob format documented so it can be read without this engine.
