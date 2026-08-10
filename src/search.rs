@@ -538,6 +538,11 @@ impl Searcher {
             }
         }
 
+        // Killers two plies down belong to whatever the last visit to this
+        // subtree was doing; by the time the search gets back here they refute
+        // a position that is no longer on the board.
+        self.killers[ply + 2] = [Move::NULL; 2];
+
         let excluded = self.stack[ply].excluded;
         let hit = if excluded.is_null() { tt().probe(pos.key, ply) } else { None };
         let mut tt_move = Move::NULL;
@@ -647,6 +652,48 @@ impl Searcher {
                 if v >= beta {
                     // Never return an unproven mate from a null move.
                     return if v >= MATE_IN_MAX { beta } else { v };
+                }
+            }
+
+            // ProbCut: if a capture beats a beta raised by a full pawn and a
+            // bit, at a much reduced depth, the full-depth search would almost
+            // certainly have beaten the real beta too. Each candidate is sifted
+            // by quiescence first, so the reduced search only runs for captures
+            // that already look like they clear the raised bar.
+            let pc_beta = beta + 180;
+            if depth >= 5
+                && pc_beta.abs() < MATE_IN_MAX
+                // A shallower table entry that already failed this test is
+                // enough to skip it; nothing here would overturn it.
+                && !(tt_depth >= depth - 3 && tt_score < pc_beta)
+            {
+                let mut list = MoveList::new();
+                generate(pos, &mut list, GenKind::Noisy);
+                self.score_moves(pos, &mut list, tt_move, ply);
+                for i in 0..list.n {
+                    let m = list.pick(i);
+                    // The capture has to be able to reach the raised beta on
+                    // material alone before it is worth a node.
+                    if m == excluded || !see_ge(pos, m, pc_beta - corrected) {
+                        continue;
+                    }
+                    let to = m.to();
+                    let moved = pc_index(pos.stm, pos.piece_at(m.from()) as usize);
+                    pos.make(m);
+                    self.stack[ply].mv = m;
+                    self.stack[ply].piece_to = moved * 64 + to + 1;
+                    let mut v = -self.qsearch(pos, -pc_beta, -pc_beta + 1, ply + 1, false);
+                    if v >= pc_beta {
+                        v = -self.negamax(pos, depth - 4, -pc_beta, -pc_beta + 1, ply + 1, !cut_node, false);
+                    }
+                    pos.unmake(m);
+                    if self.stop {
+                        return 0;
+                    }
+                    if v >= pc_beta {
+                        tt().store(pos.key, m, v, raw_eval, depth - 3, BOUND_LOWER, ply);
+                        return v;
+                    }
                 }
             }
         }

@@ -103,7 +103,7 @@ which was a bug in the reference.
 | Board | Bitboards, 12 piece planes plus a mailbox, incremental Zobrist |
 | Attacks | Magic bitboards; the magics are *searched* at startup, so they validate themselves |
 | Movegen | Fully legal — pins, check evasions and en-passant discovery all resolved during generation |
-| Search | Fail-soft PVS with TT, null move, LMR, singular extensions, SEE and history pruning, static-eval correction history |
+| Search | Fail-soft PVS with TT, null move, ProbCut, LMR, singular extensions, SEE and history pruning, static-eval correction history |
 | Eval | 934 -> 32 -> 1, int8, eight output buckets by material, NEON inference |
 | I/O | Raw `read` / `write` / `poll` / `mmap`, hand-rolled integer formatting |
 
@@ -138,7 +138,7 @@ iterative deepening
       └ negamax (PVS)
           ├ transposition cutoff
           ├ static eval, corrected by the search's own past residuals
-          ├ whole-node pruning: reverse futility, razoring, null move
+          ├ whole-node pruning: reverse futility, razoring, null move, ProbCut
           ├ move loop
           │   ├ per-move pruning: late-move, futility, SEE, history
           │   ├ extensions: check, singular (with multi-cut)
@@ -210,12 +210,13 @@ result below is 20,000 nodes per move, self-play from randomised openings:
 |---|---|---|---|
 | 1.1 (before correction history and the time-management rework) | 800 | 0.546 | **+32 ±24** |
 | 1.1, at 100,000 nodes per move | 300 | 0.533 | +23 ±39 |
+| the same build without ProbCut and killer hygiene | 2400 | 0.508 | +6 ±14 |
 | `sable-std` (1.0 network build) | 200 | 0.578 | +54 ±49 |
 | `sable-net` (first network release) | 200 | 0.573 | +51 ±49 |
 | `sable-hce` (same search, no network) | 200 | 0.635 | +96 ±50 |
 
 The search change also pays for itself in nodes: `bench 12` reaches the same
-depth on 759k nodes where 1.1 needed 854k, an 11% reduction.
+depth on 677k nodes where 1.1 needed 854k, a 21% reduction.
 
 One reduction rule did not survive this process. Reducing late quiet moves
 harder when the static evaluation sat well below alpha cut the bench node count
