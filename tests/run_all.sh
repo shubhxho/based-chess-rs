@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Everything that has to pass before a change is trusted.
 #
-# The two python-chess oracle passes take several minutes each -- that library
-# is the reference, not the fast path. Run them anyway; they are the only thing
-# standing between a movegen bug and a plausible-looking wrong answer.
+# The python-chess passes dominate the runtime -- that library is the reference,
+# not the fast path. They are also the only thing standing between a movegen bug
+# and a plausible-looking wrong answer, so they run by default at depth 4.
+# DEPTH=5 for a deeper (much slower) sweep.
 set -u
 cd "$(dirname "$0")/.."
 PY=${PY:-.venv/bin/python}

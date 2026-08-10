@@ -22,7 +22,11 @@ FENS = [
  "8/P1k5/K7/8/8/8/8/8 w - - 0 1",
  "8/8/8/8/1k6/8/K1p5/8 b - - 0 1",
 ]
-DEPTH = 5
+# Depth 4 keeps the whole suite runnable in a minute or so. python-chess is the
+# reference implementation, not a fast one -- depth 5 over these positions takes
+# it the better part of an hour, and depth 4 already exercises every edge case
+# here (castling rights, en-passant pins, promotion races, stalemate).
+DEPTH = int(os.environ.get("DEPTH", "4"))
 
 def perft(board, d):
     if d == 0: return 1

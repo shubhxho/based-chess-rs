@@ -7,7 +7,7 @@ def perft(b,d):
         b.push(m); n+=perft(b,d-1); b.pop()
     return n
 rng=random.Random(4242); fens=[]
-for _ in range(120):
+for _ in range(int(os.environ.get("N","120"))):
     b=chess.Board()
     for _ in range(rng.randint(4,60)):
         ms=list(b.legal_moves)
@@ -15,7 +15,7 @@ for _ in range(120):
         b.push(rng.choice(ms))
     if b.is_game_over(): continue
     fens.append(b.fen())
-D=4
+D=int(os.environ.get("DEPTH","4"))
 inp="".join(f"position fen {f}\ngo perft {D}\n" for f in fens)+"quit\n"
 out=subprocess.run([os.environ.get("ENGINE","./target/release/sable")],input=inp,capture_output=True,text=True).stdout
 mine=[int(l.split()[1]) for l in out.splitlines() if l.startswith("nodes ")]
