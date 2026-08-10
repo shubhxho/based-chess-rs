@@ -5,3 +5,6 @@
 sable-hce
 sable-net
 *.npz
+.DS_Store
+__pycache__/
+*.pyc
