@@ -49,6 +49,38 @@ impl Clone for Rec {
 
 static GAME: SyncCell<[Rec; MAX_GAME]> = SyncCell::new([Rec { fen: [0; 96], len: 0, score: 0 }; MAX_GAME]);
 
+/// Positions already written, as an open-addressed set of Zobrist keys.
+///
+/// Self-play from randomised openings converges: the same middlegame structures
+/// come back game after game, and a duplicate teaches the network nothing while
+/// still costing a training slot. A key of zero means the slot is free, so the
+/// table starts empty in BSS and needs no initialisation pass.
+const SEEN_BITS: usize = 22;
+const SEEN_N: usize = 1 << SEEN_BITS;
+static SEEN: SyncCell<[u64; SEEN_N]> = SyncCell::new([0; SEEN_N]);
+
+/// True the first time a key is offered, false every time after. Probes a short
+/// run of slots and then gives up: a full table should stop deduplicating, not
+/// spin looking for room.
+fn first_sighting(key: u64) -> bool {
+    if key == 0 {
+        return true;
+    }
+    let t = unsafe { SEEN.as_mut() };
+    let mut i = (key >> (64 - SEEN_BITS)) as usize;
+    for _ in 0..8 {
+        if t[i] == key {
+            return false;
+        }
+        if t[i] == 0 {
+            t[i] = key;
+            return true;
+        }
+        i = (i + 1) & (SEEN_N - 1);
+    }
+    true
+}
+
 /// Serialise a position as FEN. Written by hand because the trainer needs to
 /// read these with an off-the-shelf parser.
 pub fn write_fen(pos: &Position, buf: &mut [u8; 96]) -> usize {
@@ -148,8 +180,10 @@ pub fn run(target: u64, nodes: u64, seed: u64, out: &mut Out) {
         }
 
         // Random opening. Symmetric play from one book line would give the
-        // network a very narrow slice of the position space.
-        let plies = 8 + (rng.next() % 5) as usize;
+        // network a very narrow slice of the position space, and a narrow
+        // opening span gives it a narrow slice of game *phases* -- so the
+        // length varies as much as the moves do.
+        let plies = 8 + (rng.next() % 9) as usize;
         let mut ok = true;
         for _ in 0..plies {
             let m = random_move(&pos, &mut rng);
@@ -176,7 +210,7 @@ pub fn run(target: u64, nodes: u64, seed: u64, out: &mut Out) {
         let mut result = 1u8;
         let mut adjudicate = 0i32;
 
-        for _ply in 0..MAX_GAME {
+        for ply in 0..MAX_GAME {
             if pos.is_draw(0) || pos.is_material_draw() {
                 result = 1;
                 break;
@@ -200,9 +234,11 @@ pub fn run(target: u64, nodes: u64, seed: u64, out: &mut Out) {
             let score = s.best_score;
             let best = s.best;
 
-            // Keep only quiet, non-tactical positions.
+            // Keep only quiet, non-tactical positions, and only once the
+            // random opening has been answered: the first couple of plies are
+            // the engine repairing whatever the dice did, not play.
             let quiet = !pos.in_check() && !best.is_capture() && !best.is_promo();
-            if quiet && score.abs() < 2000 && n_rec < MAX_GAME {
+            if quiet && ply >= 2 && score.abs() < 2000 && n_rec < MAX_GAME && first_sighting(pos.key) {
                 let white_score = if pos.stm == WHITE { score } else { -score };
                 let r = &mut unsafe { GAME.as_mut() }[n_rec];
                 r.len = write_fen(&pos, &mut r.fen);
