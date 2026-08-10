@@ -2,11 +2,9 @@
 /.venv
 /data
 /data2
-sable-hce
-sable-net
 *.npz
 .DS_Store
 __pycache__/
 *.pyc
-sable-net-v1
-sable*.bin
+# Comparison binaries built by the arena workflow.
+sable-*
