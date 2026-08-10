@@ -125,17 +125,6 @@ impl<'a> Tokens<'a> {
         }
         Some(&self.s[start..self.i])
     }
-    /// Everything from the current point to the end, trimmed.
-    fn rest(&mut self) -> &'a [u8] {
-        while self.i < self.s.len() && self.s[self.i] == b' ' {
-            self.i += 1;
-        }
-        let mut e = self.s.len();
-        while e > self.i && (self.s[e - 1] == 0 || self.s[e - 1] == b'\r' || self.s[e - 1] == b' ') {
-            e -= 1;
-        }
-        &self.s[self.i..e]
-    }
 }
 
 fn parse_u64(t: &[u8]) -> u64 {

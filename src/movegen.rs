@@ -272,23 +272,6 @@ fn attacked_with(pos: &Position, c: usize, sq: usize, occ: Bb, them: Bb) -> bool
     rook_attacks(sq, occ) & (pos.piece[ROOK_P] | pos.piece[QUEEN_P]) & them != 0
 }
 
-/// Validate a move that arrived from the transposition table. A 16-bit hash
-/// collision can hand the search any bit pattern, so this has to reject
-/// everything that is not genuinely legal in *this* position.
-pub fn is_legal(pos: &Position, m: Move) -> bool {
-    if m.is_null() {
-        return false;
-    }
-    let mut list = MoveList::new();
-    generate(pos, &mut list, GenKind::All);
-    for i in 0..list.n {
-        if list.mv[i] == m {
-            return true;
-        }
-    }
-    false
-}
-
 /// Does `m` give check? Computed before the move is made, without touching the
 /// position, so the search can extend on checks for free.
 pub fn gives_check(pos: &Position, m: Move) -> bool {

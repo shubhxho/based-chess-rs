@@ -78,11 +78,6 @@ impl Move {
     pub const fn is_null(self) -> bool {
         self.0 == 0
     }
-    /// Cheap identity for history/counter-move tables.
-    #[inline(always)]
-    pub const fn key(self) -> usize {
-        (self.0 & 0xFFF) as usize
-    }
 }
 
 // ---------------------------------------------------------------------------

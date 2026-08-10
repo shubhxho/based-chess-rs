@@ -12,10 +12,6 @@ pub type Bb = u64;
 pub const FILE_A: Bb = 0x0101_0101_0101_0101;
 pub const FILE_H: Bb = FILE_A << 7;
 pub const RANK_1: Bb = 0xFF;
-pub const RANK_2: Bb = RANK_1 << 8;
-pub const RANK_4: Bb = RANK_1 << 24;
-pub const RANK_5: Bb = RANK_1 << 32;
-pub const RANK_7: Bb = RANK_1 << 48;
 pub const RANK_8: Bb = RANK_1 << 56;
 
 #[inline(always)]
@@ -52,14 +48,6 @@ pub fn more_than_one(b: Bb) -> bool {
     b & b.wrapping_sub(1) != 0
 }
 
-#[inline(always)]
-pub fn north(b: Bb) -> Bb {
-    b << 8
-}
-#[inline(always)]
-pub fn south(b: Bb) -> Bb {
-    b >> 8
-}
 #[inline(always)]
 pub fn east(b: Bb) -> Bb {
     (b & !FILE_H) << 1

@@ -169,10 +169,6 @@ impl<T> SyncCell<T> {
         Self(core::cell::UnsafeCell::new(v))
     }
     #[inline(always)]
-    pub fn get(&self) -> *mut T {
-        self.0.get()
-    }
-    #[inline(always)]
     #[allow(clippy::mut_from_ref)]
     pub unsafe fn as_mut(&self) -> &mut T {
         &mut *self.0.get()

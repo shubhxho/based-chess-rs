@@ -135,8 +135,8 @@ impl Tt {
         for i in 0..CLUSTER {
             let e = unsafe { &*c.add(i) };
             if e.key == k32 || e.gen_bound & 3 == BOUND_NONE {
+                // Same position, or a free slot: nothing to weigh up.
                 best = i;
-                best_val = i32::MIN;
                 break;
             }
             // Depth is the main currency; entries from older searches are
