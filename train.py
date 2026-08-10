@@ -30,6 +30,7 @@ H = int(os.environ.get("NET_H", "32"))   # hidden neurons per perspective
 IN = 768               # 12 piece-square planes
 MAX_FEATURES = 32      # a legal position has at most 32 pieces
 QA, QB = 127, 64       # int8 scales for the two layers
+BUCKETS = int(os.environ.get("NET_B", "8"))  # output layers, chosen by material
 SCALE = 400            # network units -> centipawns
 EVAL_WEIGHT = float(os.environ.get("EVAL_W", "0.6"))  # teacher score vs game result
 SIGMOID_K = float(os.environ.get("SIG_K", "400"))  # centipawns -> win probability
@@ -129,7 +130,11 @@ def load(paths, cache=None, limit=None):
 
 class Net(nn.Module):
     """Row `IN` of `ft` is a permanent zero pad, so unused feature slots
-    contribute nothing and every position can use a fixed-width index array."""
+    contribute nothing and every position can use a fixed-width index array.
+
+    The output layer is one of `BUCKETS` sets, picked by how much material is
+    left. The feature transformer stays shared: what changes across the game is
+    how the same positional signals should be weighed, not what they are."""
 
     def __init__(self):
         super().__init__()
@@ -137,16 +142,16 @@ class Net(nn.Module):
         # has to stay well under the clipped-ReLU ceiling of 1.
         self.ft = mx.random.normal((IN + 1, H)) * 0.02
         self.ft_b = mx.zeros((H,))
-        self.out = mx.random.normal((2 * H,)) * 0.1
-        self.out_b = mx.zeros((1,))
+        self.out = mx.random.normal((BUCKETS, 2 * H)) * 0.1
+        self.out_b = mx.zeros((BUCKETS,))
 
-    def __call__(self, us, them):
+    def __call__(self, us, them, bucket):
         pad = mx.zeros((1, H))
         w = mx.concatenate([self.ft[:IN], pad], axis=0)
         acc_us = w[us].sum(axis=1) + self.ft_b
         acc_them = w[them].sum(axis=1) + self.ft_b
         a = mx.clip(mx.concatenate([acc_us, acc_them], axis=1), 0.0, 1.0)
-        return (a * self.out).sum(axis=1) + self.out_b
+        return (a * self.out[bucket]).sum(axis=1) + self.out_b[bucket]
 
 
 def clip_weights(model):
@@ -166,22 +171,27 @@ def export(model, path=None):
     ft = np.array(model.ft[:IN])
     ft_b = np.array(model.ft_b)
     out = np.array(model.out)
-    out_b = float(np.array(model.out_b)[0])
+    out_b = np.array(model.out_b)
 
     ft_q = np.clip(np.round(ft * QA), -127, 127).astype(np.int8)
     ft_b_q = np.clip(np.round(ft_b * QA), -32767, 32767).astype(np.int16)
     out_q = np.clip(np.round(out * QB), -127, 127).astype(np.int8)
-    out_b_q = int(round(out_b * QA * QB))
+    out_b_q = np.round(out_b * QA * QB).astype(np.int32)
 
-    blob = struct.pack("<II", 0x4E4C4253, H)
+    blob = struct.pack("<III", 0x53424C32 if False else 0x324C4253, H, BUCKETS)
     blob += ft_q.reshape(-1).tobytes()          # row-major [feature][neuron]
     blob += ft_b_q.tobytes()
-    blob += out_q.tobytes()
-    blob += struct.pack("<i", out_b_q)
+    blob += out_q.reshape(-1).tobytes()         # row-major [bucket][neuron]
+    blob += out_b_q.tobytes()
     with open(path, "wb") as fh:
         fh.write(blob)
     print(f"wrote {path}: {len(blob)} bytes ({len(blob)/1024:.1f} KB)")
     return ft_q, ft_b_q, out_q, out_b_q
+
+
+def bucket_of(piece_count):
+    """Must match net.rs exactly, integer division included."""
+    return min((max(piece_count - 1, 0) * BUCKETS) // 32, BUCKETS - 1)
 
 
 def quantised_eval(ft_q, ft_b_q, out_q, out_b_q, us, them):
@@ -190,7 +200,8 @@ def quantised_eval(ft_q, ft_b_q, out_q, out_b_q, us, them):
     acc_u = ft_b_q.astype(np.int32) + ft_q[us[us < IN]].sum(axis=0)
     acc_t = ft_b_q.astype(np.int32) + ft_q[them[them < IN]].sum(axis=0)
     a = np.concatenate([np.clip(acc_u, 0, QA), np.clip(acc_t, 0, QA)])
-    total = int((a * out_q.astype(np.int32)).sum()) + out_b_q
+    b = bucket_of(int((us < IN).sum()))
+    total = int((a * out_q[b].astype(np.int32)).sum()) + int(out_b_q[b])
     # Truncate toward zero, matching Rust's integer division. Python's `//`
     # floors, which differs by one on negative scores.
     return int(total * SCALE / (QA * QB))
@@ -220,6 +231,9 @@ def main():
     # normalised units the network outputs. The network therefore only ever has
     # to learn the part the hand-crafted terms get wrong.
     hce_mx = mx.array(hce / SIGMOID_K)
+    counts = (us < IN).sum(axis=1)
+    buckets = np.minimum(np.maximum(counts - 1, 0) * BUCKETS // 32, BUCKETS - 1)
+    bucket_mx = mx.array(buckets.astype(np.int32))
 
     model = Net()
     mx.eval(model.parameters())
@@ -227,8 +241,8 @@ def main():
     steps_per_epoch = n // batch
     opt = optim.AdamW(learning_rate=1e-2, weight_decay=0.0)
 
-    def loss_fn(model, u, t, base, y):
-        pred = base + model(u, t) * (SCALE / SIGMOID_K)
+    def loss_fn(model, u, t, bk, base, y):
+        pred = base + model(u, t, bk) * (SCALE / SIGMOID_K)
         return mx.mean((mx.sigmoid(pred) - y) ** 2)
 
     grad_fn = nn.value_and_grad(model, loss_fn)
@@ -245,7 +259,8 @@ def main():
             t = them_mx[idx]
             y = y_mx[idx]
             base = hce_mx[idx]
-            loss, grads = grad_fn(model, u, t, base, y)
+            bk = bucket_mx[idx]
+            loss, grads = grad_fn(model, u, t, bk, base, y)
             opt.update(model, grads)
             mx.eval(model.parameters(), opt.state)
             clip_weights(model)

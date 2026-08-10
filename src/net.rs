@@ -1,6 +1,10 @@
 //! Quantised neural evaluation.
 //!
-//! Architecture: `768 -> H` perspective accumulator, clipped ReLU, `2H -> 1`.
+//! Architecture: `768 -> H` perspective accumulator, clipped ReLU, `2H -> 1`,
+//! with the output layer selected from one of `BUCKETS` sets by how much
+//! material is left. A single linear output has to describe the correction with
+//! one set of coefficients across every phase of the game; buckets let the
+//! endgame disagree with the middlegame for 640 extra bytes.
 //! Both sides get their own accumulator over the same weight matrix with the
 //! board flipped, and the output layer reads them side-to-move first, so the
 //! network learns one function of "my position" rather than two of "white's".
@@ -17,11 +21,13 @@ use crate::pos::*;
 use crate::sys::SyncCell;
 
 const BLOB: &[u8] = include_bytes!("../net.bin");
-const MAGIC: u32 = 0x4E4C_4253; // "SBLN" little-endian
+const MAGIC: u32 = 0x324C_4253; // "SBL2" little-endian
 
 /// Hidden neurons per perspective. Must match the trainer.
 pub const H: usize = 32;
 const IN: usize = 768;
+/// Output-layer sets, indexed by remaining material.
+pub const BUCKETS: usize = 8;
 
 /// Quantisation scales; the trainer applies the same ones.
 const QA: i32 = 127; // feature-transformer / activation range
@@ -31,16 +37,16 @@ const SCALE: i32 = 400; // internal units -> centipawns
 struct Net {
     ft_w: [i8; IN * H],
     ft_b: [i16; H],
-    out_w: [i8; 2 * H],
-    out_b: i32,
+    out_w: [i8; BUCKETS * 2 * H],
+    out_b: [i32; BUCKETS],
     loaded: bool,
 }
 
 static NET: SyncCell<Net> = SyncCell::new(Net {
     ft_w: [0; IN * H],
     ft_b: [0; H],
-    out_w: [0; 2 * H],
-    out_b: 0,
+    out_w: [0; BUCKETS * 2 * H],
+    out_b: [0; BUCKETS],
     loaded: false,
 });
 
@@ -55,19 +61,21 @@ pub fn is_loaded() -> bool {
 }
 
 /// Expected layout, little-endian, tightly packed:
-///   magic u32 | hidden u32 | ft_w i8[768*H] | ft_b i16[H] | out_w i8[2H] | out_b i32
+///   magic u32 | hidden u32 | buckets u32 | ft_w i8[768*H] | ft_b i16[H]
+///   | out_w i8[BUCKETS*2H] | out_b i32[BUCKETS]
 pub fn init() {
-    let need = 8 + IN * H + 2 * H + 2 * H + 4;
+    let need = 12 + IN * H + 2 * H + BUCKETS * 2 * H + BUCKETS * 4;
     if BLOB.len() < need {
         return;
     }
     let magic = u32::from_le_bytes([BLOB[0], BLOB[1], BLOB[2], BLOB[3]]);
     let hidden = u32::from_le_bytes([BLOB[4], BLOB[5], BLOB[6], BLOB[7]]) as usize;
-    if magic != MAGIC || hidden != H {
+    let buckets = u32::from_le_bytes([BLOB[8], BLOB[9], BLOB[10], BLOB[11]]) as usize;
+    if magic != MAGIC || hidden != H || buckets != BUCKETS {
         return;
     }
     let n = unsafe { NET.as_mut() };
-    let mut o = 8;
+    let mut o = 12;
     for i in 0..IN * H {
         n.ft_w[i] = BLOB[o + i] as i8;
     }
@@ -76,11 +84,18 @@ pub fn init() {
         n.ft_b[i] = i16::from_le_bytes([BLOB[o + 2 * i], BLOB[o + 2 * i + 1]]);
     }
     o += 2 * H;
-    for i in 0..2 * H {
+    for i in 0..BUCKETS * 2 * H {
         n.out_w[i] = BLOB[o + i] as i8;
     }
-    o += 2 * H;
-    n.out_b = i32::from_le_bytes([BLOB[o], BLOB[o + 1], BLOB[o + 2], BLOB[o + 3]]);
+    o += BUCKETS * 2 * H;
+    for i in 0..BUCKETS {
+        n.out_b[i] = i32::from_le_bytes([
+            BLOB[o + 4 * i],
+            BLOB[o + 4 * i + 1],
+            BLOB[o + 4 * i + 2],
+            BLOB[o + 4 * i + 3],
+        ]);
+    }
     n.loaded = true;
 }
 
@@ -182,6 +197,10 @@ pub fn evaluate(pos: &Position) -> i32 {
     let mut them = [0i16; H];
     accumulate(pos, pos.stm, &mut us);
     accumulate(pos, pos.stm ^ 1, &mut them);
-    let out = propagate(&us, &n.out_w[..H]) + propagate(&them, &n.out_w[H..]) + n.out_b;
+    // 2..32 pieces map onto the bucket range; both extremes are clamped rather
+    // than given their own bucket, since neither is common enough to train.
+    let b = ((popcount(pos.occ()) as usize).saturating_sub(1) * BUCKETS / 32).min(BUCKETS - 1);
+    let w = &n.out_w[b * 2 * H..(b + 1) * 2 * H];
+    let out = propagate(&us, &w[..H]) + propagate(&them, &w[H..]) + n.out_b[b];
     (out * SCALE / (QA * QB)).clamp(-20_000, 20_000)
 }

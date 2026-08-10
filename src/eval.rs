@@ -188,6 +188,12 @@ struct Acc {
 /// it only for the residual keeps everything the hand-crafted terms already
 /// know and spends the entire parameter budget on what they miss.
 pub fn evaluate(pos: &Position) -> i32 {
+    // Checked before the network runs, not after: a dead-drawn material
+    // configuration has to evaluate to exactly zero, and adding a learned
+    // correction to it would let the search believe it can win K vs K.
+    if pos.is_material_draw() {
+        return 0;
+    }
     let base = hand_crafted(pos);
     if crate::net::is_loaded() {
         (base + crate::net::evaluate(pos)).clamp(-20_000, 20_000)
