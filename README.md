@@ -1,37 +1,111 @@
 # Sable
 
-A UCI chess engine written entirely in Rust, with a distilled neural evaluation
-trained in MLX on Apple silicon.
+A chess engine written in Rust, with a 30 KB evaluation network distilled from
+its own search using MLX.
 
-The engine is `#![no_std]`. There is no allocator, no third-party crate, and no
-libc call anywhere in the source — every kernel interaction is a hand-written
-`svc #0x80` trap. libSystem is linked only because Mach-O requires it for the
-process entry stub.
-
-The whole thing, network included, is a **248 KB binary** — 6% of the 4 MB
-budget it was built to fit in.
+The engine is `#![no_std]`. No allocator, no third-party crate, no libc call
+anywhere in the source — every conversation with the kernel is a hand-written
+`svc #0x80` trap. libSystem gets linked only because Mach-O insists on it for
+the process entry stub. The finished binary, network and all, is **265 KB**.
 
 ```
 cargo build --release
 ./target/release/sable
 ```
 
+Then talk UCI to it, or type `bench 13`, `perft 6`, `eval`, or `d` to see the
+board.
+
 ---
 
-## What's in it
+## The interesting part: the network that didn't work
+
+The obvious way to build a small neural evaluation is the standard NNUE input —
+768 binary features, one per (piece, colour, square). I built that first. It
+plays **165 Elo worse** than the hand-crafted evaluator it was meant to replace.
+
+The natural reaction is "too small, make it bigger." So I swept the hidden layer
+from 16 neurons to 128 — an 8x range — and the fit against the teacher barely
+moved: r hovered around 0.93 the whole way. That flatness is the actual finding.
+Capacity was never the constraint.
+
+The constraint is that piece-square features describe where pieces **are**, and
+almost everything that decides a chess position is about where pieces can
+**go**. A knight on d5 is worth wildly different amounts depending on what it
+attacks. A rook is worth a lot more on an open file. Neither fact is recoverable
+from a one-hot square index, no matter how wide the layer behind it.
+
+So the budget went into the input instead of the hidden layer. Alongside the 768
+piece-square planes there are now 166 rows encoding mobility, passed pawns by
+rank, isolated and doubled pawns, rooks on open and half-open files, the bishop
+pair, king attackers, and king shelter — all computed from the board and looked
+up in the same embedding table. Each row costs 32 bytes.
+
+That was the whole difference:
+
+| Input set | Size | r vs teacher | RMSE |
+|---|---|---|---|
+| Hand-crafted evaluation (baseline) | — | 0.937 | 192 cp |
+| 768 piece-square features | 24.6 KB | 0.955 | 161 cp |
+| 934 features, with mobility and structure | 29.8 KB | **0.970** | **130 cp** |
+
+Same 32 neurons. Same optimiser. Same data. Five kilobytes of extra input beat
+four times the hidden width.
+
+---
+
+## How it's trained
+
+The teacher is the engine's own alpha-beta search. `datagen` self-plays out of
+randomised openings and labels every quiet position with the score a fixed-node
+search returned, plus how the game eventually ended. The student is a static
+evaluation that never searches — the same idea behind DeepMind's searchless
+grandmaster-level chess, at a size that fits in L1 cache instead of a TPU pod.
+
+Positions are thrown away when the side to move is in check or the best move is
+a capture. In those positions the tactic decides the game, not the static
+evaluation, and training on them just teaches the network to imitate search —
+which it has no way to do.
+
+```bash
+./sable datagen 400000 5000 $SEED > data/shard.txt   # self-play; engine teaches
+python train.py 2000000 14                            # MLX; writes net.bin
+cargo build --release                                 # net.bin is include_bytes!'d
+```
+
+Two decisions in the trainer are worth explaining.
+
+**The trainer never computes features.** It asks the engine for them, through a
+`featdump` command that writes the active indices for each position. Two
+implementations of one feature map is a bug that produces a network which loads
+fine, runs fine, and is quietly wrong — the worst kind to track down. One
+implementation, in `net.rs`, is the source of truth for both.
+
+**Quantisation is part of the objective, not a step at the end.** Weights get
+projected back into the int8 box after every optimiser step, so what ships is
+the function the trainer actually converged to rather than a rounded-off
+approximation of it. To be sure of that, `net.bin` is replayed through an
+independent NumPy reference that reproduces `net.rs` operation by operation.
+They agree on every position tested — the only disagreement I ever saw turned
+out to be Python's floor division against Rust's truncation on negative scores,
+which was a bug in the reference.
+
+---
+
+## What's inside
 
 | Layer | Implementation |
 |---|---|
-| Board | Bitboards, 12 piece planes + mailbox, incremental Zobrist |
-| Attacks | Magic bitboards, magics *searched* at startup and self-validated |
-| Movegen | Fully legal — pins, check evasions and en-passant discovery resolved during generation |
-| Search | Fail-soft PVS, TT, null move, LMR, singular extensions, SEE pruning |
-| Eval | Tapered hand-crafted terms **plus** a 25 KB distilled network |
-| I/O | Raw `read`/`write`/`poll`/`mmap` syscalls, hand-rolled integer formatting |
+| Board | Bitboards, 12 piece planes plus a mailbox, incremental Zobrist |
+| Attacks | Magic bitboards; the magics are *searched* at startup, so they validate themselves |
+| Movegen | Fully legal — pins, check evasions and en-passant discovery all resolved during generation |
+| Search | Fail-soft PVS with TT, null move, LMR, singular extensions, SEE pruning |
+| Eval | 934 -> 32 -> 1, int8, eight output buckets by material, NEON inference |
+| I/O | Raw `read` / `write` / `poll` / `mmap`, hand-rolled integer formatting |
 
-### Kernel interface
+### Talking to the kernel
 
-`src/sys.rs` is the entire OS dependency:
+`src/sys.rs` is the entire OS dependency, and it is short:
 
 ```rust
 asm!(
@@ -44,13 +118,13 @@ asm!(
 );
 ```
 
-`read`, `write`, `poll`, `mmap`, `munmap`, `exit`. That is the complete list.
-The transposition table is a raw `mmap` region, and `poll` on fd 0 is how `stop`
-is noticed mid-search without ever blocking the search.
+`read`, `write`, `poll`, `mmap`, `munmap`, `exit`. That's the complete list. The
+transposition table is a raw `mmap` region. `poll` on fd 0 is how `stop` gets
+noticed mid-search without the search ever blocking on input.
 
-The clock does not even trap: it reads the arm64 generic timer registers
-(`cntvct_el0` / `cntfrq_el0`) directly, which is monotonic, immune to NTP steps
-mid-search, and free enough that the search can poll it constantly.
+The clock doesn't even trap: it reads the arm64 generic timer registers
+(`cntvct_el0` / `cntfrq_el0`) directly. Monotonic, immune to an NTP step landing
+in the middle of a search, and cheap enough to poll constantly.
 
 ### Search
 
@@ -67,105 +141,48 @@ iterative deepening
           └ quiescence at the horizon
 ```
 
-Move ordering drives everything else: TT move, then SEE-classified captures,
-killers, counter-move, then quiets ranked by butterfly history plus two plies of
-continuation history. All history tables use gravity updates so they stay
-responsive after millions of increments.
+Ordering is what makes the pruning safe, so it gets as much care as the pruning
+rules: TT move first, then captures classified by static exchange evaluation,
+killers, the counter-move, and finally quiets ranked by butterfly history plus
+two plies of continuation history. Every history table uses gravity updates, so
+it still responds to new information after millions of increments.
 
-One detail worth calling out — the 2.4 MB continuation-history table is a static
-of its own rather than a field of the searcher. A global only lands in BSS when
-its *entire* initialiser is zero, and the searcher has non-zero fields. Splitting
-it out is the difference between a 2.6 MB binary and a 215 KB one.
-
----
-
-## The network
-
-`768 → 32 → 1`, both perspectives sharing one weight matrix, int8 weights,
-clipped ReLU, and 8 output layers selected by remaining material —
-**25,196 bytes** total. Inference is written against ARM NEON intrinsics
-directly (`vmovl_s8`, `vmlal_s16`, `vaddvq_s32`).
-
-It is **additive**: the network predicts a correction to the hand-crafted
-evaluation rather than replacing it.
-
-That choice was measured, not assumed:
-
-| Setup | Size | vs hand-crafted baseline |
-|---|---|---|
-| Network **replaces** hand-crafted eval | 24.1 KB | **−165 ± 69 Elo** (200 games) |
-| Network **corrects** hand-crafted eval | 24.1 KB | **+55 ± 31 Elo** (500 games) |
-| ... with material-bucketed output | 24.6 KB | **+57 ± 28 Elo** (600 games) |
-
-A network of this size over plain piece-square features simply cannot represent
-mobility or king safety — those depend on where pieces can *go*, not where they
-are. A replacement network throws that knowledge away and lacks the capacity to
-rediscover it. Predicting only the residual keeps everything the hand-crafted
-terms already know and spends the whole parameter budget on what they miss.
-
-Fit against the teacher, measured on the *quantised* network:
-
-| Predictor | r | MAE | RMSE |
-|---|---|---|---|
-| hand-crafted alone | 0.9369 | 96.3 cp | 191.6 cp |
-| + network, single output | 0.9551 | 93.5 cp | 167.3 cp |
-| + network, 8 output buckets | 0.9553 | 90.3 cp | **161.3 cp** |
-
-Hidden width was swept from 16 to 128 neurons and the fit plateaus at every
-width — the bottleneck is the feature set, not capacity. That is why the last
-480 bytes went into output buckets rather than a wider hidden layer.
-
-All matches run at a fixed 20,000 nodes per move, so results do not depend on
-machine load, with colours swapped on every opening pair.
-
-### Distillation
-
-The teacher is the engine's own search. `datagen` self-plays from randomised
-openings, and every quiet position is labelled with the score a fixed-node search
-returned, plus the eventual game result. The student is a static evaluation that
-never searches — the same idea DeepMind used for searchless grandmaster-level
-play, at a scale that fits in L1 instead of a TPU pod.
-
-```
-./sable datagen 400000 5000 <seed> > shard.txt     # self-play, engine is teacher
-python train.py 4000000 12                          # MLX, exports net.bin
-cargo build --release                               # net.bin is include_bytes!'d
-```
-
-Quantisation is part of the objective, not a post-processing step: weights are
-projected back into the int8 box after every optimiser step, so the exported
-network computes exactly the function the trainer converged to. This is verified
-— `net.bin` round-trips through an independent NumPy reference that reproduces
-`net.rs` operation for operation, and the two agree on every position tested.
+One trap worth writing down. The 2.4 MB continuation-history table lives in a
+static of its own rather than as a field of the searcher. A global only lands in
+BSS when its *entire* initialiser is zero, and the searcher has non-zero fields —
+so as a field, all 2.4 MB of zeros get written into the executable. That single
+split is the difference between a 2.6 MB binary and a 265 KB one.
 
 ---
 
-## Verification
+## Does it work?
 
-Move generation is checked against `python-chess` as an independent oracle, not
-against remembered constants:
+Move generation is checked against `python-chess` as an independent oracle,
+because I don't trust my own memory of perft constants — and I was right not to.
+Half the "known" values I first wrote down were wrong, and the oracle is what
+told me the engine was fine and my test data wasn't.
 
 | Suite | Result |
 |---|---|
 | Classic perft (startpos, kiwipete, positions 3–6) | 6/6 exact, to depth 7 |
 | Oracle-verified edge cases (castling, ep pins, promotion races) | 20/20 exact |
-| Randomised fuzz, depth 4 | 119/119 exact |
-| Rust NEON inference vs NumPy reference | 60/60 identical |
-| Insufficient-material positions evaluate to exactly 0 | K vs K, K+N vs K |
+| Randomised positions, depth 4 | 119/119 exact |
+| Rust NEON inference vs NumPy reference | 80/80 identical |
+| Insufficient material evaluates to exactly 0 | K vs K, K+N vs K |
 
+`bench 13` is bit-identical run to run, which makes it a proper refactoring
+guard. When I removed a redundant legality check on the transposition move, the
+node count stayed at exactly 1,321,821 — proof the change was a pure speedup and
+not a silent behaviour change.
+
+Throughput is around 2.6 Mnps on a single M-series core.
+
+Matches are run at a fixed node count rather than a fixed time, so results don't
+shift with machine load, and colours are swapped on every opening pair:
+
+```bash
+python arena.py ./sable-std ./sable-hce 400 "nodes 20000" 9
 ```
-perft 6                       # from any position
-bench 13                      # fixed node count, deterministic
-python arena.py A B 400 "nodes 20000" 8
-```
-
-`bench 13` is bit-identical across runs, which is what makes it usable as a
-refactoring guard: removing the redundant transposition-move legality check left
-the node count at exactly 1,321,821, proving the change was a pure speedup and
-not a behaviour change.
-
-Throughput is ~2.6 Mnps single-threaded on an M-series core; the network costs
-about 15% of that.
 
 ---
 
@@ -176,17 +193,28 @@ src/sys.rs       raw syscalls, SyncCell
 src/bb.rs        bitboards, magic generation
 src/pos.rs       position, make/unmake, Zobrist
 src/movegen.rs   legal move generation
-src/eval.rs      hand-crafted evaluation
-src/net.rs       quantised network inference (NEON)
+src/eval.rs      hand-crafted evaluation (baseline and fallback)
+src/net.rs       features + quantised inference — source of truth for both
 src/search.rs    PVS, pruning, ordering, time management
 src/tt.rs        mmap-backed transposition table
 src/datagen.rs   self-play data generation
-src/uci.rs       protocol, perft, bench
+src/uci.rs       protocol, perft, bench, featdump
 train.py         MLX trainer and quantised exporter
-arena.py         head-to-head match runner with Elo confidence intervals
-publish_hf.py    uploads the network and trainer to the Hugging Face Hub
+arena.py         match runner with Elo confidence intervals
+publish_hf.py    uploads the network to the Hugging Face Hub
 ```
 
 The network is on the Hub at
 [`shubhxho/sable-chess-net`](https://huggingface.co/shubhxho/sable-chess-net),
-with the blob format documented so it can be read without this engine.
+with the format documented well enough to read it without this engine.
+
+## Honest limitations
+
+- It is distilled from itself. With no external engine available, the ceiling is
+  the teacher's own search quality, not a stronger reference.
+- Accumulators are refreshed in full rather than updated incrementally, which
+  costs roughly 15% nps. At 32 neurons a whole matrix row is four NEON
+  registers, so the bookkeeping isn't obviously worth it — but it's the first
+  thing I'd try next.
+- Single-threaded. The `Threads` UCI option is accepted and ignored.
+- No opening book, no endgame tablebases.

@@ -178,15 +178,11 @@ struct Acc {
     eg: i32,
 }
 
-/// Full evaluation: the hand-crafted term plus, when a network is embedded,
-/// the learned correction to it.
+/// Evaluation, in centipawns, from the side to move's point of view.
 ///
-/// The network is *additive* rather than a replacement. A 24 KB net over plain
-/// piece-square features cannot represent mobility or king safety -- those
-/// depend on where pieces can go, not where they are -- so asking it to
-/// reproduce the whole function from scratch throws that knowledge away. Asking
-/// it only for the residual keeps everything the hand-crafted terms already
-/// know and spends the entire parameter budget on what they miss.
+/// When a network is embedded it *is* the evaluation. The hand-crafted function
+/// below stays for two reasons: it is the fallback for a binary built without a
+/// network, and it is the baseline every network is measured against.
 pub fn evaluate(pos: &Position) -> i32 {
     // Checked before the network runs, not after: a dead-drawn material
     // configuration has to evaluate to exactly zero, and adding a learned
@@ -194,11 +190,10 @@ pub fn evaluate(pos: &Position) -> i32 {
     if pos.is_material_draw() {
         return 0;
     }
-    let base = hand_crafted(pos);
     if crate::net::is_loaded() {
-        (base + crate::net::evaluate(pos)).clamp(-20_000, 20_000)
+        crate::net::evaluate(pos)
     } else {
-        base
+        hand_crafted(pos)
     }
 }
 

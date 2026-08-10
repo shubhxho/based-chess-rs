@@ -375,6 +375,51 @@ pub fn run() -> ! {
                 tt().resize(8);
                 crate::datagen::run(n, nodes, seed, &mut out);
             }
+            b"featdump" => {
+                // Every remaining line of stdin is a FEN. For each one, emit a
+                // fixed-size binary record of the active feature indices for
+                // both perspectives plus the output bucket.
+                //
+                // The trainer reads these rather than deriving features itself.
+                // Two implementations of the same feature map is one of the few
+                // bugs here that would produce a network which loads, runs, and
+                // is silently wrong.
+                use crate::net::{bucket_of, features, IN as NET_IN, MAX_F};
+                const REC: usize = MAX_F * 4 + 2;
+                loop {
+                    let line = match read_line(&mut out) {
+                        Some(l) => l,
+                        None => break,
+                    };
+                    let end = line
+                        .iter()
+                        .position(|&c| c == 0 || c == b'\r')
+                        .unwrap_or(line.len());
+                    if end == 0 {
+                        continue;
+                    }
+                    let p = position();
+                    p.set_fen(&line[..end]);
+                    let mut rec = [0u8; REC];
+                    let mut f = [0u16; MAX_F];
+                    for (side, half) in [(p.stm, 0usize), (p.stm ^ 1, 1usize)] {
+                        let n = features(p, side, &mut f);
+                        for i in 0..MAX_F {
+                            // Unused slots point at the zero row, so every
+                            // record is the same width.
+                            let v = if i < n { f[i] } else { NET_IN as u16 };
+                            let o = (half * MAX_F + i) * 2;
+                            rec[o] = v as u8;
+                            rec[o + 1] = (v >> 8) as u8;
+                        }
+                    }
+                    let b = bucket_of(popcount(p.occ()) as usize) as u16;
+                    rec[MAX_F * 4] = b as u8;
+                    rec[MAX_F * 4 + 1] = (b >> 8) as u8;
+                    out.s(&rec);
+                }
+                out.flush();
+            }
             b"bench" => {
                 let d = t.next().map(parse_u64).unwrap_or(12) as i32;
                 bench(d.max(1), &mut out);
