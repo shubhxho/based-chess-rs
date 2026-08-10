@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Everything that has to pass before a change is trusted.
+#
+# The two python-chess oracle passes take several minutes each -- that library
+# is the reference, not the fast path. Run them anyway; they are the only thing
+# standing between a movegen bug and a plausible-looking wrong answer.
 set -u
 cd "$(dirname "$0")/.."
 PY=${PY:-.venv/bin/python}

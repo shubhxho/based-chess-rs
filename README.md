@@ -185,6 +185,7 @@ Matches are run at a fixed node count rather than a fixed time, so results don't
 shift with machine load, and colours are swapped on every opening pair:
 
 ```bash
+bash tests/run_all.sh                                    # everything above
 python arena.py ./sable-std ./sable-hce 400 "nodes 20000" 9
 ```
 
@@ -206,6 +207,7 @@ src/uci.rs       protocol, perft, bench, featdump
 train.py         MLX trainer and quantised exporter
 arena.py         match runner with Elo confidence intervals
 publish_hf.py    uploads the network to the Hugging Face Hub
+tests/           perft suites, the python-chess oracle, inference verification
 ```
 
 The network is on the Hub at
