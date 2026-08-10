@@ -345,7 +345,7 @@ fn feature_sets(p: &Position) -> (Vec<u16>, Vec<u16>) {
 fn evaluation_is_colour_symmetric() {
     setup();
 
-    let mut check = |text: &str| {
+    let check = |text: &str| {
         let mirrored = mirror_fen(text);
         let a = pos_from(text.as_bytes());
         let b = pos_from(mirrored.as_bytes());
