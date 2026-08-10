@@ -82,6 +82,10 @@
       <div class="stat"><b id="s-nps">–</b><span>knps</span></div>
     </div>
     <div class="panel">
+      <div class="label">sable expects</div>
+      <div id="pv" style="font-size:12px; line-height:1.7; color:var(--dim); min-height:20px;">–</div>
+    </div>
+    <div class="panel">
       <div class="label">search telemetry</div>
       <div id="tel"></div>
     </div>
@@ -92,6 +96,8 @@
     <div class="row">
       <button id="new">New game</button>
       <button id="flip">Play black</button>
+      <button id="undo" title="take back your last move">Undo</button>
+      <button id="pgn" title="copy game PGN">PGN</button>
       <select id="mt" aria-label="engine think time">
         <option value="250">250 ms</option>
         <option value="1000" selected>1 s</option>
@@ -154,13 +160,26 @@ function afterMove() {
   if (game.game_over()) {
     $id('status').className = '';
     $id('status').textContent =
-      game.in_checkmate() ? (game.turn() === 'w' ? 'checkmate — sable wins' : 'checkmate — you win')
+      game.in_checkmate() ? (game.turn() === myColor ? 'checkmate — sable wins' : 'checkmate — you win')
       : game.in_stalemate() ? 'stalemate'
       : game.in_threefold_repetition() ? 'draw — repetition'
       : 'draw';
     return true;
   }
   return false;
+}
+
+// UCI pv -> readable SAN, played out on a scratch copy of the game
+function pvToSan(pvStr) {
+  const scratch = new Chess(game.fen());
+  const out = [];
+  for (const u of (pvStr || '').split(' ')) {
+    const m = scratch.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] });
+    if (!m) break;
+    out.push(m.san);
+    if (out.length >= 10) break;
+  }
+  return out.join(' ');
 }
 
 function showInfo(lines) {
@@ -196,10 +215,15 @@ async function engineMove() {
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     showInfo(j.info || []);
+    const lastPv = ((j.info || []).slice(-1)[0] || '').match(/ pv (.*)$/);
+    if (lastPv) $id('pv').textContent = pvToSan(lastPv[1]) || '–';
     const u = j.bestmove;
     game.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] });
     board.position(game.fen());
-    if (!afterMove()) { st.className = ''; st.textContent = 'your move'; }
+    if (!afterMove()) {
+      st.className = '';
+      st.textContent = game.in_check() ? 'check — your move' : 'your move';
+    }
   } catch (e) {
     st.className = ''; st.textContent = 'engine error: ' + e.message;
   }
@@ -219,4 +243,18 @@ function newGame(color) {
 }
 $id('new').onclick = () => newGame('w');
 $id('flip').onclick = () => newGame('b');
+$id('undo').onclick = () => {
+  if (thinking) return;
+  // take back engine reply + own move (or single ply if engine hasn't answered)
+  if (game.history().length && game.turn() !== myColor) game.undo();
+  else { game.undo(); game.undo(); }
+  board.position(game.fen());
+  afterMove();
+  $id('status').className = ''; $id('status').textContent = 'your move';
+  $id('pv').textContent = '–';
+};
+$id('pgn').onclick = async () => {
+  await navigator.clipboard.writeText(game.pgn());
+  const b = $id('pgn'); b.textContent = 'Copied'; setTimeout(() => b.textContent = 'PGN', 900);
+};
 </script>
