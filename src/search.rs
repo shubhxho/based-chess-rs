@@ -729,8 +729,8 @@ impl Searcher {
         let mut best = -INF;
         let mut best_move = Move::NULL;
         let mut bound = BOUND_UPPER;
-        let mut searched_quiets = MoveList::new();
-        let mut searched_noisy = MoveList::new();
+        let mut searched_quiets = Tried::new();
+        let mut searched_noisy = Tried::new();
         let mut moves_played = 0i32;
         let mut skip_quiets = false;
         let lmp_limit = (3 + depth * depth) / (2 - improving as i32);
@@ -1146,8 +1146,8 @@ impl Searcher {
         best: Move,
         ply: usize,
         depth: i32,
-        quiets: &MoveList,
-        noisy: &MoveList,
+        quiets: &Tried,
+        noisy: &Tried,
         best_is_noisy: bool,
     ) {
         let bonus = (155 * depth - 80).clamp(0, 1200);
@@ -1173,16 +1173,16 @@ impl Searcher {
                 }
             }
             // Everything tried before the cutoff was, in hindsight, wrong.
-            for i in 0..quiets.n {
-                let q = quiets.mv[i];
+            for i in 0..quiets.len() {
+                let q = quiets.get(i);
                 if q == best {
                     continue;
                 }
                 self.bonus_quiet(pos, q, ply, malus);
             }
         }
-        for i in 0..noisy.n {
-            let q = noisy.mv[i];
+        for i in 0..noisy.len() {
+            let q = noisy.get(i);
             if q == best {
                 continue;
             }

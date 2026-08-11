@@ -7,12 +7,50 @@
 use crate::bb::*;
 use crate::pos::*;
 
+use core::mem::MaybeUninit;
+
 pub const MAX_MOVES: usize = 256;
 
 pub struct MoveList {
     pub mv: [Move; MAX_MOVES],
     pub sc: [i32; MAX_MOVES],
     pub n: usize,
+}
+
+/// The moves already tried at a node, kept only so that a cutoff can penalise
+/// them in the history tables afterwards.
+///
+/// This was a `MoveList`, which is the wrong shape for the job twice over: it
+/// carries a 1 KB score array nothing here ever reads, and constructing one
+/// zeroes all 1544 bytes. Two of them per interior node came to 4.6 KB of
+/// memset and memcpy per node, which is what put `_platform_memmove` in the
+/// profile. Nothing is initialised here -- `push` writes slot `n` before `n`
+/// grows, and `get` is only ever called below `len`.
+pub struct Tried {
+    mv: [MaybeUninit<Move>; MAX_MOVES],
+    n: usize,
+}
+
+impl Tried {
+    pub const fn new() -> Tried {
+        Tried { mv: [MaybeUninit::uninit(); MAX_MOVES], n: 0 }
+    }
+    #[inline(always)]
+    pub fn push(&mut self, m: Move) {
+        unsafe {
+            *self.mv.get_unchecked_mut(self.n) = MaybeUninit::new(m);
+        }
+        self.n += 1;
+    }
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.n
+    }
+    /// Caller must stay below `len`; every slot under it was written by `push`.
+    #[inline(always)]
+    pub fn get(&self, i: usize) -> Move {
+        unsafe { self.mv.get_unchecked(i).assume_init() }
+    }
 }
 
 impl MoveList {
