@@ -42,6 +42,8 @@ BUCKETS = int(os.environ.get("NET_B", "8"))
 QA, QB = 127, 64         # int8 scales for the two layers
 SCALE = 400              # network units -> centipawns
 EVAL_WEIGHT = float(os.environ.get("EVAL_W", "0.9"))
+WEIGHTED = os.environ.get("WEIGHTED", "1") != "0"
+WEIGHT_CLAMP = float(os.environ.get("WEIGHT_CLAMP", "3"))
 SIGMOID_K = float(os.environ.get("SIG_K", "400"))
 ENGINE = os.environ.get("ENGINE", "./target/release/sable")
 
@@ -271,6 +273,22 @@ def main():
         EVAL_WEIGHT / (1.0 + np.exp(-sc / SIGMOID_K)) + (1 - EVAL_WEIGHT) * wdl
     ).astype(np.float32)
 
+    # Per-position weights. Self-play spends most of its plies in the middlegame,
+    # so the material buckets are far from evenly filled and an unweighted mean
+    # quietly trains the crowded buckets at the expense of the sparse ones. The
+    # correction is inverse bucket frequency, clamped: bucket balance is worth
+    # nudging, not worth letting a handful of endgame positions dominate.
+    counts = np.bincount(buckets, minlength=BUCKETS).astype(np.float64)
+    share = np.where(counts > 0, counts.sum() / (BUCKETS * np.maximum(counts, 1)), 1.0)
+    share = np.clip(share, 1.0 / WEIGHT_CLAMP, WEIGHT_CLAMP)
+    weight = share[buckets].astype(np.float32)
+    if not WEIGHTED:
+        weight = np.ones_like(weight)
+    print(
+        "  bucket counts " + " ".join(f"{int(c)}" for c in counts) + "\n"
+        "  weights       " + " ".join(f"{w:.2f}" for w in share)
+    )
+
     model = Net()
     mx.eval(model.parameters())
     batch = 16384
@@ -278,9 +296,10 @@ def main():
     base_lr = float(os.environ.get("LR", "1e-2"))
     opt = optim.AdamW(learning_rate=base_lr, weight_decay=0.0)
 
-    def loss_fn(model, u, t, bk, y):
+    def loss_fn(model, u, t, bk, y, w):
         # SCALE / SIGMOID_K converts network units into the sigmoid's argument.
-        return mx.mean((mx.sigmoid(model(u, t, bk) * (SCALE / SIGMOID_K)) - y) ** 2)
+        err = (mx.sigmoid(model(u, t, bk) * (SCALE / SIGMOID_K)) - y) ** 2
+        return mx.sum(err * w) / mx.sum(w)
 
     grad_fn = nn.value_and_grad(model, loss_fn)
 
@@ -295,6 +314,7 @@ def main():
                     mx.array(them[idx]),
                     mx.array(buckets[idx]),
                     mx.array(target[idx]),
+                    mx.array(weight[idx]),
                 )
             ) * len(idx)
             m += len(idx)
@@ -321,6 +341,7 @@ def main():
                 mx.array(them[idx]),
                 mx.array(buckets[idx]),
                 mx.array(target[idx]),
+                mx.array(weight[idx]),
             )
             opt.update(model, grads)
             mx.eval(model.parameters(), opt.state)

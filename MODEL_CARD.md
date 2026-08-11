@@ -149,9 +149,11 @@ that ever mattered.
 
 A second iteration of the same idea did **not** pay off. Four million fresh
 positions, labelled by the network below and the search that ships with it,
-produced a network that lost to its own teacher by 20.0 +/- 24.1 Elo over 800
-games; mixing those with the previous round's shards (6M positions in total)
-landed at +4.3 +/- 24.1, which is nothing. One round of relabelling against a
+produced a network that lost to its own teacher by 20.0 +/- 24.1 over 800 games
+and 24.4 +/- 21.6 over another 1000 — about 22 Elo down across 1800 games, twice
+in a row. Mixing those shards with the previous round's (6M positions in total)
+landed at +4.3 +/- 24.1, and doing the same with bucket-balanced sample weights
+at +4.9 +/- 21.5: nothing, either way. One round of relabelling against a
 stronger search was worth about 23 Elo and the next round was worth zero, so
 the gain came from the teacher's jump in strength rather than from iterating,
 and there is no free ladder here.

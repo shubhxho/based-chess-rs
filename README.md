@@ -68,9 +68,11 @@ shown.
 
 Doing it a second time bought nothing. Four million more positions, labelled by
 that better network and the search around it, trained a net that *lost* to its
-own teacher by 20 ± 24 Elo; mixing old and new shards came out at +4 ± 24. One
-relabelling against a clearly stronger search was worth something; the next one
-wasn't. Self-distillation isn't a ladder you can keep climbing.
+own teacher — by 20 ± 24 Elo over 800 games and 24 ± 22 over another 1000.
+Mixing old and new shards came out at +4 ± 24, and adding bucket-balanced
+sample weights to that at +5 ± 22. One relabelling against a clearly stronger
+search was worth something; the next one wasn't. Self-distillation isn't a
+ladder you can keep climbing.
 
 ---
 
