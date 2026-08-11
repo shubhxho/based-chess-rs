@@ -147,6 +147,15 @@ Data volume is not the constraint either: retraining on the full 3.36M against
 130.8 cp). Between that and the width sweep, the feature set was the only thing
 that ever mattered.
 
+A second iteration of the same idea did **not** pay off. Four million fresh
+positions, labelled by the network below and the search that ships with it,
+produced a network that lost to its own teacher by 20.0 +/- 24.1 Elo over 800
+games; mixing those with the previous round's shards (6M positions in total)
+landed at +4.3 +/- 24.1, which is nothing. One round of relabelling against a
+stronger search was worth about 23 Elo and the next round was worth zero, so
+the gain came from the teacher's jump in strength rather than from iterating,
+and there is no free ladder here.
+
 What did move: the teacher. Relabelling from scratch with a search roughly 30
 Elo stronger, at 6k nodes instead of 5k and with duplicates removed, produced a
 network that beats the one it replaces by **+23.5 ± 24.1 Elo over 800 games**,

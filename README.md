@@ -66,6 +66,12 @@ replaced by +23.5 ± 24.1 Elo over 800 games, and by +23.0 ± 21.6 over a furthe
 1000 — the same margin twice. The student can only be as good as what it is
 shown.
 
+Doing it a second time bought nothing. Four million more positions, labelled by
+that better network and the search around it, trained a net that *lost* to its
+own teacher by 20 ± 24 Elo; mixing old and new shards came out at +4 ± 24. One
+relabelling against a clearly stronger search was worth something; the next one
+wasn't. Self-distillation isn't a ladder you can keep climbing.
+
 ---
 
 ## How it's trained
