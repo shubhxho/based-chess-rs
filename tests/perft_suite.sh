@@ -11,7 +11,10 @@
 # move for move with python-chess at every depth from 1 to 7 — 14, 191, 2812,
 # 43238, 674624, 11030083, 178633661 — and all seven agree with the engine. The
 # d8 figure below is still a published constant; three billion nodes is out of
-# reach for a pure-Python reference.
+# reach for a pure-Python reference. Two of its fourteen subtrees have been
+# checked that way though -- b4f4 at 50,536,497 and g2g3 at 76,036,362, both
+# exact -- so 4% of that number is verified and the other 96% is trust. Worth
+# stating as the fraction it is rather than rounding up to "verified".
 
 cd "$(dirname "$0")/.." || exit 1
 ENGINE=${ENGINE:-./target/release/sable}
