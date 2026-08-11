@@ -102,6 +102,32 @@ fn read_line(out: &mut Out) -> Option<[u8; 4096]> {
     }
 }
 
+/// Line reader for bulk input: `featdump` and `relabel` are fed millions of
+/// lines, and a 4 KB copy each is most of what they do.
+///
+/// The line is handed to `f` as a borrow of the input buffer and consumed
+/// afterwards, so `f` must not read another line while it holds this one. It is
+/// safe for `f` to run a search only because a silent search does not poll
+/// stdin; a search that did would refill the buffer under the borrow.
+fn with_line<R>(out: &mut Out, f: impl FnOnce(&[u8], &mut Out) -> R) -> Option<R> {
+    out.flush();
+    loop {
+        let i = inbuf();
+        if let Some(e) = i.line_end() {
+            let end = i.buf[..e].iter().position(|&c| c == b'\r').unwrap_or(e);
+            let r = f(&i.buf[..end], out);
+            let i = inbuf();
+            i.consume(e + 1);
+            i.scanned = 0;
+            return Some(r);
+        }
+        if i.eof {
+            return None;
+        }
+        i.fill(true);
+    }
+}
+
 // ---------------------------------------------------------------------------
 
 struct Tokens<'a> {
@@ -379,36 +405,37 @@ pub fn run() -> ! {
                 tt().resize(8);
                 let s = searcher();
                 s.silent = true;
-                while let Some(line) = read_line(&mut out) {
-                    let end = line.iter().position(|&c| c == 0 || c == b'\r').unwrap_or(line.len());
-                    let body = &line[..end];
+                while with_line(&mut out, |body, out| {
                     let bar = match body.iter().position(|&c| c == b'|') {
                         Some(i) => i,
-                        None => continue,
+                        None => return,
                     };
                     let tail = match body[bar + 1..].iter().position(|&c| c == b'|') {
                         Some(i) => &body[bar + 1 + i..],
-                        None => continue,
+                        None => return,
                     };
                     let mut fen_end = bar;
                     while fen_end > 0 && body[fen_end - 1] == b' ' {
                         fen_end -= 1;
                     }
                     if fen_end == 0 {
-                        continue;
+                        return;
                     }
                     let p = position();
                     p.set_fen(&body[..fen_end]);
+                    let s = searcher();
                     s.limits = Limits::new();
                     s.limits.nodes = nodes;
-                    s.go(p, &mut out);
+                    s.go(p, out);
                     if s.best.is_null() {
-                        continue; // mate or stalemate: nothing to learn from
+                        return; // mate or stalemate: nothing to learn from
                     }
                     // Shards store scores from white's point of view.
                     let white_score = if p.stm == WHITE { s.best_score } else { -s.best_score };
                     out.s(&body[..fen_end]).s(b" | ").i(white_score as i64).s(b" ").s(tail).nl();
-                }
+                })
+                .is_some()
+                {}
                 s.silent = false;
                 out.flush();
             }
@@ -443,13 +470,12 @@ pub fn run() -> ! {
                 out.s(b"SBF2");
                 put16!(out, NET_IN);
                 put16!(out, MAX_F);
-                while let Some(line) = read_line(&mut out) {
-                    let end = line.iter().position(|&c| c == 0 || c == b'\r').unwrap_or(line.len());
-                    if end == 0 {
-                        continue;
+                while with_line(&mut out, |line, out| {
+                    if line.is_empty() {
+                        return;
                     }
                     let p = position();
-                    p.set_fen(&line[..end]);
+                    p.set_fen(line);
                     // One pass for both perspectives: they describe the same
                     // board and only the index arithmetic differs.
                     let mut us = [0u16; MAX_F];
@@ -463,7 +489,9 @@ pub fn run() -> ! {
                         put16!(out, *v);
                     }
                     put16!(out, bucket_of(popcount(p.occ()) as usize));
-                }
+                })
+                .is_some()
+                {}
                 out.flush();
             }
             b"bench" => {
