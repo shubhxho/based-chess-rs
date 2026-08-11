@@ -1,4 +1,4 @@
-import sys, subprocess, struct, random, numpy as np, chess
+import sys, os, tempfile, subprocess, struct, random, numpy as np, chess
 sys.path.insert(0, ".")
 import train as T
 
@@ -26,15 +26,19 @@ inp="".join(f"position fen {f}\neval\n" for f in fens)+"quit\n"
 out=subprocess.run(["./target/release/sable"],input=inp,capture_output=True,text=True).stdout
 rust=[int(l.split()[1]) for l in out.splitlines() if l.startswith("eval ")]
 
-# engine features for the same FENs
+# engine features for the same FENs. Parsed with the trainer's own reader, so
+# this checks the format both sides actually agree on rather than a third copy
+# of the layout that can drift away from either.
 fin=("featdump\n"+"\n".join(fens)+"\n").encode()
 raw=subprocess.run(["./target/release/sable"],input=fin,capture_output=True).stdout
-feats=np.frombuffer(raw,dtype='<u2').reshape(-1,T.REC)
+dump=os.path.join(tempfile.gettempdir(),"sable_verify_feat.bin")
+with open(dump,"wb") as fh: fh.write(raw)
+us_all,them_all,buckets,_=T.parse_features(dump,len(fens))
+os.remove(dump)
 
 bad=0
 for i,(f,r) in enumerate(zip(fens,rust)):
-    us=feats[i,:T.MAX_F].astype(np.int32); them=feats[i,T.MAX_F:2*T.MAX_F].astype(np.int32)
-    bk=int(feats[i,2*T.MAX_F])
+    us=us_all[i]; them=them_all[i]; bk=int(buckets[i])
     py=T.quantised_eval(ftq,fbq,oq,obq,us,them,bk)
     if py!=r:
         bad+=1

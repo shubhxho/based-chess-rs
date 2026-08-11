@@ -245,6 +245,7 @@ const BENCH_FENS: [&[u8]; 12] = [
 fn bench(depth: i32, out: &mut Out) {
     let s = searcher();
     let mut total = 0u64;
+    s.ignore_stdin = true;
     let t0 = sys::now_ms();
     for fen in BENCH_FENS {
         tt().clear();
@@ -257,6 +258,7 @@ fn bench(depth: i32, out: &mut Out) {
         total += s.nodes;
     }
     let ms = sys::now_ms().saturating_sub(t0);
+    s.ignore_stdin = false;
     out.s(b"===========================").nl();
     out.s(b"Total nodes  : ").u(total).nl();
     out.s(b"Time (ms)    : ").u(ms).nl();

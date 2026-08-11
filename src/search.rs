@@ -81,6 +81,11 @@ pub struct Searcher {
     /// Suppresses `info`/`bestmove` output; data generation runs millions of
     /// searches and the protocol chatter would dominate the run time.
     pub silent: bool,
+    /// Set for searches that are not driven by the GUI: `bench` runs a fixed
+    /// workload, so a `quit` sitting further down the pipe is not an order to
+    /// abandon it. Without this, `printf 'bench\nquit\n' | sable` reports zero
+    /// nodes, which reads as a benchmark result rather than a cancelled run.
+    pub ignore_stdin: bool,
     /// Milliseconds held back from every time budget to cover the trip through
     /// the GUI and the pipe. Set by the `Move Overhead` UCI option: the default
     /// suits a local match runner, a network game wants more.
@@ -110,6 +115,7 @@ pub static SEARCHER: SyncCell<Searcher> = SyncCell::new(Searcher {
     best: Move::NULL,
     best_score: 0,
     silent: false,
+    ignore_stdin: false,
     move_overhead: 25,
     killers: [[Move::NULL; 2]; MAX_PLY + 4],
     history: [[[0; 64]; 64]; 2],
@@ -335,7 +341,7 @@ impl Searcher {
             // Only a UCI search treats stdin as a controller. `datagen` and
             // `relabel` are fed their work on stdin, and polling it there both
             // costs the scan and risks eating input that is not a command.
-            if !self.silent && crate::uci::interrupted() {
+            if !self.silent && !self.ignore_stdin && crate::uci::interrupted() {
                 self.stop = true;
             }
         }

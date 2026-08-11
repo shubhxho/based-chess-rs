@@ -7,6 +7,12 @@ edition = "2021"
 name = "sable"
 path = "src/main.rs"
 
+# The binary is `no_std`, so it cannot unwind. Cargo ignores this setting for
+# the test profile, where the harness does need unwinding, so `cargo test` is
+# unaffected — this only stops a plain `cargo clippy` from failing to build.
+[profile.dev]
+panic = "abort"
+
 [profile.release]
 opt-level = 3
 lto = "fat"

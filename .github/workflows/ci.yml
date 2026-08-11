@@ -42,9 +42,16 @@ jobs:
         run: |
           a=$(printf 'bench 13\n' | ./target/release/sable | awk '/Total nodes/ {print $4}')
           b=$(printf 'bench 13\n' | ./target/release/sable | awk '/Total nodes/ {print $4}')
+          # A trailing `quit` is how every scripted run ends. It used to be read
+          # ahead by the search's stdin poll and abort the benchmark on its first
+          # position, so the run reported 0 nodes and still looked like a result.
+          c=$(printf 'bench 13\nquit\n' | ./target/release/sable | awk '/Total nodes/ {print $4}')
           echo "run 1: $a nodes"
           echo "run 2: $b nodes"
+          echo "run 3 (trailing quit): $c nodes"
           test "$a" = "$b"
+          test "$a" = "$c"
+          test "$a" -gt 0
 
       - name: UCI handshake
         run: |
