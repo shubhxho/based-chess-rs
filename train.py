@@ -44,6 +44,7 @@ SCALE = 400              # network units -> centipawns
 EVAL_WEIGHT = float(os.environ.get("EVAL_W", "0.9"))
 WEIGHTED = os.environ.get("WEIGHTED", "1") != "0"
 WEIGHT_CLAMP = float(os.environ.get("WEIGHT_CLAMP", "3"))
+SHARD_DECAY = float(os.environ.get("SHARD_DECAY", "1.0"))
 SIGMOID_K = float(os.environ.get("SIG_K", "400"))
 ENGINE = os.environ.get("ENGINE", "./target/release/sable")
 
@@ -55,9 +56,22 @@ FEAT_MAGIC = b"SBF2"     # featdump stream header
 # ---------------------------------------------------------------------------
 
 def read_labels(paths, limit):
-    """Pull FEN text and labels out of the augmented self-play shards."""
-    fens, sc, wdl = [], [], []
-    for path in paths:
+    """Pull FEN text and labels out of the augmented self-play shards.
+
+    Positions are deduplicated across shards, later shard wins. The engine
+    deduplicates within one generation run, but two runs months apart still
+    rediscover the same openings, and in a mixed set the duplicate carries the
+    *older*, weaker teacher's label. Keeping the last occurrence means a mixed
+    set is the union of what each teacher saw with the better label on the
+    overlap, rather than a set where the overlap is graded twice.
+
+    Each shard also carries a provenance weight: with SHARD_DECAY below 1, older
+    shards count for less, so a mixed set can lean on the newer teacher without
+    throwing the older positions away.
+    """
+    seen = {}
+    fens, sc, wdl, src = [], [], [], []
+    for si, path in enumerate(paths):
         with open(path, "rb") as fh:
             for line in fh:
                 parts = line.split(b"|")
@@ -76,15 +90,26 @@ def read_labels(paths, limit):
                 if not white:
                     score = -score
                     result = 2 - result
-                fens.append(fen)
-                sc.append(score)
-                wdl.append(result * 0.5)
+                prev = seen.get(fen)
+                if prev is None:
+                    seen[fen] = len(fens)
+                    fens.append(fen)
+                    sc.append(score)
+                    wdl.append(result * 0.5)
+                    src.append(si)
+                else:
+                    # Later shard wins: newer teacher, better label.
+                    sc[prev] = score
+                    wdl[prev] = result * 0.5
+                    src[prev] = si
                 if limit and len(fens) >= limit:
                     break
-        print(f"  {path}: {len(fens)} positions", flush=True)
+        print(f"  {path}: {len(fens)} unique positions", flush=True)
         if limit and len(fens) >= limit:
             break
-    return fens, np.array(sc, np.float32), np.array(wdl, np.float32)
+    n_shards = max(src) + 1 if src else 1
+    age = np.array([SHARD_DECAY ** (n_shards - 1 - i) for i in src], np.float32)
+    return fens, np.array(sc, np.float32), np.array(wdl, np.float32), age
 
 
 def parse_features(path, n_expected):
@@ -250,7 +275,7 @@ def main():
     np.random.seed(seed)
     mx.random.seed(seed)
 
-    fens, sc, wdl = read_labels(shards, limit)
+    fens, sc, wdl, age = read_labels(shards, limit)
     us, them, buckets, width = dump_features(fens, f"data/feat_{limit or 'all'}.bin")
     n = len(sc)
     print(
@@ -281,9 +306,9 @@ def main():
     counts = np.bincount(buckets, minlength=BUCKETS).astype(np.float64)
     share = np.where(counts > 0, counts.sum() / (BUCKETS * np.maximum(counts, 1)), 1.0)
     share = np.clip(share, 1.0 / WEIGHT_CLAMP, WEIGHT_CLAMP)
-    weight = share[buckets].astype(np.float32)
+    weight = (share[buckets] * age).astype(np.float32)
     if not WEIGHTED:
-        weight = np.ones_like(weight)
+        weight = age.astype(np.float32)
     print(
         "  bucket counts " + " ".join(f"{int(c)}" for c in counts) + "\n"
         "  weights       " + " ".join(f"{w:.2f}" for w in share)

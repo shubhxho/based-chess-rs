@@ -153,7 +153,18 @@ produced a network that lost to its own teacher by 20.0 +/- 24.1 over 800 games
 and 24.4 +/- 21.6 over another 1000 — about 22 Elo down across 1800 games, twice
 in a row. Mixing those shards with the previous round's (6M positions in total)
 landed at +4.3 +/- 24.1, and doing the same with bucket-balanced sample weights
-at +4.9 +/- 21.5: nothing, either way. One round of relabelling against a
+at +4.9 +/- 21.5: nothing, either way.
+
+The overlap between rounds was the missing piece. Self-play deduplicates within
+a generation run but not across them, so a mixed set grades the shared openings
+twice, with the older and weaker teacher's label surviving. Deduplicating across
+shards and keeping the newer label on the overlap gives **+12.9 +/- 21.5 over
+1000 games and +11.9 +/- 19.7 over 1200** — about +12 across 2200 — and that is
+the network described here.
+
+Weighting older shards down as well (`SHARD_DECAY` below 1) loses 24.0 +/- 21.6
+and stays off by default. The old positions carry their weight; only their
+labels were stale. One round of relabelling against a
 stronger search was worth about 23 Elo and the next round was worth zero, so
 the gain came from the teacher's jump in strength rather than from iterating,
 and there is no free ladder here.

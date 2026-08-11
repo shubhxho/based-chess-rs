@@ -70,9 +70,18 @@ Doing it a second time bought nothing. Four million more positions, labelled by
 that better network and the search around it, trained a net that *lost* to its
 own teacher — by 20 ± 24 Elo over 800 games and 24 ± 22 over another 1000.
 Mixing old and new shards came out at +4 ± 24, and adding bucket-balanced
-sample weights to that at +5 ± 22. One relabelling against a clearly stronger
-search was worth something; the next one wasn't. Self-distillation isn't a
-ladder you can keep climbing.
+sample weights to that at +5 ± 22.
+
+What finally got something out of the second round was noticing that the two
+rounds *overlap*. The engine drops duplicate positions inside one generation
+run, but two runs rediscover the same openings, and in a mixed set the duplicate
+carries the older, weaker teacher's label. Deduplicating across shards and
+keeping the newer label on the overlap is worth +12 ± 22 and +12 ± 20 over two
+runs — about +12 across 2200 games, and that is the network that ships now.
+
+Weighting the older shards down on top of that, on the theory that the newer
+teacher knows more, loses 24 ± 22. The old positions are worth as much as the
+new ones; it is only their stale *labels* that aren't.
 
 ---
 
