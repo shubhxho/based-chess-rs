@@ -81,14 +81,26 @@ jobs:
           raw = open('/tmp/feat.bin','rb').read()
           assert raw[:4] == b'SBF2', raw[:4]
           n_in, max_f = struct.unpack('<HH', raw[4:8])
-          pos, records = 8, 0
+          # A record is n, then n indices for each of the two perspectives, then
+          # the bucket: 4n + 4 bytes. Striding by 2n + 4 lands mid-record, reads
+          # a feature index as if it were a length, and skips an arbitrary
+          # distance -- which is why this step reported 409 records for 3003
+          # positions and failed every build since it was written. The engine was
+          # right the whole time.
+          pos, records, total = 8, 0, 0
           while pos < len(raw):
               n = struct.unpack_from('<H', raw, pos)[0]
-              pos += 2 * n + 4
+              pos += 4 * n + 4
               records += 1
+              total += n
           want = sum(1 for _ in open('/tmp/fens.txt'))
-          print(f'featdump: {records} records for {want} positions')
+          print(f'featdump: {records} records for {want} positions, {total/records:.1f} features each')
+          # Landing exactly on the end is the real check: it says every length
+          # field in the file agrees with every other, not merely that the count
+          # came out right.
+          assert pos == len(raw), (pos, len(raw))
           assert records == want, (records, want)
+          assert 0 < total / records <= max_f
           EOF
 
       - name: Binary size budget
