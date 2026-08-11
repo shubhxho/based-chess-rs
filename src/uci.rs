@@ -359,6 +359,54 @@ pub fn run() -> ! {
                 tt().resize(8);
                 crate::datagen::run(n, nodes, seed, &mut out);
             }
+            b"relabel" => {
+                // Re-score existing shard lines with the engine as it is now.
+                //
+                // A training set built over several sessions carries labels from
+                // several teachers, and the oldest ones are the worst. Weighting
+                // those positions down throws away good positions to get rid of
+                // bad labels; relabelling fixes the labels and keeps the
+                // positions, which is what you actually wanted.
+                //
+                // Input and output are both `FEN | score | result` lines, so a
+                // relabelled shard is a drop-in replacement for its original.
+                let nodes = parse_u64(t.next().unwrap_or(b"6000")).max(100);
+                tt().resize(8);
+                let s = searcher();
+                s.silent = true;
+                while let Some(line) = read_line(&mut out) {
+                    let end = line.iter().position(|&c| c == 0 || c == b'\r').unwrap_or(line.len());
+                    let body = &line[..end];
+                    let bar = match body.iter().position(|&c| c == b'|') {
+                        Some(i) => i,
+                        None => continue,
+                    };
+                    let tail = match body[bar + 1..].iter().position(|&c| c == b'|') {
+                        Some(i) => &body[bar + 1 + i..],
+                        None => continue,
+                    };
+                    let mut fen_end = bar;
+                    while fen_end > 0 && body[fen_end - 1] == b' ' {
+                        fen_end -= 1;
+                    }
+                    if fen_end == 0 {
+                        continue;
+                    }
+                    let p = position();
+                    p.set_fen(&body[..fen_end]);
+                    s.limits = Limits::new();
+                    s.limits.nodes = nodes;
+                    s.go(p, &mut out);
+                    if s.best.is_null() {
+                        continue; // mate or stalemate: nothing to learn from
+                    }
+                    // Shards store scores from white's point of view.
+                    let white_score = if p.stm == WHITE { s.best_score } else { -s.best_score };
+                    out.s(&body[..fen_end]).s(b" | ").i(white_score as i64).s(b" ").s(tail).nl();
+                }
+                s.silent = false;
+                out.flush();
+            }
             b"featdump" => {
                 // Every remaining line of stdin is a FEN. For each one, emit the
                 // active feature indices for both perspectives plus the output

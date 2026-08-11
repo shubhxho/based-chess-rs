@@ -4,6 +4,7 @@
 /data2
 /data_new
 /data_r2
+/data_relabel
 *.npz
 .DS_Store
 __pycache__/
