@@ -398,13 +398,16 @@ is, nothing at all, for 16 KB more binary. The portability baseline costs
 nothing, which is the good version of this result.
 
 Profile-guided optimisation is the knob that should pay on a search this
-branchy, and it does not work here. `-Cprofile-generate` links and the
-instrumented binary is duly slower, but no profile ever appears: the engine
-leaves through a raw `exit` syscall, so the runtime's write-on-exit hook never
-runs. Calling `__llvm_profile_write_file` directly produces a file of zero
-bytes, because on a `no_std` binary on stable the counters are never registered
-with the runtime that would dump them. Getting there needs `-Z build-std` and a
-nightly toolchain, which is a heavier requirement than the result deserves.
+branchy, and it will not run here. `-Cprofile-generate` links and does its half
+of the job: the binary grows from 264 KB to 349 KB, which is 85 KB of counters.
+Nothing ever comes out of them. The engine leaves through a raw `exit` syscall,
+so the runtime's write-on-exit hook never fires; calling
+`__llvm_profile_write_file` by hand creates the file and writes zero bytes to
+it, with or without `strip`. The counters exist and the runtime cannot find
+them — on Mach-O it locates them through section markers that a `no_std` binary
+with its own entry point and a hand-rolled link line does not set up. That is
+solvable with enough linker archaeology, or by moving to `-Z build-std` on
+nightly, and neither is worth a gain nobody has measured yet.
 
 **Two smaller versions of the same lesson.** `features_both` checks `n < MAX_F`
 before every feature it writes, and those checks are dead: the count can't
