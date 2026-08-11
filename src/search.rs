@@ -328,7 +328,10 @@ impl Searcher {
             if !self.limits.infinite && self.elapsed() >= self.hard {
                 self.stop = true;
             }
-            if crate::uci::interrupted() {
+            // Only a UCI search treats stdin as a controller. `datagen` and
+            // `relabel` are fed their work on stdin, and polling it there both
+            // costs the scan and risks eating input that is not a command.
+            if !self.silent && crate::uci::interrupted() {
                 self.stop = true;
             }
         }

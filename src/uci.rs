@@ -35,6 +35,11 @@ impl InBuf {
             return;
         }
         if self.len == IN_CAP {
+            if self.line_end().is_some() {
+                // Full of complete lines the caller has not read yet. Dropping
+                // them here would silently eat input; wait to be drained.
+                return;
+            }
             // Pathological input with no newline; drop it rather than wedge.
             self.len = 0;
             self.scanned = 0;
