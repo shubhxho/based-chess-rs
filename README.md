@@ -342,6 +342,35 @@ python arena.py ./sable-std ./sable-hce 400 "nodes 20000" 9
 
 Recorded because a negative result nobody writes down gets re-attempted.
 
+**How any of this is measured.** The machine drifts: over one afternoon the
+same unmodified binary produced medians of 495, 476, 455 and 428 ms. Comparing
+two medians taken minutes apart therefore measures the weather. `tests/paircmp.sh`
+runs the two binaries adjacently and keeps the *difference* per pair, alternating
+which one goes first, so whatever the machine is doing lands on both halves and
+cancels. Run against itself it reports a median delta of 0 ms with an interval of
+±3 ms over 21 pairs — that is the noise floor, and anything smaller than it was
+never a result. Node count is the correctness check throughout: 1,399,778 at
+`bench 13` and 9,623,933 at `bench 18`. A change that moves either one is a
+change to the search, whatever else it claims to be.
+
+**Deferring the losing-capture test into move selection.** Quiescence scores
+every noisy move up front, which runs a full swap evaluation on each, and then
+usually leaves after two or three of them. Carrying the winning-band score as an
+optimistic placeholder and resolving it only when a move wins a scan is exactly
+equivalent — the score is an upper bound on the truth, resolution only lowers
+it, and the scan keeps the earliest maximum, so the same move comes out, ties
+included. Node counts confirmed it to the digit at two depths. It is also not
+faster: resolving in place forces the scan to restart, and that O(n) rescan
+costs about what the skipped evaluation saves. 428 against 430 ms over 41 pairs.
+
+**Two smaller versions of the same lesson.** Splitting `features_both` on a
+const generic so the hot path carries no `n < MAX_F` compare — the bound is
+provably `2·pieces + 12 ≤ 76`, so those branches really are dead — measured
++1 ms with an interval of [-5, +7] and cost 16 KB of binary for the second
+monomorphisation. Merging the piece-square and mobility walks, which scan the
+same four bitboards twice, measured +9 ms over 25 pairs and then -2 ms over 41.
+The first number is why the interval is printed.
+
 **Deferred quiet scoring.** Two thirds of the quiet moves a node generates are
 never picked — the node cuts, or late-move pruning takes the tail — and each one
 costs three history lookups scattered across four megabytes. Leaving them
