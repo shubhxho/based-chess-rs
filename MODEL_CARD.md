@@ -276,7 +276,9 @@ the current engine.
   neurons a matrix row is four NEON registers, and most of the 166 non-piece-
   square rows change on almost every move anyway, so an incremental update would
   only cover the piece-square part. The eval cache took the easy half of that win
-  for a fraction of the complexity.
+  for a fraction of the complexity, and the refresh itself now keeps both
+  perspectives in registers for the whole feature list rather than storing the
+  accumulator back to memory once per row.
 
 ## License
 

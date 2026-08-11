@@ -1,2 +1,11 @@
 max_width = 110
 use_small_heuristics = "Max"
+
+# Pinned rather than inferred. rustfmt guesses the edition from the invocation,
+# so `cargo fmt` and a bare `rustfmt src/*.rs` could disagree about the same
+# file; CI runs the first and a person reaching for the second should not get a
+# diff out of it. Every option here is stable -- a nightly-only setting would
+# pass locally and fail the `-D warnings` job on stable.
+edition = "2021"
+newline_style = "Unix"
+use_field_init_shorthand = true

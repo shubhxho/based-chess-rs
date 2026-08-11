@@ -182,6 +182,14 @@ microseconds earlier. It buys about 3% at `bench 13` and returns bit-identical
 node counts, which is the useful property: a cache that changed the search would
 be a cache that was wrong.
 
+What survives the cache runs through a tighter accumulator. Thirty-two hidden
+neurons are four NEON registers, so both perspectives now stay in the register
+file for the whole walk over the feature list — the earlier version called an
+`acc += row` helper per feature and reloaded and stored the accumulator around
+each one, eighty round trips to memory per evaluation for arithmetic that never
+had to leave. Cache and accumulator together: 492 ms to 459 ms on `bench 13`,
+best of nine runs each, same 1,399,778 nodes.
+
 Ordering is what makes the pruning safe, so it gets as much care as the pruning
 rules: TT move first, then captures classified by static exchange evaluation,
 killers, the counter-move, and finally quiets ranked by butterfly history plus

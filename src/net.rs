@@ -317,37 +317,54 @@ pub fn bucket_of(pieces: usize) -> usize {
 // Inference
 // ---------------------------------------------------------------------------
 
-fn accumulate(acc: &mut [i16; H], feat: &[u16], count: usize) {
-    let n = net();
-    acc.copy_from_slice(&n.ft_b);
-    for &f in feat.iter().take(count) {
-        let base = f as usize * H;
-        add_row(acc, &n.ft_w[base..base + H]);
-    }
-}
+/// A hidden layer this size is four NEON registers, so the accumulators stay in
+/// them for the whole walk over the feature list. The obvious version — one
+/// `acc += row` helper called per feature — reloads and restores the
+/// accumulator around every single row, which is eighty round trips to memory
+/// per evaluation for arithmetic that never needed to leave the register file.
+const _: () = assert!(H.is_multiple_of(8), "the accumulator is walked eight lanes at a time");
 
-/// `acc += row`, widening int8 to int16. Written against the NEON intrinsics
-/// directly; the scalar path exists only for non-aarch64 builds.
-#[inline(always)]
-fn add_row(acc: &mut [i16; H], row: &[i8]) {
+/// Both perspectives at once. They read different rows but the same feature
+/// count, so pairing them halves the loop overhead and gives the two
+/// independent load-add chains something to interleave with.
+fn accumulate_both(us: &mut [i16; H], them: &mut [i16; H], fu: &[u16], ft: &[u16], count: usize) {
+    let n = net();
+
     #[cfg(target_arch = "aarch64")]
     unsafe {
         use core::arch::aarch64::*;
-        let mut i = 0;
-        while i + 8 <= H {
-            let w = vmovl_s8(vld1_s8(row.as_ptr().add(i)));
-            let a = vld1q_s16(acc.as_ptr().add(i));
-            vst1q_s16(acc.as_mut_ptr().add(i), vaddq_s16(a, w));
-            i += 8;
+        const V: usize = H / 8;
+        let mut a = [vdupq_n_s16(0); V];
+        let mut b = [vdupq_n_s16(0); V];
+        for j in 0..V {
+            a[j] = vld1q_s16(n.ft_b.as_ptr().add(j * 8));
+            b[j] = a[j];
         }
-        while i < H {
-            acc[i] += row[i] as i16;
-            i += 1;
+        for i in 0..count {
+            let ra = n.ft_w.as_ptr().add(*fu.get_unchecked(i) as usize * H);
+            let rb = n.ft_w.as_ptr().add(*ft.get_unchecked(i) as usize * H);
+            for j in 0..V {
+                a[j] = vaddq_s16(a[j], vmovl_s8(vld1_s8(ra.add(j * 8))));
+                b[j] = vaddq_s16(b[j], vmovl_s8(vld1_s8(rb.add(j * 8))));
+            }
+        }
+        for j in 0..V {
+            vst1q_s16(us.as_mut_ptr().add(j * 8), a[j]);
+            vst1q_s16(them.as_mut_ptr().add(j * 8), b[j]);
         }
     }
+
     #[cfg(not(target_arch = "aarch64"))]
-    for i in 0..H {
-        acc[i] += row[i] as i16;
+    {
+        us.copy_from_slice(&n.ft_b);
+        them.copy_from_slice(&n.ft_b);
+        for i in 0..count {
+            let (ba, bb) = (fu[i] as usize * H, ft[i] as usize * H);
+            for j in 0..H {
+                us[j] += n.ft_w[ba + j] as i16;
+                them[j] += n.ft_w[bb + j] as i16;
+            }
+        }
     }
 }
 
@@ -405,8 +422,7 @@ pub fn evaluate(pos: &Position) -> i32 {
     let count = features_both(pos, pos.stm, &mut fu, &mut ft);
     let mut us = [0i16; H];
     let mut them = [0i16; H];
-    accumulate(&mut us, &fu, count);
-    accumulate(&mut them, &ft, count);
+    accumulate_both(&mut us, &mut them, &fu, &ft, count);
     let b = bucket_of(popcount(pos.occ()) as usize);
     let w = &n.out_w[b * 2 * H..(b + 1) * 2 * H];
     let out = propagate(&us, &w[..H]) + propagate(&them, &w[H..]) + n.out_b[b];
