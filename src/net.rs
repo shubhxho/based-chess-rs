@@ -274,6 +274,7 @@ pub fn features_both(pos: &Position, persp: usize, a: &mut [u16; MAX_F], b: &mut
 }
 
 /// Single-perspective view, for the training-data dump.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn features(pos: &Position, persp: usize, out: &mut [u16; MAX_F]) -> usize {
     let mut other = [0u16; MAX_F];
     features_both(pos, persp, out, &mut other)

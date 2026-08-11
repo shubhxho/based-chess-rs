@@ -360,16 +360,36 @@ pub fn run() -> ! {
                 crate::datagen::run(n, nodes, seed, &mut out);
             }
             b"featdump" => {
-                // Every remaining line of stdin is a FEN. For each one, emit a
-                // fixed-size binary record of the active feature indices for
-                // both perspectives plus the output bucket.
+                // Every remaining line of stdin is a FEN. For each one, emit the
+                // active feature indices for both perspectives plus the output
+                // bucket, as little-endian u16:
+                //
+                //   header  "SBF2", IN, MAX_F
+                //   record  n, us[n], them[n], bucket
                 //
                 // The trainer reads these rather than deriving features itself.
                 // Two implementations of the same feature map is one of the few
                 // bugs here that would produce a network which loads, runs, and
                 // is silently wrong.
-                use crate::net::{bucket_of, features, IN as NET_IN, MAX_F};
-                const REC: usize = MAX_F * 4 + 2;
+                //
+                // Records carry their own length rather than padding out to
+                // MAX_F. A typical position lights up around forty features of
+                // the ninety-six slots, so the padding was more than half the
+                // file — and the file has to fit in memory on the machine that
+                // trains from it.
+                use crate::net::{bucket_of, features_both, IN as NET_IN, MAX_F};
+                let mut u16buf = [0u8; 2];
+                macro_rules! put16 {
+                    ($out:expr, $v:expr) => {{
+                        let v = $v as u16;
+                        u16buf[0] = v as u8;
+                        u16buf[1] = (v >> 8) as u8;
+                        $out.s(&u16buf);
+                    }};
+                }
+                out.s(b"SBF2");
+                put16!(out, NET_IN);
+                put16!(out, MAX_F);
                 while let Some(line) = read_line(&mut out) {
                     let end = line.iter().position(|&c| c == 0 || c == b'\r').unwrap_or(line.len());
                     if end == 0 {
@@ -377,23 +397,19 @@ pub fn run() -> ! {
                     }
                     let p = position();
                     p.set_fen(&line[..end]);
-                    let mut rec = [0u8; REC];
-                    let mut f = [0u16; MAX_F];
-                    for (side, half) in [(p.stm, 0usize), (p.stm ^ 1, 1usize)] {
-                        let n = features(p, side, &mut f);
-                        for (i, slot) in f.iter().enumerate() {
-                            // Unused slots point at the zero row, so every
-                            // record is the same width.
-                            let v = if i < n { *slot } else { NET_IN as u16 };
-                            let o = (half * MAX_F + i) * 2;
-                            rec[o] = v as u8;
-                            rec[o + 1] = (v >> 8) as u8;
-                        }
+                    // One pass for both perspectives: they describe the same
+                    // board and only the index arithmetic differs.
+                    let mut us = [0u16; MAX_F];
+                    let mut them = [0u16; MAX_F];
+                    let n = features_both(p, p.stm, &mut us, &mut them);
+                    put16!(out, n);
+                    for v in us.iter().take(n) {
+                        put16!(out, *v);
                     }
-                    let b = bucket_of(popcount(p.occ()) as usize) as u16;
-                    rec[MAX_F * 4] = b as u8;
-                    rec[MAX_F * 4 + 1] = (b >> 8) as u8;
-                    out.s(&rec);
+                    for v in them.iter().take(n) {
+                        put16!(out, *v);
+                    }
+                    put16!(out, bucket_of(popcount(p.occ()) as usize));
                 }
                 out.flush();
             }

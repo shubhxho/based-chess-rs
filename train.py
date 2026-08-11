@@ -45,7 +45,7 @@ EVAL_WEIGHT = float(os.environ.get("EVAL_W", "0.9"))
 SIGMOID_K = float(os.environ.get("SIG_K", "400"))
 ENGINE = os.environ.get("ENGINE", "./target/release/sable")
 
-REC = MAX_F * 2 + 1      # uint16s per featdump record: us, them, bucket
+FEAT_MAGIC = b"SBF2"     # featdump stream header
 
 
 # ---------------------------------------------------------------------------
@@ -85,13 +85,60 @@ def read_labels(paths, limit):
     return fens, np.array(sc, np.float32), np.array(wdl, np.float32)
 
 
+def parse_features(path, n_expected):
+    """Unpack a featdump stream into padded index arrays.
+
+    The stream is self-describing: a header, then one variable-length record per
+    position. Records are packed rather than padded to MAX_F, so the array width
+    here is the widest position actually seen -- typically well under the
+    ninety-six slots the engine allows for, which is the difference between the
+    feature cache fitting in memory and not.
+    """
+    with open(path, "rb") as fh:
+        head = fh.read(8)
+    if len(head) < 8 or head[:4] != FEAT_MAGIC:
+        return None
+    n_in, max_f = struct.unpack("<HH", head[4:])
+    if n_in != IN or max_f != MAX_F:
+        raise SystemExit(f"featdump says IN={n_in} MAX_F={max_f}, trainer says {IN} {MAX_F}")
+
+    raw = np.fromfile(path, dtype="<u2", offset=8)
+
+    # Walk the record starts once. The lengths are only knowable in sequence,
+    # so this is the one loop; everything after it is vectorised.
+    counts = np.empty(n_expected, np.int32)
+    starts = np.empty(n_expected, np.int64)
+    pos, k, total = 0, 0, len(raw)
+    while pos < total and k < n_expected:
+        n = int(raw[pos])
+        counts[k] = n
+        starts[k] = pos + 1
+        pos += 2 * n + 2          # n, us[n], them[n], bucket
+        k += 1
+    if k != n_expected or pos != total:
+        raise SystemExit(f"featdump returned {k} records for {n_expected} positions")
+
+    width = int(counts.max())
+    ends = np.cumsum(counts)
+    # Ragged arange: 0..n-1 within each record, concatenated.
+    offsets = np.arange(int(ends[-1]), dtype=np.int64) - np.repeat(ends - counts, counts)
+    rows = np.repeat(np.arange(n_expected, dtype=np.int64), counts)
+    us = np.full((n_expected, width), PAD, np.int32)
+    them = np.full((n_expected, width), PAD, np.int32)
+    base = np.repeat(starts, counts)
+    us[rows, offsets] = raw[base + offsets]
+    them[rows, offsets] = raw[base + counts.repeat(counts) + offsets]
+    buckets = raw[starts + 2 * counts].astype(np.int32)
+    return us, them, buckets, width
+
+
 def dump_features(fens, cache):
     """Ask the engine for the feature indices of every position."""
     if os.path.exists(cache):
-        raw = np.fromfile(cache, dtype="<u2")
-        if len(raw) == len(fens) * REC:
+        parsed = parse_features(cache, len(fens))
+        if parsed is not None:
             print(f"cache hit: {cache}")
-            return raw.reshape(-1, REC)
+            return parsed
         print("cache stale, regenerating")
 
     cmds = os.path.join(os.path.dirname(cache) or ".", "_fens.txt")
@@ -104,13 +151,11 @@ def dump_features(fens, cache):
         subprocess.run([ENGINE], stdin=stdin, stdout=stdout, check=True)
     os.remove(cmds)
 
-    raw = np.fromfile(cache, dtype="<u2")
-    if len(raw) != len(fens) * REC:
-        raise SystemExit(
-            f"featdump returned {len(raw)//REC} records for {len(fens)} positions"
-        )
+    parsed = parse_features(cache, len(fens))
+    if parsed is None:
+        raise SystemExit("featdump produced no usable header")
     print(f"  featdump: {len(fens)} positions in {time.time()-t0:.0f}s")
-    return raw.reshape(-1, REC)
+    return parsed
 
 
 # ---------------------------------------------------------------------------
@@ -204,12 +249,12 @@ def main():
     mx.random.seed(seed)
 
     fens, sc, wdl = read_labels(shards, limit)
-    feats = dump_features(fens, f"data/feat_{limit or 'all'}.bin")
+    us, them, buckets, width = dump_features(fens, f"data/feat_{limit or 'all'}.bin")
     n = len(sc)
-    us = feats[:, :MAX_F].astype(np.int32)
-    them = feats[:, MAX_F : 2 * MAX_F].astype(np.int32)
-    buckets = feats[:, 2 * MAX_F].astype(np.int32)
-    print(f"{n} positions, {epochs} epochs, {feats.nbytes/1e6:.0f} MB of features, seed {seed}")
+    print(
+        f"{n} positions, {epochs} epochs, {(us.nbytes + them.nbytes)/1e6:.0f} MB of "
+        f"features at width {width} of {MAX_F}, seed {seed}"
+    )
 
     # Held-out positions never touched by the optimiser. The exported network
     # is the epoch that did best here, not whatever the last epoch happened
