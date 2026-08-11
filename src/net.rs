@@ -198,6 +198,19 @@ pub fn features_both(pos: &Position, persp: usize, a: &mut [u16; MAX_F], b: &mut
     let mut n = 0usize;
     let occ = pos.occ();
 
+    // Every knight, bishop, rook and queen is asked for its attack set exactly
+    // once. Mobility wants it for the piece's own colour and king safety wants
+    // the same board from the other side, so the first version generated each
+    // one twice — and a queen's attack set is two magic lookups. The counts are
+    // filled in during the mobility walk and emitted after both colours are
+    // done, because the pieces that bear on white's king are black's, and they
+    // are not seen until the second pass.
+    let zone = [
+        king_attacks(pos.king_sq(WHITE)) | bit(pos.king_sq(WHITE)),
+        king_attacks(pos.king_sq(BLACK)) | bit(pos.king_sq(BLACK)),
+    ];
+    let mut attackers = [0usize; 2];
+
     for c in 0..2 {
         // Relative colour under each perspective. The two are always opposite,
         // because the perspectives themselves are.
@@ -245,6 +258,9 @@ pub fn features_both(pos: &Position, persp: usize, a: &mut [u16; MAX_F], b: &mut
                 };
                 let m = popcount(att & !pos.color[c]) as usize;
                 put!(MOB, 4 * 12, (pt - 1) * 12 + m.min(11));
+                if att & zone[them] != 0 {
+                    attackers[them] += 1;
+                }
             }
         }
 
@@ -291,28 +307,23 @@ pub fn features_both(pos: &Position, persp: usize, a: &mut [u16; MAX_F], b: &mut
         if more_than_one(pos.pieces(c, BISHOP_P)) {
             put!(PAIR, 1, 0);
         }
+    }
 
-        // --- king safety: how many enemy pieces bear on the king's neighbourhood
-        let ksq = pos.king_sq(c);
-        let zone = king_attacks(ksq) | bit(ksq);
-        let mut attackers = 0usize;
-        for pt in [KNIGHT_P, BISHOP_P, ROOK_P, QUEEN_P] {
-            let mut e = pos.pieces(them, pt);
-            while e != 0 {
-                let sq = pop_lsb(&mut e);
-                let att = match pt {
-                    KNIGHT_P => knight_attacks(sq),
-                    BISHOP_P => bishop_attacks(sq, occ),
-                    ROOK_P => rook_attacks(sq, occ),
-                    _ => queen_attacks(sq, occ),
-                };
-                if att & zone != 0 {
-                    attackers += 1;
-                }
-            }
+    // --- king safety, now that both sides' attackers have been counted
+    for c in 0..2 {
+        let ra = if c == persp { 0 } else { 1 };
+        let rb = 1 - ra;
+        if n < MAX_F {
+            a[n] = (KING_ATT + ra * 8 + attackers[c].min(7)) as u16;
+            b[n] = (KING_ATT + rb * 8 + attackers[c].min(7)) as u16;
+            n += 1;
         }
-        put!(KING_ATT, 8, attackers.min(7));
-        put!(SHELTER, 4, (popcount(zone & our_pawns) as usize).min(3));
+        let shelter = (popcount(zone[c] & pos.pieces(c, PAWN_P)) as usize).min(3);
+        if n < MAX_F {
+            a[n] = (SHELTER + ra * 4 + shelter) as u16;
+            b[n] = (SHELTER + rb * 4 + shelter) as u16;
+            n += 1;
+        }
     }
 
     n
