@@ -4,6 +4,14 @@
 # Every other position this suite once contained came from my memory, and five
 # of them were wrong. python-chess (tests/perft_oracle.py) is the oracle for
 # anything beyond these — never a remembered constant.
+#
+# pos3 is the one worth being sure about: a bare pawns-and-rooks endgame that
+# leans on en passant, pinned pawn captures and rook x-rays, which is where a
+# generator that is subtly wrong shows it. Its numbers have since been recomputed
+# move for move with python-chess at every depth from 1 to 7 — 14, 191, 2812,
+# 43238, 674624, 11030083, 178633661 — and all seven agree with the engine. The
+# d8 figure below is still a published constant; three billion nodes is out of
+# reach for a pure-Python reference.
 
 cd "$(dirname "$0")/.." || exit 1
 ENGINE=${ENGINE:-./target/release/sable}
