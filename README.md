@@ -62,8 +62,9 @@ input set was the whole thing.
 The one thing that did move it later was the *teacher*. Relabelling the whole
 set with a search about 30 Elo stronger, at 6,000 nodes a move instead of 5,000
 and with repeated positions thrown away, gave a network that beats the one it
-replaced by +23.5 ± 24.1 Elo over 800 games. The student can only be as good as
-what it is shown.
+replaced by +23.5 ± 24.1 Elo over 800 games, and by +23.0 ± 21.6 over a further
+1000 — the same margin twice. The student can only be as good as what it is
+shown.
 
 ---
 

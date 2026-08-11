@@ -149,7 +149,8 @@ that ever mattered.
 
 What did move: the teacher. Relabelling from scratch with a search roughly 30
 Elo stronger, at 6k nodes instead of 5k and with duplicates removed, produced a
-network that beats the one it replaces by **+23.5 ± 24.1 Elo over 800 games**.
+network that beats the one it replaces by **+23.5 ± 24.1 Elo over 800 games**,
+and by +23.0 ± 21.6 over a further 1000 — the same margin twice.
 Its fit numbers against that harder, less repetitive data (r 0.974, MAE 85.1,
 RMSE 137.7 cp) are not comparable to the table above, which was measured on the
 old shards — a better teacher gives you harder targets, so a bigger residual
