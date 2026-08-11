@@ -125,21 +125,35 @@ The teacher is the engine's **own alpha-beta search** — the distillation
 principle behind DeepMind's searchless grandmaster-level chess, at a size that
 fits in L1 cache rather than a TPU pod. The student never searches.
 
-- **Data**: 3.36M positions from engine self-play out of randomised openings, in
-  two iterations (3.0M at 3k nodes/move, then 0.35M at 5k nodes/move once the
-  engine had a network of its own).
+- **Data**: 3.4M positions from engine self-play out of randomised openings of
+  8 to 16 plies, labelled at 6k nodes/move by the current engine. Positions are
+  deduplicated by Zobrist key across the whole run, and the first two plies of
+  real play are skipped — those are the engine repairing whatever the random
+  opening did. Earlier releases used 3.36M positions labelled at 3k and 5k
+  nodes by weaker versions of the same search; those shards are kept, not
+  mixed in, so each network has one teacher rather than an average of several.
 - **Filtering**: positions are dropped when the side to move is in check or the
   best move is a capture. There the tactic decides the game, not the static
   evaluation, and training on them only teaches the network to imitate search —
   which it has no mechanism to do.
 - **Objective**: MSE in win-probability space,
   `sigmoid(net / 400)` against `0.9 * sigmoid(search / 400) + 0.1 * result`.
-- **Optimiser**: AdamW, batch 16384, lr 1e-2 decayed 0.78x per epoch.
+- **Optimiser**: AdamW, batch 16384, lr 1e-2 with one warmup epoch then cosine
+  decay over 30 epochs. 5% of positions are held out; the exported network is
+  the epoch that did best on them, not the last one.
 
 Data volume is not the constraint either: retraining on the full 3.36M against
 2M moves the fit by nothing worth reporting (r 0.970 -> 0.968, RMSE 130.1 ->
 130.8 cp). Between that and the width sweep, the feature set was the only thing
 that ever mattered.
+
+What did move: the teacher. Relabelling from scratch with a search roughly 30
+Elo stronger, at 6k nodes instead of 5k and with duplicates removed, produced a
+network that beats the one it replaces by **+23.5 ± 24.1 Elo over 800 games**.
+Its fit numbers against that harder, less repetitive data (r 0.974, MAE 85.1,
+RMSE 137.7 cp) are not comparable to the table above, which was measured on the
+old shards — a better teacher gives you harder targets, so a bigger residual
+against a better opponent is the expected shape of an improvement.
 
 ### Features come from the engine, never from the trainer
 
