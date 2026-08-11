@@ -3,6 +3,7 @@
 /data
 /data2
 /data_new
+/data_r2
 *.npz
 .DS_Store
 __pycache__/
