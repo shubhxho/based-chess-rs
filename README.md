@@ -342,60 +342,71 @@ python arena.py ./sable-std ./sable-hce 400 "nodes 20000" 9
 
 Recorded because a negative result nobody writes down gets re-attempted.
 
-**How any of this is measured.** The machine drifts: over one afternoon the
-same unmodified binary produced medians of 495, 476, 455 and 428 ms. Comparing
-two medians taken minutes apart therefore measures the weather. `tests/paircmp.sh`
-runs the two binaries adjacently and keeps the *difference* per pair, alternating
-which one goes first, so whatever the machine is doing lands on both halves and
-cancels. Run against itself it reports a median delta of 0 ms with an interval of
-±3 ms over 21 pairs — that is the noise floor, and anything smaller than it was
-never a result. Node count is the correctness check throughout: 1,399,778 at
-`bench 13` and 9,623,933 at `bench 18`. A change that moves either one is a
-change to the search, whatever else it claims to be.
+**First, how any of this gets measured.** This machine drifts. In one afternoon
+the same untouched binary reported medians of 495, 476, 455 and 428 ms — a
+spread wider than anything I changed that day. So comparing two medians taken
+minutes apart doesn't measure the change, it measures the weather.
 
-**Deferring the losing-capture test into move selection.** Quiescence scores
-every noisy move up front, which runs a full swap evaluation on each, and then
-usually leaves after two or three of them. Carrying the winning-band score as an
-optimistic placeholder and resolving it only when a move wins a scan is exactly
-equivalent — the score is an upper bound on the truth, resolution only lowers
-it, and the scan keeps the earliest maximum, so the same move comes out, ties
-included. Node counts confirmed it to the digit at two depths. It is also not
-faster: resolving in place forces the scan to restart, and that O(n) rescan
-costs about what the skipped evaluation saves. 428 against 430 ms over 41 pairs.
+`tests/paircmp.sh` runs both binaries back to back and keeps the *difference*
+from each pair, alternating which one goes first. Whatever the machine is doing
+hits both halves and cancels. Point it at two copies of the same binary and it
+says 0 ms, ±3 ms, over 21 pairs. That ±3 ms is the floor. Anything smaller than
+it was never a result, and I have the retracted claims to prove it.
 
-**Scoring quiescence's captures at quiescence's own threshold.** Move ordering
-sorts a capture above the quiet moves when its swap value clears -20, and then
-quiescence, which will not search anything below 0, asks a second time with the
-tighter number. Scoring at 0 in the first place should collapse the two: the
-moves that differ are exactly those the second test was going to throw away, and
-dropping them earlier cannot change which moves get searched or in what order.
-The argument survives contact with the awkward cases too — the tt move and queen
-promotions are scored by what they are rather than what they win, so they keep
-their own test, and a quiescence node that is *in check* searches losing
-captures, so it keeps the old threshold.
+The correctness check is the node count: 1,399,778 at `bench 13` and 9,623,933
+at `bench 18`. If a change moves either number it changed the search, whatever
+it says on the label.
 
-It still moves the node count: 1,400,014 against 1,399,778 at depth 13, and
-9,326,301 against 9,623,933 at depth 18. Fewer nodes, which is the direction
-that flatters it, and no explanation for either number in the argument above.
-Something in the premise is false — most likely that `see_ge` is exactly
-monotone in its threshold, given the pruning it does internally on the way to an
-answer. A change that moves the tree is a change to how the engine plays,
-measurable only by playing games, and it was sold as a free speedup. Reverted
-unmeasured.
+**Making quiescence decide captures lazily.** Quiescence scores every capture
+before it looks at any of them, and each score costs a full swap evaluation.
+Then it usually leaves after two or three moves. All that work, thrown away.
 
-**Two smaller versions of the same lesson.** Splitting `features_both` on a
-const generic so the hot path carries no `n < MAX_F` compare — the bound is
-provably `2·pieces + 12 ≤ 76` for any legal position, so those branches really
-are dead — read +1 ms over 25 pairs and then **-5 ms over 41**, faster in 16 of
-them. Not noise in the end: the second monomorphisation adds 16 KB, and the
-instruction cache charges more for it than the branches ever cost. The other way
-to reach the same place is to size the buffer past the 140 features a 64-piece
-FEN could produce and drop the checks with no duplication, but `MAX_F` is
-written into the featdump header and mirrored in `train.py`, so that grows every
-training record by half for a saving already shown to be under the noise floor.
-The guards stay. Merging the piece-square and mobility walks, which scan the
-same four bitboards twice, measured +9 ms over 25 pairs and then -2 ms over 41.
-That first number is why the interval is printed.
+The fix looks obvious: give each capture the score it would have if it won, and
+only run the real test when a move actually wins a scan. That's exact, and the
+proof is nicer than I expected — a provisional score is always an upper bound,
+resolving it only ever lowers it, and the scan keeps the earliest maximum, so
+the same move comes out every time, ties and all. Node counts agreed to the
+digit at two depths.
+
+It just isn't faster. Resolving a score in place makes the scan start over, and
+that restart costs about what the skipped evaluation saves. 428 against 430 ms
+over 41 pairs. Deleted.
+
+**Scoring those captures at quiescence's own threshold.** Same target, better
+idea. Ordering puts a capture above the quiet moves if its swap value clears
+-20; quiescence then asks again whether it clears 0. Score at 0 up front and
+the second question disappears. The moves that change bands are exactly the ones
+the second test was going to discard, so nothing that gets searched should move.
+Even the awkward cases work out: the tt move and queen promotions are scored by
+what they are rather than what they win, so they keep an explicit test, and a
+quiescence node in check does search losing captures, so it keeps the old
+threshold.
+
+The node count moved anyway — 1,400,014 against 1,399,778, and 9,326,301
+against 9,623,933. Fewer nodes, which is the flattering direction, and nothing
+in the argument above predicts either number. Some premise is false, most likely
+that `see_ge` is exactly monotone in its threshold given how much pruning it
+does on the way to an answer. Fewer nodes might genuinely be better here, but
+that's a claim about playing strength and only games settle those. I pitched it
+as a free speedup. It wasn't one, so it went back.
+
+**Two smaller versions of the same lesson.** `features_both` checks `n < MAX_F`
+before every feature it writes, and those checks are dead: the count can't
+exceed `2·pieces + 12`, which is 76 on a full board against a limit of 96. Split
+the function on a const generic and the hot copy carries none of them. It read
++1 ms over 25 pairs, then **-5 ms over 41**, faster in only 16 of them. Not
+noise — the second copy of the function adds 16 KB, and the instruction cache
+charges more for that than the compares ever did.
+
+There's another way to get there: make the buffer bigger than any FEN could
+fill, and drop the checks with nothing duplicated. But `MAX_F` is written into
+the featdump header and mirrored in `train.py`, so that grows every training
+record by half to buy something already measured below the floor. The checks
+stay.
+
+Merging the piece-square and mobility walks, which scan the same four bitboards
+twice over, read +9 ms across 25 pairs and then -2 ms across 41. The first
+number is exactly why the interval gets printed next to the median.
 
 **Deferred quiet scoring.** Two thirds of the quiet moves a node generates are
 never picked — the node cuts, or late-move pruning takes the tail — and each one
