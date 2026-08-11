@@ -365,11 +365,17 @@ costs about what the skipped evaluation saves. 428 against 430 ms over 41 pairs.
 
 **Two smaller versions of the same lesson.** Splitting `features_both` on a
 const generic so the hot path carries no `n < MAX_F` compare — the bound is
-provably `2·pieces + 12 ≤ 76`, so those branches really are dead — measured
-+1 ms with an interval of [-5, +7] and cost 16 KB of binary for the second
-monomorphisation. Merging the piece-square and mobility walks, which scan the
+provably `2·pieces + 12 ≤ 76` for any legal position, so those branches really
+are dead — read +1 ms over 25 pairs and then **-5 ms over 41**, faster in 16 of
+them. Not noise in the end: the second monomorphisation adds 16 KB, and the
+instruction cache charges more for it than the branches ever cost. The other way
+to reach the same place is to size the buffer past the 140 features a 64-piece
+FEN could produce and drop the checks with no duplication, but `MAX_F` is
+written into the featdump header and mirrored in `train.py`, so that grows every
+training record by half for a saving already shown to be under the noise floor.
+The guards stay. Merging the piece-square and mobility walks, which scan the
 same four bitboards twice, measured +9 ms over 25 pairs and then -2 ms over 41.
-The first number is why the interval is printed.
+That first number is why the interval is printed.
 
 **Deferred quiet scoring.** Two thirds of the quiet moves a node generates are
 never picked — the node cuts, or late-move pruning takes the tail — and each one
