@@ -87,21 +87,39 @@ fn net() -> &'static Net {
 /// two accumulations to rediscover a number computed a microsecond ago is most
 /// of what the evaluator does.
 ///
-/// One `u64` per slot: the top 32 bits of the Zobrist key as a tag, the score in
-/// the low 32. The index comes from the low bits of the key, which do not
-/// overlap the tag, so a slot can only be claimed by a position that agrees on
-/// both halves. An empty slot is all-zero, which is why this lives in BSS and
-/// costs the binary nothing.
+/// One `u64` per slot, packed as `tag:40 | generation:8 | score:16`. The index
+/// is the low bits of the key and the tag is bits 24 and up, so the two never
+/// overlap: a slot only answers for a position that agrees on both. Scores are
+/// clamped to ±20,000, so sixteen bits hold one exactly.
+///
+/// The generation is what makes the table cheap to empty. The first version
+/// zeroed all of it, and that memset was large enough to decide the sizing:
+/// 18-bit and 20-bit tables both measured *slower* than 16-bit, because the
+/// clear between bench positions cost more than the extra hits were worth.
+/// Bumping a counter invalidates every entry at once, so the size question is
+/// now about cache footprint alone.
 const CACHE_BITS: usize = 16;
 static CACHE: SyncCell<[u64; 1 << CACHE_BITS]> = SyncCell::new([0; 1 << CACHE_BITS]);
+static GEN: SyncCell<u8> = SyncCell::new(0);
+
+#[inline(always)]
+fn pack(key: u64, gen: u8, score: i32) -> u64 {
+    (key >> 24 << 24) | ((gen as u64) << 16) | (score as i16 as u16 as u64)
+}
 
 /// Not needed for correctness — a cached score is as valid as the day it was
 /// stored — but `bench` and datagen want each position measured from a cold
 /// start, and the search's own `clear` is where that is expressed.
 pub fn clear_cache() {
-    let c = unsafe { CACHE.as_mut() };
-    for e in c.iter_mut() {
-        *e = 0;
+    let g = unsafe { GEN.as_mut() };
+    *g = g.wrapping_add(1);
+    // Eight bits of generation wrap after 256 clears, and an entry that old
+    // would start answering again. That only happens once every 256 clears, so
+    // pay for the real erase then.
+    if *g == 0 {
+        for e in unsafe { CACHE.as_mut() }.iter_mut() {
+            *e = 0;
+        }
     }
 }
 
@@ -405,15 +423,16 @@ fn propagate(acc: &[i16; H], w: &[i8]) -> i32 {
 
 /// Evaluation in centipawns, from the side to move's point of view.
 pub fn evaluate(pos: &Position) -> i32 {
-    // Tag 0 is indistinguishable from an empty slot, so the one key in four
-    // billion whose top half is zero simply never caches. Cheaper than spending
-    // a bit on a validity flag.
+    // An erased slot is all-zero, which is a real entry for the one position in
+    // a trillion whose key has forty zero bits on top and whose score is zero.
+    // That costs a zero instead of a zero; no validity bit is worth the space.
     let slot = (pos.key as usize) & ((1 << CACHE_BITS) - 1);
-    let tag = pos.key & 0xFFFF_FFFF_0000_0000;
+    let gen = unsafe { *GEN.as_ref() };
+    let want = pack(pos.key, gen, 0);
     let c = unsafe { CACHE.as_mut() };
     let hit = c[slot];
-    if tag != 0 && hit & 0xFFFF_FFFF_0000_0000 == tag {
-        return hit as u32 as i32;
+    if hit & !0xFFFF == want {
+        return hit as u16 as i16 as i32;
     }
 
     let n = net();
@@ -427,6 +446,6 @@ pub fn evaluate(pos: &Position) -> i32 {
     let w = &n.out_w[b * 2 * H..(b + 1) * 2 * H];
     let out = propagate(&us, &w[..H]) + propagate(&them, &w[H..]) + n.out_b[b];
     let score = (out * SCALE / (QA * QB)).clamp(-20_000, 20_000);
-    c[slot] = tag | score as u32 as u64;
+    c[slot] = pack(pos.key, gen, score);
     score
 }

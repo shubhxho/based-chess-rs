@@ -182,6 +182,18 @@ microseconds earlier. It buys about 3% at `bench 13` and returns bit-identical
 node counts, which is the useful property: a cache that changed the search would
 be a cache that was wrong.
 
+A slot is one `u64`: `tag:40 | generation:8 | score:16`. Scores clamp to
+±20,000 so sixteen bits hold one exactly, which leaves the other forty-eight to
+spend on being sure — a forty-bit tag makes a wrong answer from a key collision
+256 times rarer than a thirty-two-bit one would. The generation byte is how the
+table empties: bumping a counter invalidates everything at once, where the first
+version memset half a megabyte. That memset was big enough to decide the sizing
+— 18- and 20-bit tables measured *slower* than 16-bit purely because of it.
+Making the clear free and re-running the sweep, 16 bits still wins (461 ms
+against 463, 470 and 478), so the answer was right for the wrong reason and is
+now right for the right one: past 512 KB the table stops fitting the caches that
+make it worth having.
+
 What survives the cache runs through a tighter accumulator. Thirty-two hidden
 neurons are four NEON registers, so both perspectives now stay in the register
 file for the whole walk over the feature list — the earlier version called an
