@@ -12,7 +12,7 @@ jobs:
   build-and-test:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Toolchain
         run: |
@@ -33,7 +33,10 @@ jobs:
         run: cargo test --release
 
       - name: Perft (classic positions)
-        run: bash tests/perft_suite.sh
+        # DEEP=1 on a manual run only: it adds a ply to four of the six and
+        # takes the sweep from eight billion nodes to seventeen, which is a
+        # minute of runner time that a README edit does not need to spend.
+        run: DEEP=${{ github.event_name == 'workflow_dispatch' && '1' || '0' }} bash tests/perft_suite.sh
 
       - name: Bench is deterministic
         # The node count is a behaviour fingerprint: two runs that disagree mean
@@ -117,8 +120,8 @@ jobs:
     # so it runs as its own job rather than holding up the fast feedback.
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Dependencies
