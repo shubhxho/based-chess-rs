@@ -173,14 +173,6 @@ pub fn init() {
 // Feature extraction
 // ---------------------------------------------------------------------------
 
-/// Squares ahead of `sq` on its own and the adjacent files, from `c`'s view.
-fn passed_mask(c: usize, sq: usize) -> Bb {
-    let f = file_of(sq);
-    let files = file_bb(f) | (file_bb(f) & !FILE_A) >> 1 | (file_bb(f) & !FILE_H) << 1;
-    let ahead = if c == WHITE { !0u64 << ((rank_of(sq) + 1) * 8) } else { (1u64 << (rank_of(sq) * 8)) - 1 };
-    files & ahead
-}
-
 /// The active feature indices for a position, from **both** perspectives at
 /// once. `a` receives `persp`'s view, `b` receives the opponent's.
 ///
@@ -264,24 +256,34 @@ pub fn features_both(pos: &Position, persp: usize, a: &mut [u16; MAX_F], b: &mut
             }
         }
 
-        // --- pawn structure
-        let mut isolated = 0usize;
-        let mut doubled = 0usize;
-        let mut bb = our_pawns;
+        // --- pawn structure, asked of the whole board instead of pawn by pawn
+        //
+        // Every question here was being answered one pawn at a time, with a
+        // `file_bb`, an adjacent-file mask and a `popcount` each, and
+        // `passed_mask` rebuilding the same two masks a second time. All three
+        // are functions of the pawn sets, so the file fills answer them for
+        // sixteen pawns at the cost of a few shifts.
+        //
+        // isolated: no friendly pawn on either neighbouring file. `west`/`east`
+        // clip at the edge files exactly as the per-pawn mask did.
+        let our_files = file_fill(our_pawns);
+        let isolated = popcount(our_pawns & !(west(our_files) | east(our_files))) as usize;
+        // doubled: a friendly pawn strictly above or strictly below on the same
+        // file. Counts every pawn on a shared file, as the loop did -- not the
+        // number of surplus pawns.
+        let doubled = popcount(our_pawns & (nfill(our_pawns << 8) | sfill(our_pawns >> 8))) as usize;
+        // passed: no enemy pawn ahead on this file or either neighbour. Smearing
+        // the enemy pawns sideways first puts a bit on file `f` at rank `r`
+        // whenever an enemy pawn stands on `f-1`, `f` or `f+1` at that rank, so
+        // one fill then covers all three files.
+        let blockers = their_pawns | west(their_pawns) | east(their_pawns);
+        let stopped = if c == WHITE { sfill(blockers >> 8) } else { nfill(blockers << 8) };
+        // Ascending square order, which is the order the per-pawn loop emitted.
+        let mut bb = our_pawns & !stopped;
         while bb != 0 {
             let sq = pop_lsb(&mut bb);
-            let fb = file_bb(file_of(sq));
-            let adjacent = (fb & !FILE_A) >> 1 | (fb & !FILE_H) << 1;
-            if our_pawns & adjacent == 0 {
-                isolated += 1;
-            }
-            if popcount(our_pawns & fb) > 1 {
-                doubled += 1;
-            }
-            if their_pawns & passed_mask(c, sq) == 0 {
-                let rel_rank = if c == WHITE { rank_of(sq) } else { 7 - rank_of(sq) };
-                put!(PASSED, 8, rel_rank);
-            }
+            let rel_rank = if c == WHITE { rank_of(sq) } else { 7 - rank_of(sq) };
+            put!(PASSED, 8, rel_rank);
         }
         put!(ISOLATED, 4, isolated.min(3));
         put!(DOUBLED, 4, doubled.min(3));

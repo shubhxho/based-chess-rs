@@ -48,6 +48,29 @@ pub fn more_than_one(b: Bb) -> bool {
     b & b.wrapping_sub(1) != 0
 }
 
+/// Smear every bit upward, downward, or both, over its own file. Three shifted
+/// ors each, and they answer "is there a pawn anywhere above/below this square
+/// on this file" for the whole board at once, which is otherwise a per-square
+/// question with a per-square cost.
+#[inline(always)]
+pub fn nfill(mut b: Bb) -> Bb {
+    b |= b << 8;
+    b |= b << 16;
+    b |= b << 32;
+    b
+}
+#[inline(always)]
+pub fn sfill(mut b: Bb) -> Bb {
+    b |= b >> 8;
+    b |= b >> 16;
+    b |= b >> 32;
+    b
+}
+#[inline(always)]
+pub fn file_fill(b: Bb) -> Bb {
+    nfill(b) | sfill(b)
+}
+
 #[inline(always)]
 pub fn east(b: Bb) -> Bb {
     (b & !FILE_H) << 1
