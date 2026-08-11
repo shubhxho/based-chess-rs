@@ -1003,6 +1003,17 @@ impl Searcher {
         for i in 0..list.n {
             let m = list.pick(i);
             if !in_check {
+                // Everything left over is a losing capture, so stop rather than
+                // ask again. `score_moves` already ran `see_ge(m, -20)` on every
+                // noisy move and put the failures below zero; a swap that cannot
+                // clear -20 cannot clear the 0 this loop wants, so each of them
+                // would be skipped below. `pick` hands out scores in
+                // non-increasing order, which makes the rest of the list losing
+                // as well. The tt move and queen promotions score in the
+                // positive bands, so neither is caught by this.
+                if list.sc[i] < 0 {
+                    break;
+                }
                 // Delta pruning: even winning this material would not reach
                 // alpha, so the whole branch is pointless.
                 let gain = if m.is_ep() { SEE_VAL[PAWN_P] } else { SEE_VAL[pos.piece_at(m.to()) as usize] }
