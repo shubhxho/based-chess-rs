@@ -390,6 +390,22 @@ does on the way to an answer. Fewer nodes might genuinely be better here, but
 that's a claim about playing strength and only games settle those. I pitched it
 as a free speedup. It wasn't one, so it went back.
 
+**Telling the compiler about the actual chip.** `.cargo/config.toml` pins
+`target-cpu=apple-m1` so a build runs on any Apple silicon. The machine I test
+on is an M4, so that baseline is three generations old and giving it up looked
+like free speed. It is worth **+1 ms, interval [-5, +3], 21 of 41 pairs** — that
+is, nothing at all, for 16 KB more binary. The portability baseline costs
+nothing, which is the good version of this result.
+
+Profile-guided optimisation is the knob that should pay on a search this
+branchy, and it does not work here. `-Cprofile-generate` links and the
+instrumented binary is duly slower, but no profile ever appears: the engine
+leaves through a raw `exit` syscall, so the runtime's write-on-exit hook never
+runs. Calling `__llvm_profile_write_file` directly produces a file of zero
+bytes, because on a `no_std` binary on stable the counters are never registered
+with the runtime that would dump them. Getting there needs `-Z build-std` and a
+nightly toolchain, which is a heavier requirement than the result deserves.
+
 **Two smaller versions of the same lesson.** `features_both` checks `n < MAX_F`
 before every feature it writes, and those checks are dead: the count can't
 exceed `2·pieces + 12`, which is 76 on a full board against a limit of 96. Split
