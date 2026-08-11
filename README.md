@@ -144,7 +144,8 @@ asm!(
     "cset {err}, cs",
     err = out(reg) err,
     inlateout("x0") a0 => ret,
-    in("x1") a1, in("x2") a2, in("x16") n,
+    inlateout("x1") a1 => _, inlateout("x2") a2 => _,
+    inlateout("x16") n => _, lateout("x17") _,
     options(nostack)
 );
 ```
@@ -152,6 +153,26 @@ asm!(
 `read`, `write`, `poll`, `mmap`, `munmap`, `exit`. That's the complete list. The
 transposition table is a raw `mmap` region. `poll` on fd 0 is how `stop` gets
 noticed mid-search without the search ever blocking on input.
+
+Every argument register is an output, and that detail cost a real bug. The
+obvious way to write this is `in("x1") a1`, which reads correctly — x1 is an
+input — but it promises the compiler that x1 still holds the same value when
+the kernel returns. Darwin returns a second value in x1 and traps through x16,
+so the promise is false, and the compiler is free to keep a live variable in a
+register the kernel is about to overwrite.
+
+It did. `Tt::resize` computed a byte count, called `mmap`, and stored the byte
+count into the table — except the byte count was living in x1 across the call,
+so what got stored was the kernel's leftover zero. A table with the right
+cluster count and a length of zero works perfectly on every probe and store,
+and silently does nothing in `clear()`, which memsets `bytes` bytes.
+
+The visible symptom was a table that never cleared: after any `setoption name
+Hash`, `ucinewgame` and the `Clear Hash` button both became no-ops, so every
+game inherited the previous game's entries. The startup `resize` escaped it only
+because there is no mapping to unmap yet, and the different branch happened to
+put the byte count somewhere else. `bench 13` run twice in one process is the
+shortest way to see it: 1,399,778 nodes then 543,535.
 
 The clock doesn't even trap: it reads the arm64 generic timer registers
 (`cntvct_el0` / `cntfrq_el0`) directly. Monotonic, immune to an NTP step landing

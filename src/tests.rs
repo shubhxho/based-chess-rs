@@ -486,6 +486,22 @@ fn tt_round_trips_and_rebases_mate_scores() {
     assert_eq!(h.score, mate, "mate distance did not survive the round trip");
 
     assert!(tt().probe(0xFFFF_FFFF_FFFF_FFFF, 0).is_none() || true);
+
+    // A resize that replaces an existing mapping goes down a different path
+    // from the first one -- it unmaps before it maps -- and used to come back
+    // with a byte count of zero, which turned `clear()` into a no-op and left
+    // the table live across `ucinewgame`. The first resize never showed it.
+    //
+    // This lives inside the one test that owns the table rather than in a test
+    // of its own: the harness runs tests on parallel threads, and a second one
+    // resizing the global table unmaps memory the first is still probing.
+    for mb in [1usize, 2, 1] {
+        tt().resize(mb);
+        tt().store(key, mv, 42, -7, 9, BOUND_EXACT, 0);
+        assert!(tt().probe(key, 0).is_some(), "entry missing at {mb} MB");
+        tt().clear();
+        assert!(tt().probe(key, 0).is_none(), "clear() left the entry live at {mb} MB");
+    }
 }
 
 // ---------------------------------------------------------------------------

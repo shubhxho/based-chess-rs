@@ -28,12 +28,20 @@ unsafe fn sc6(n: u64, a0: u64, a1: u64, a2: u64, a3: u64, a4: u64, a5: u64) -> (
         "cset {err}, cs",
         err = out(reg) err,
         inlateout("x0") a0 => ret,
-        in("x1") a1,
-        in("x2") a2,
-        in("x3") a3,
-        in("x4") a4,
-        in("x5") a5,
-        in("x16") n,
+        // Every argument register is an *output* here, not an input. Darwin
+        // returns a second value in x1 and the trap itself goes through x16,
+        // so whatever the compiler was keeping in those registers is gone
+        // once the kernel returns. Declaring them `in` promises they survive,
+        // and the promise is false: a live value silently becomes whatever
+        // the kernel left behind. That is how `resize` came to store x1 --
+        // zero -- into `self.bytes`, which made `clear()` a no-op.
+        inlateout("x1") a1 => _,
+        inlateout("x2") a2 => _,
+        inlateout("x3") a3 => _,
+        inlateout("x4") a4 => _,
+        inlateout("x5") a5 => _,
+        inlateout("x16") n => _,
+        lateout("x17") _,
         options(nostack)
     );
     (ret, err != 0)
