@@ -1,12 +1,15 @@
 # Sable
 
-A chess engine written in Rust, with a 30 KB evaluation network distilled from
-its own search using MLX.
+A chess engine written in Rust. It plays UCI, evaluates positions with a small
+neural network, and that network was trained on games the engine played against
+itself.
 
-The engine is `#![no_std]`. No allocator, no third-party crate, no libc call
-anywhere in the source — every conversation with the kernel is a hand-written
-`svc #0x80` trap. libSystem gets linked only because Mach-O insists on it for
-the process entry stub. The finished binary, network and all, is **265 KB**.
+It is `#![no_std]`: no allocator, no third-party crate, no libc call anywhere in
+the source. Every conversation with the kernel is a hand-written `svc #0x80`
+trap, and libSystem gets linked only because Mach-O insists on it for the
+process entry stub. That constraint isn't a goal in itself — it just means
+there's nothing between the code and the machine to wonder about when something
+is slow.
 
 ```
 cargo build --release
@@ -18,7 +21,7 @@ board.
 
 ---
 
-## The interesting part: the network that didn't work
+## The network that didn't work
 
 The obvious way to build a small neural evaluation is the standard NNUE input —
 768 binary features, one per (piece, colour, square). I built that first. It
@@ -175,17 +178,17 @@ worth more time.
 One trap worth writing down. The 2.4 MB continuation-history table lives in a
 static of its own rather than as a field of the searcher. A global only lands in
 BSS when its *entire* initialiser is zero, and the searcher has non-zero fields —
-so as a field, all 2.4 MB of zeros get written into the executable. That single
-split is the difference between a 2.6 MB binary and a 265 KB one.
+so as a field, all 2.4 MB of zeros get written into the executable. Moving it
+out keeps them there — the same trick applies to the correction tables.
 
 ---
 
 ## Does it work?
 
-Move generation is checked against `python-chess` as an independent oracle,
-because I don't trust my own memory of perft constants — and I was right not to.
-Half the "known" values I first wrote down were wrong, and the oracle is what
-told me the engine was fine and my test data wasn't.
+Move generation is checked against `python-chess`, because I didn't trust my own
+memory of perft constants — and I was right not to. Half the "known" values I
+first wrote down were wrong, and the oracle is what told me the engine was fine
+and my test data wasn't.
 
 | Suite | Result |
 |---|---|
