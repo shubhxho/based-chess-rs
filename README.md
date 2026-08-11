@@ -342,6 +342,35 @@ tie constantly at zero, so that alone changed the tree.
 inside the noise and 18 through 22 lose slowly to their own footprint. There is
 no cliff to find here.
 
+**Making the eval cache associative — and the measurement that killed it.**
+Instrumenting the direct-mapped table looked like an argument for associativity:
+at `bench 13` it takes 973,613 probes, 43% of which land on a slot already
+holding a live entry for a different position. That is a lot of apparent
+conflict, so a four-way set-associative version was written — 2^14 sets of four
+ways, same 512 KB, sets aligned to 64 bytes so a probe still touches one cache
+line. It measured **exactly zero** over 24 interleaved runs.
+
+The reason is the number that should have been measured first. Rebuilding with
+a 24-bit table — 128 MB, essentially conflict-free, 2,843 conflicts left out of
+973,613 probes — raises the hit rate from **14.4% to 16.6%**. That 2.2 points is
+the entire prize available to *any* change in cache geometry: about 21,000
+evaluations skipped out of 833,000, under 1% of runtime, which is below the
+noise floor of the benchmark. The 128 MB version is itself slower (491 ms vs
+459) purely on footprint.
+
+So the misses are not conflict misses that a smarter table could recover. They
+are positions that genuinely never come back: only one evaluation in six is of a
+position the search has already evaluated. The cache is within two points of its
+own ceiling and there is nothing left in it.
+
+**Hoisting the cache probe above the material-draw test**, so a hit also skips
+`is_material_draw()` and so the hand-crafted evaluator gets cached in a binary
+built without a network. Neutral on the network build, and — the more
+interesting half — neutral on the hand-crafted build too, where it is the
+difference between no memoisation at all and a 512 KB table in front of the
+evaluator. The hand-crafted evaluation is cheap enough that caching it does not
+pay for the probe.
+
 ---
 
 ## Layout
