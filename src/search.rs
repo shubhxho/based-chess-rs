@@ -1084,8 +1084,14 @@ impl Searcher {
         }
         let mut s = self.history[pos.stm][m.from()][to] as i32;
         let idx = moved * 64 + to + 1;
+        // The reduction formula reads the same tables the ordering does, or a
+        // move can be ordered late and then reduced as though nothing were
+        // known about it.
         if ply > 0 && self.stack[ply - 1].piece_to != NO_PIECE_TO {
             s += cont()[0][self.stack[ply - 1].piece_to][idx] as i32;
+        }
+        if ply > 1 && self.stack[ply - 2].piece_to != NO_PIECE_TO {
+            s += cont()[1][self.stack[ply - 2].piece_to][idx] as i32;
         }
         s.clamp(-16_384, 16_384) as i16
     }
