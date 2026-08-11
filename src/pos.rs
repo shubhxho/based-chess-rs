@@ -195,8 +195,7 @@ impl Position {
                 pawn_key: 0,
                 np_key: 0,
                 checkers: 0,
-            };
-                MAX_PLY + 8],
+            }; MAX_PLY + 8],
             hist: [0; HIST],
             hist_len: 0,
             root_ply: 0,

@@ -52,7 +52,6 @@ impl Limits {
 }
 
 pub const MAX_DEPTH: i32 = 100;
-const MOVE_OVERHEAD: u64 = 25;
 
 #[derive(Clone, Copy)]
 struct Node {
@@ -82,6 +81,10 @@ pub struct Searcher {
     /// Suppresses `info`/`bestmove` output; data generation runs millions of
     /// searches and the protocol chatter would dominate the run time.
     pub silent: bool,
+    /// Milliseconds held back from every time budget to cover the trip through
+    /// the GUI and the pipe. Set by the `Move Overhead` UCI option: the default
+    /// suits a local match runner, a network game wants more.
+    pub move_overhead: u64,
 
     killers: [[Move; 2]; MAX_PLY + 4],
     /// `[side][from][to]`, the classic butterfly table.
@@ -107,6 +110,7 @@ pub static SEARCHER: SyncCell<Searcher> = SyncCell::new(Searcher {
     best: Move::NULL,
     best_score: 0,
     silent: false,
+    move_overhead: 25,
     killers: [[Move::NULL; 2]; MAX_PLY + 4],
     history: [[[0; 64]; 64]; 2],
     capt_hist: [[[0; 7]; 64]; 12],
@@ -290,7 +294,7 @@ impl Searcher {
     fn set_clocks(&mut self, stm: usize) {
         self.start = sys::now_ms();
         if self.limits.movetime > 0 {
-            let t = self.limits.movetime.saturating_sub(MOVE_OVERHEAD).max(1);
+            let t = self.limits.movetime.saturating_sub(self.move_overhead).max(1);
             self.soft = t;
             self.hard = t;
             return;
@@ -300,7 +304,7 @@ impl Searcher {
             self.hard = u64::MAX;
             return;
         }
-        let avail = self.limits.time[stm].saturating_sub(MOVE_OVERHEAD);
+        let avail = self.limits.time[stm].saturating_sub(self.move_overhead);
         let inc = self.limits.inc[stm];
         let mtg = if self.limits.movestogo > 0 {
             self.limits.movestogo.min(50)
@@ -762,8 +766,7 @@ impl Searcher {
                     // History pruning: a move the tables have watched fail this
                     // often, this close to the horizon, is not worth a node.
                     if lmr_depth <= 3
-                        && (self.history_of(pos, m, ply, moved, to, false) as i32)
-                            < -3200 * lmr_depth.max(1)
+                        && (self.history_of(pos, m, ply, moved, to, false) as i32) < -3200 * lmr_depth.max(1)
                     {
                         continue;
                     }

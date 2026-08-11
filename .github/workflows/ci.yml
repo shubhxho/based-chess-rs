@@ -46,6 +46,44 @@ jobs:
           echo "run 2: $b nodes"
           test "$a" = "$b"
 
+      - name: UCI handshake
+        run: |
+          out=$(printf 'uci\nisready\nsetoption name Move Overhead value 100\nposition startpos moves e2e4\ngo depth 6\nquit\n' | ./target/release/sable)
+          echo "$out" | grep -q '^uciok$'
+          echo "$out" | grep -q '^readyok$'
+          echo "$out" | grep -qE '^bestmove [a-h][1-8][a-h][1-8]'
+
+      - name: Bulk input survives the pipe
+        # A regression test for a specific bug: the input buffer used to drop
+        # everything it held whenever it filled, so feeding more lines than the
+        # buffer silently lost most of them. Both bulk commands must return
+        # exactly one record per line they were given.
+        run: |
+          printf 'datagen 3000 400 7\n' | ./target/release/sable > /tmp/shard.txt
+          lines=$(wc -l < /tmp/shard.txt)
+          echo "shard: $lines lines"
+          test "$lines" -ge 3000
+          { printf 'relabel 400\n'; cat /tmp/shard.txt; } | ./target/release/sable > /tmp/relabelled.txt
+          back=$(wc -l < /tmp/relabelled.txt)
+          echo "relabelled: $back lines"
+          test "$back" = "$lines"
+          cut -d'|' -f1 /tmp/shard.txt | sed 's/ *$//' > /tmp/fens.txt
+          { printf 'featdump\n'; cat /tmp/fens.txt; } | ./target/release/sable > /tmp/feat.bin
+          python3 - <<'EOF'
+          import struct
+          raw = open('/tmp/feat.bin','rb').read()
+          assert raw[:4] == b'SBF2', raw[:4]
+          n_in, max_f = struct.unpack('<HH', raw[4:8])
+          pos, records = 8, 0
+          while pos < len(raw):
+              n = struct.unpack_from('<H', raw, pos)[0]
+              pos += 2 * n + 4
+              records += 1
+          want = sum(1 for _ in open('/tmp/fens.txt'))
+          print(f'featdump: {records} records for {want} positions')
+          assert records == want, (records, want)
+          EOF
+
       - name: Binary size budget
         # The whole point of the project is that it stays small. 512 KB is
         # generous against the current ~265 KB; blowing through it means

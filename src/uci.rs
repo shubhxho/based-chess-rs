@@ -70,12 +70,17 @@ pub fn interrupted() -> bool {
         return true;
     }
     i.fill(false);
-    // Only look at bytes that have arrived since the last scan.
+    // Only look at bytes that have arrived since the last scan, and only at the
+    // start of a line: a command is a line, and matching mid-line would let any
+    // input that happens to contain the word abort a search.
     while i.scanned < i.len {
         let s = i.scanned;
-        if i.buf[s..].starts_with(b"stop") || i.buf[s..].starts_with(b"quit") {
-            i.stop = true;
-            return true;
+        if s == 0 || i.buf[s - 1] == b'\n' {
+            let rest = &i.buf[s..i.len];
+            if rest.starts_with(b"stop") || rest.starts_with(b"quit") {
+                i.stop = true;
+                return true;
+            }
         }
         i.scanned += 1;
     }
@@ -279,6 +284,8 @@ pub fn run() -> ! {
                 out.s(b"id author built with Claude Code").nl();
                 out.s(b"option name Hash type spin default 64 min 1 max 4096").nl();
                 out.s(b"option name Threads type spin default 1 min 1 max 1").nl();
+                out.s(b"option name Move Overhead type spin default 25 min 0 max 5000").nl();
+                out.s(b"option name Clear Hash type button").nl();
                 out.s(b"uciok").nl();
             }
             b"isready" => {
@@ -290,7 +297,12 @@ pub fn run() -> ! {
                 position().set_startpos();
             }
             b"setoption" => {
-                // setoption name <id> value <x>
+                // setoption name <id...> [value <x>]
+                //
+                // Option names can contain spaces ("Move Overhead"), so the
+                // name is everything between `name` and `value` rather than one
+                // token. Matching is on the first word, which is unambiguous
+                // across the options offered.
                 let mut name: &[u8] = b"";
                 let mut val: u64 = 0;
                 while let Some(tok) = t.next() {
@@ -300,8 +312,14 @@ pub fn run() -> ! {
                         _ => {}
                     }
                 }
-                if name == b"Hash" {
-                    tt().resize(val.clamp(1, 4096) as usize);
+                match name {
+                    b"Hash" => tt().resize(val.clamp(1, 4096) as usize),
+                    b"Move" => searcher().move_overhead = val.min(5000),
+                    b"Clear" => {
+                        tt().clear();
+                        searcher().clear();
+                    }
+                    _ => {}
                 }
             }
             b"position" => {
