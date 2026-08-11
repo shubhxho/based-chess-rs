@@ -363,6 +363,26 @@ included. Node counts confirmed it to the digit at two depths. It is also not
 faster: resolving in place forces the scan to restart, and that O(n) rescan
 costs about what the skipped evaluation saves. 428 against 430 ms over 41 pairs.
 
+**Scoring quiescence's captures at quiescence's own threshold.** Move ordering
+sorts a capture above the quiet moves when its swap value clears -20, and then
+quiescence, which will not search anything below 0, asks a second time with the
+tighter number. Scoring at 0 in the first place should collapse the two: the
+moves that differ are exactly those the second test was going to throw away, and
+dropping them earlier cannot change which moves get searched or in what order.
+The argument survives contact with the awkward cases too — the tt move and queen
+promotions are scored by what they are rather than what they win, so they keep
+their own test, and a quiescence node that is *in check* searches losing
+captures, so it keeps the old threshold.
+
+It still moves the node count: 1,400,014 against 1,399,778 at depth 13, and
+9,326,301 against 9,623,933 at depth 18. Fewer nodes, which is the direction
+that flatters it, and no explanation for either number in the argument above.
+Something in the premise is false — most likely that `see_ge` is exactly
+monotone in its threshold, given the pruning it does internally on the way to an
+answer. A change that moves the tree is a change to how the engine plays,
+measurable only by playing games, and it was sold as a free speedup. Reverted
+unmeasured.
+
 **Two smaller versions of the same lesson.** Splitting `features_both` on a
 const generic so the hot path carries no `n < MAX_F` compare — the bound is
 provably `2·pieces + 12 ≤ 76` for any legal position, so those branches really
