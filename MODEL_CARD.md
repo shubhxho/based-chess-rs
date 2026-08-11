@@ -245,19 +245,38 @@ done; wait
 
 python train.py 3400000 16      # dumps features via the engine, writes net.bin
 cargo build --release           # net.bin is include_bytes!'d into the binary
+cp target/release/sable sable-std
+
+# The network is embedded at compile time, so "no network" means building with
+# a header the loader rejects; it then falls back to the hand-crafted eval.
+cp net.bin /tmp/net.keep
+printf '\0\0\0\0\0\0\0\0' > net.bin
+cargo build --release && cp target/release/sable sable-hce
+cp /tmp/net.keep net.bin && cargo build --release
+
 python arena.py ./sable-std ./sable-hce 400 "nodes 20000" 9
 ```
+
+The two comparison binaries are build artefacts, not repository contents —
+`.gitignore` covers `sable-*` precisely so a stale one cannot be mistaken for
+the current engine.
 
 ## Limitations
 
 - Distilled from itself. With no external engine available, the ceiling is the
   teacher's own search quality rather than a stronger reference.
-- Computing mobility and king-attacker features costs throughput: 2.5 Mnps
-  against 3.1 for the hand-crafted evaluator on the same core. At a fixed node
-  count that is free; under a clock it is not.
+- Computing mobility and king-attacker features used to cost real throughput:
+  2.5 Mnps against 3.1 for the hand-crafted evaluator on the same core. A
+  direct-mapped cache of finished evaluations, keyed on the Zobrist key, has
+  since closed that gap — `bench 13`, median of five runs, is 2.98 Mnps with the
+  network against 3.02 without it. The search asks about the same position often
+  enough (transpositions, re-searches, null-move verification) that most of the
+  feature extraction was repeat work.
 - Accumulators are refreshed in full rather than updated incrementally. At 32
-  neurons a matrix row is four NEON registers, so the incremental bookkeeping is
-  not obviously worth it — but it is the first thing to try next.
+  neurons a matrix row is four NEON registers, and most of the 166 non-piece-
+  square rows change on almost every move anyway, so an incremental update would
+  only cover the piece-square part. The eval cache took the easy half of that win
+  for a fraction of the complexity.
 
 ## License
 

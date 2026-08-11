@@ -252,6 +252,7 @@ impl Searcher {
         for t in corr_cont().iter_mut() {
             t.fill(0);
         }
+        crate::net::clear_cache();
     }
 
     /// The static evaluation after the correction tables have had their say.

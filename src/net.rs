@@ -78,6 +78,33 @@ fn net() -> &'static Net {
     unsafe { NET.as_ref() }
 }
 
+/// Direct-mapped cache of finished evaluations.
+///
+/// The network is a pure function of the position, and a search asks about the
+/// same position many times over: transpositions, the re-search after a
+/// fail-high, null-move verification, and the static evaluation taken at a node
+/// that a later iteration visits again. Extracting eighty features and running
+/// two accumulations to rediscover a number computed a microsecond ago is most
+/// of what the evaluator does.
+///
+/// One `u64` per slot: the top 32 bits of the Zobrist key as a tag, the score in
+/// the low 32. The index comes from the low bits of the key, which do not
+/// overlap the tag, so a slot can only be claimed by a position that agrees on
+/// both halves. An empty slot is all-zero, which is why this lives in BSS and
+/// costs the binary nothing.
+const CACHE_BITS: usize = 16;
+static CACHE: SyncCell<[u64; 1 << CACHE_BITS]> = SyncCell::new([0; 1 << CACHE_BITS]);
+
+/// Not needed for correctness — a cached score is as valid as the day it was
+/// stored — but `bench` and datagen want each position measured from a cold
+/// start, and the search's own `clear` is where that is expressed.
+pub fn clear_cache() {
+    let c = unsafe { CACHE.as_mut() };
+    for e in c.iter_mut() {
+        *e = 0;
+    }
+}
+
 #[inline(always)]
 pub fn is_loaded() -> bool {
     net().loaded
@@ -361,6 +388,17 @@ fn propagate(acc: &[i16; H], w: &[i8]) -> i32 {
 
 /// Evaluation in centipawns, from the side to move's point of view.
 pub fn evaluate(pos: &Position) -> i32 {
+    // Tag 0 is indistinguishable from an empty slot, so the one key in four
+    // billion whose top half is zero simply never caches. Cheaper than spending
+    // a bit on a validity flag.
+    let slot = (pos.key as usize) & ((1 << CACHE_BITS) - 1);
+    let tag = pos.key & 0xFFFF_FFFF_0000_0000;
+    let c = unsafe { CACHE.as_mut() };
+    let hit = c[slot];
+    if tag != 0 && hit & 0xFFFF_FFFF_0000_0000 == tag {
+        return hit as u32 as i32;
+    }
+
     let n = net();
     let mut fu = [0u16; MAX_F];
     let mut ft = [0u16; MAX_F];
@@ -372,5 +410,7 @@ pub fn evaluate(pos: &Position) -> i32 {
     let b = bucket_of(popcount(pos.occ()) as usize);
     let w = &n.out_w[b * 2 * H..(b + 1) * 2 * H];
     let out = propagate(&us, &w[..H]) + propagate(&them, &w[H..]) + n.out_b[b];
-    (out * SCALE / (QA * QB)).clamp(-20_000, 20_000)
+    let score = (out * SCALE / (QA * QB)).clamp(-20_000, 20_000);
+    c[slot] = tag | score as u32 as u64;
+    score
 }

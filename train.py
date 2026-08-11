@@ -131,13 +131,17 @@ def parse_features(path, n_expected):
 
     raw = np.fromfile(path, dtype="<u2", offset=8)
 
-    # Walk the record starts once. The lengths are only knowable in sequence,
-    # so this is the one loop; everything after it is vectorised.
+    # Walk the record starts once. Each length is only knowable after the
+    # previous record has been stepped over, so this is the one loop in the
+    # function. It reads through a memoryview rather than indexing the array:
+    # `raw[pos]` builds a NumPy scalar object per word, `mv[pos]` hands back a
+    # plain int, and over millions of records that is most of the walk.
+    mv = memoryview(raw)
     counts = np.empty(n_expected, np.int32)
     starts = np.empty(n_expected, np.int64)
     pos, k, total = 0, 0, len(raw)
     while pos < total and k < n_expected:
-        n = int(raw[pos])
+        n = mv[pos]
         counts[k] = n
         starts[k] = pos + 1
         pos += 2 * n + 2          # n, us[n], them[n], bucket
@@ -146,15 +150,28 @@ def parse_features(path, n_expected):
         raise SystemExit(f"featdump returned {k} records for {n_expected} positions")
 
     width = int(counts.max())
-    ends = np.cumsum(counts)
-    # Ragged arange: 0..n-1 within each record, concatenated.
-    offsets = np.arange(int(ends[-1]), dtype=np.int64) - np.repeat(ends - counts, counts)
-    rows = np.repeat(np.arange(n_expected, dtype=np.int64), counts)
-    us = np.full((n_expected, width), PAD, np.int32)
-    them = np.full((n_expected, width), PAD, np.int32)
-    base = np.repeat(starts, counts)
-    us[rows, offsets] = raw[base + offsets]
-    them[rows, offsets] = raw[base + counts.repeat(counts) + offsets]
+    # uint16 because the widest index is IN, and these two arrays are the
+    # largest thing the trainer holds -- int32 doubled the resident set for
+    # nothing. Batches are widened on their way to MLX.
+    us = np.full((n_expected, width), PAD, np.uint16)
+    them = np.full((n_expected, width), PAD, np.uint16)
+
+    # Scatter in blocks. The index temporaries are one entry per *active
+    # feature*, so doing the whole set at once allocates several gigabytes of
+    # int64 to fill an array a fraction of that size; a block at a time keeps
+    # them at a few megabytes and runs no slower.
+    block = 1 << 18
+    for lo in range(0, n_expected, block):
+        hi = min(lo + block, n_expected)
+        c = counts[lo:hi].astype(np.int64)
+        ends = np.cumsum(c)
+        # Ragged arange: 0..n-1 within each record, concatenated.
+        offsets = np.arange(int(ends[-1]), dtype=np.int64) - np.repeat(ends - c, c)
+        rows = np.repeat(np.arange(hi - lo, dtype=np.int64), c)
+        base = np.repeat(starts[lo:hi], c)
+        us[lo:hi][rows, offsets] = raw[base + offsets]
+        them[lo:hi][rows, offsets] = raw[base + np.repeat(c, c) + offsets]
+
     buckets = raw[starts + 2 * counts].astype(np.int32)
     return us, them, buckets, width
 
@@ -335,8 +352,8 @@ def main():
             total += float(
                 loss_fn(
                     model,
-                    mx.array(us[idx]),
-                    mx.array(them[idx]),
+                    mx.array(us[idx].astype(np.int32)),
+                    mx.array(them[idx].astype(np.int32)),
                     mx.array(buckets[idx]),
                     mx.array(target[idx]),
                     mx.array(weight[idx]),
@@ -362,8 +379,8 @@ def main():
             idx = perm[i * batch : (i + 1) * batch]
             loss, grads = grad_fn(
                 model,
-                mx.array(us[idx]),
-                mx.array(them[idx]),
+                mx.array(us[idx].astype(np.int32)),
+                mx.array(them[idx].astype(np.int32)),
                 mx.array(buckets[idx]),
                 mx.array(target[idx]),
                 mx.array(weight[idx]),

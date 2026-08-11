@@ -173,6 +173,15 @@ iterative deepening
           └ quiescence at the horizon
 ```
 
+Behind the "static eval" line sits a 512 KB direct-mapped cache keyed on the
+Zobrist key. The network is a pure function of the position, and a search asks
+about the same position repeatedly — transpositions, the re-search after a
+fail-high, null-move verification, a node a later iteration walks into again —
+so most of the feature extraction was rediscovering a number computed
+microseconds earlier. It buys about 3% at `bench 13` and returns bit-identical
+node counts, which is the useful property: a cache that changed the search would
+be a cache that was wrong.
+
 Ordering is what makes the pruning safe, so it gets as much care as the pruning
 rules: TT move first, then captures classified by static exchange evaluation,
 killers, the counter-move, and finally quiets ranked by butterfly history plus
@@ -317,9 +326,10 @@ with the format documented well enough to read it without this engine.
 
 - It is distilled from itself. With no external engine available, the ceiling is
   the teacher's own search quality, not a stronger reference.
-- Accumulators are refreshed in full rather than updated incrementally, which
-  costs roughly 15% nps. At 32 neurons a whole matrix row is four NEON
-  registers, so the bookkeeping isn't obviously worth it — but it's the first
-  thing I'd try next.
+- Accumulators are refreshed in full rather than updated incrementally. Only the
+  768 piece-square rows could be updated that way at all — mobility, king
+  attackers and most of the other 166 rows change on nearly every move — so an
+  incremental path would cover part of the work and complicate make/unmake for
+  the rest. The eval cache took the repeated-position half of that win instead.
 - Single-threaded. The `Threads` UCI option is accepted and ignored.
 - No opening book, no endgame tablebases.
