@@ -317,6 +317,33 @@ python arena.py ./sable-std ./sable-hce 400 "nodes 20000" 9
 
 ---
 
+## Things that didn't work
+
+Recorded because a negative result nobody writes down gets re-attempted.
+
+**Deferred quiet scoring.** Two thirds of the quiet moves a node generates are
+never picked — the node cuts, or late-move pruning takes the tail — and each one
+costs three history lookups scattered across four megabytes. Leaving them
+unscored until selection first reaches the quiets cut the tree 13% (1,399,778
+nodes to 1,220,249 at `bench 13`) and ran 18% faster in wall clock.
+
+It also lost: **−9.6 ± 24.1 Elo over 800 games** at 20k nodes. Not significant,
+but centred the wrong way, and the whole point was to gain. The reason it moves
+the search at all is worth keeping in mind — scoring quiets late reads history
+that the node's own earlier children have already updated, so it is a different
+ordering rather than the same one arrived at more cheaply. Two implementations
+of it: the first also broke ties differently, because selection swaps as it
+picks and a swap-then-reconsider version compares a permuted tail. Quiet scores
+tie constantly at zero, so that alone changed the tree.
+
+**Deduplicating attack generation** (see the commit; kept, but worth zero).
+
+**Every eval-cache size from 12 to 22 bits.** 16 wins, but 12 through 15 are
+inside the noise and 18 through 22 lose slowly to their own footprint. There is
+no cliff to find here.
+
+---
+
 ## Layout
 
 ```
