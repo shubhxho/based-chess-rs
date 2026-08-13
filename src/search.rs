@@ -683,7 +683,7 @@ impl Searcher {
             {
                 let mut list = MoveList::new();
                 generate(pos, &mut list, GenKind::Noisy);
-                self.score_moves(pos, &mut list, tt_move, ply);
+                self.score_moves::<-20>(pos, &mut list, tt_move, ply);
                 for i in 0..list.n {
                     let m = list.pick(i);
                     // The capture has to be able to reach the raised beta on
@@ -724,7 +724,7 @@ impl Searcher {
         if list.n == 0 {
             return if in_check { -MATE + ply as i32 } else { 0 };
         }
-        self.score_moves(pos, &mut list, tt_move, ply);
+        self.score_moves::<-20>(pos, &mut list, tt_move, ply);
 
         let mut best = -INF;
         let mut best_move = Move::NULL;
@@ -996,7 +996,15 @@ impl Searcher {
         if list.n == 0 {
             return if in_check { -MATE + ply as i32 } else { best };
         }
-        self.score_moves(pos, &mut list, tt_move, ply);
+        // In check, quiescence generates everything and searches losing
+        // captures too, so their order still matters and the main search's
+        // threshold stands. Out of check it discards them, which is what makes
+        // the cheaper threshold safe.
+        if in_check {
+            self.score_moves::<-20>(pos, &mut list, tt_move, ply);
+        } else {
+            self.score_moves::<0>(pos, &mut list, tt_move, ply);
+        }
 
         let mut best_move = Move::NULL;
         let mut bound = BOUND_UPPER;
@@ -1021,7 +1029,11 @@ impl Searcher {
                 if stand + gain + 150 < alpha {
                     continue;
                 }
-                if !see_ge(pos, m, 0) {
+                // The tt move and queen promotions are scored by what they
+                // are rather than what they win, so their sign says nothing
+                // about the swap and they still get asked directly. Every other
+                // capture was scored against this threshold above.
+                if list.sc[i] >= (1 << 23) && !see_ge(pos, m, 0) {
                     continue;
                 }
             }
@@ -1052,7 +1064,18 @@ impl Searcher {
     // Move ordering
     // -----------------------------------------------------------------------
 
-    fn score_moves(&mut self, pos: &Position, list: &mut MoveList, tt_move: Move, ply: usize) {
+    /// `THRESH` is the swap value a capture must clear to sort above the quiet
+    /// moves. The main search wants -20, tolerating a capture that loses a
+    /// little. Quiescence wants 0, because it refuses to search anything below
+    /// that -- scoring at its own threshold lets the sign of the score stand in
+    /// for the test rather than running the swap evaluation twice per capture.
+    fn score_moves<const THRESH: i32>(
+        &mut self,
+        pos: &Position,
+        list: &mut MoveList,
+        tt_move: Move,
+        ply: usize,
+    ) {
         let stm = pos.stm;
         let prev = if ply > 0 { self.stack[ply - 1].piece_to } else { NO_PIECE_TO };
         let prev2 = if ply > 1 { self.stack[ply - 2].piece_to } else { NO_PIECE_TO };
@@ -1075,7 +1098,7 @@ impl Searcher {
                 let mvv = SEE_VAL[victim] * 16;
                 let ch = self.capt_hist[moved][to][victim.min(6)] as i32;
                 // Winning captures ahead of every quiet, losing ones behind.
-                if see_ge(pos, m, -20) {
+                if see_ge(pos, m, THRESH) {
                     (1 << 22) + mvv + ch
                 } else {
                     -(1 << 22) + mvv + ch

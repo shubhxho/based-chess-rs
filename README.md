@@ -223,6 +223,24 @@ each one, eighty round trips to memory per evaluation for arithmetic that never
 had to leave. Cache and accumulator together: 492 ms to 459 ms on `bench 13`,
 best of nine runs each, same 1,399,778 nodes.
 
+Quiescence scores its captures against its own threshold, which is worth a
+paragraph because it is the one change here that had to be settled by playing
+rather than by measuring. Ordering sorts a capture above the quiet moves when
+its swap value clears -20; quiescence will not search one below 0. Scoring at 0
+up front makes the sign of the score answer the question, so the swap evaluation
+runs once per capture instead of twice. The moves that change bands are exactly
+the ones quiescence was going to discard.
+
+That reasoning is not quite airtight — the node count moves, by a little at
+shallow depths and 3.1% at depth 18, most likely because `see_ge` is not exactly
+monotone in its threshold given how much pruning it does on the way to an
+answer. A changed tree is a changed engine, so the benchmark stops being
+evidence. Six hundred games at 20,000 nodes a move put it at **+10 Elo ± 28**:
+neutral, with the direction favourable and the interval far too wide to call it
+anything else. Kept because neutral strength for less work is still a win —
+9,326,301 nodes against 9,623,933 at depth 18, and about 3% quicker there in
+wall clock.
+
 Ordering is what makes the pruning safe, so it gets as much care as the pruning
 rules: TT move first, then captures classified by static exchange evaluation,
 killers, the counter-move, and finally quiets ranked by butterfly history plus
@@ -353,9 +371,10 @@ hits both halves and cancels. Point it at two copies of the same binary and it
 says 0 ms, ±3 ms, over 21 pairs. That ±3 ms is the floor. Anything smaller than
 it was never a result, and I have the retracted claims to prove it.
 
-The correctness check is the node count: 1,399,778 at `bench 13` and 9,623,933
+The correctness check is the node count: 1,400,014 at `bench 13` and 9,326,301
 at `bench 18`. If a change moves either number it changed the search, whatever
-it says on the label.
+it says on the label — and then benchmarks cannot settle it and it has to go and
+play games.
 
 **Making quiescence decide captures lazily.** Quiescence scores every capture
 before it looks at any of them, and each score costs a full swap evaluation.
@@ -371,43 +390,6 @@ digit at two depths.
 It just isn't faster. Resolving a score in place makes the scan start over, and
 that restart costs about what the skipped evaluation saves. 428 against 430 ms
 over 41 pairs. Deleted.
-
-**Scoring those captures at quiescence's own threshold.** Same target, better
-idea. Ordering puts a capture above the quiet moves if its swap value clears
--20; quiescence then asks again whether it clears 0. Score at 0 up front and
-the second question disappears. The moves that change bands are exactly the ones
-the second test was going to discard, so nothing that gets searched should move.
-Even the awkward cases work out: the tt move and queen promotions are scored by
-what they are rather than what they win, so they keep an explicit test, and a
-quiescence node in check does search losing captures, so it keeps the old
-threshold.
-
-The node count moved anyway — 1,400,014 against 1,399,778, and 9,326,301
-against 9,623,933. Fewer nodes, which is the flattering direction, and nothing
-in the argument above predicts either number. Some premise is false, most likely
-that `see_ge` is exactly monotone in its threshold given how much pruning it
-does on the way to an answer. Fewer nodes might genuinely be better here, but
-that's a claim about playing strength and only games settle those. I pitched it
-as a free speedup. It wasn't one, so it went back.
-
-**Telling the compiler about the actual chip.** `.cargo/config.toml` pins
-`target-cpu=apple-m1` so a build runs on any Apple silicon. The machine I test
-on is an M4, so that baseline is three generations old and giving it up looked
-like free speed. It is worth **+1 ms, interval [-5, +3], 21 of 41 pairs** — that
-is, nothing at all, for 16 KB more binary. The portability baseline costs
-nothing, which is the good version of this result.
-
-Profile-guided optimisation is the knob that should pay on a search this
-branchy, and it will not run here. `-Cprofile-generate` links and does its half
-of the job: the binary grows from 264 KB to 349 KB, which is 85 KB of counters.
-Nothing ever comes out of them. The engine leaves through a raw `exit` syscall,
-so the runtime's write-on-exit hook never fires; calling
-`__llvm_profile_write_file` by hand creates the file and writes zero bytes to
-it, with or without `strip`. The counters exist and the runtime cannot find
-them — on Mach-O it locates them through section markers that a `no_std` binary
-with its own entry point and a hand-rolled link line does not set up. That is
-solvable with enough linker archaeology, or by moving to `-Z build-std` on
-nightly, and neither is worth a gain nobody has measured yet.
 
 **Two smaller versions of the same lesson.** `features_both` checks `n < MAX_F`
 before every feature it writes, and those checks are dead: the count can't
