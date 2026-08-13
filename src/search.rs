@@ -137,6 +137,30 @@ pub static SEARCHER: SyncCell<Searcher> = SyncCell::new(Searcher {
 /// 200 KB binary and a 2.6 MB one.
 static CONT: SyncCell<[[[i16; CONT_N]; CONT_N]; 2]> = SyncCell::new([[[0; CONT_N]; CONT_N]; 2]);
 
+/// One move list per ply, rather than one per node on the stack.
+///
+/// A `MoveList` is 1544 bytes and `negamax` builds one every node, which is
+/// what gives the frame its size: at 128 plies that is most of a megabyte of
+/// stack, and every node dirties fresh cache lines that the previous node had
+/// just warmed. Indexed by ply, so a node and its children never share a slot,
+/// and the recursion writes to the same 1544 bytes each time it returns to a
+/// depth. All-zero initialiser, so this sits in BSS and adds nothing to the
+/// binary.
+/// Two banks, because a singular search re-enters `negamax` at the *same* ply
+/// with one move excluded. Sharing a slot there lets the child's `generate`
+/// overwrite the list its parent is still looping over -- which does not crash,
+/// it just quietly searches a different tree. A singular search cannot nest at
+/// one ply (it only triggers when nothing is excluded yet), so the second bank
+/// is enough.
+const LIST_SLOTS: usize = MAX_PLY + 8;
+static LISTS: SyncCell<[MoveList; LIST_SLOTS * 2]> = SyncCell::new([MoveList::new(); LIST_SLOTS * 2]);
+
+#[inline(always)]
+fn list_at(ply: usize, excluded: bool) -> &'static mut MoveList {
+    let slot = ply.min(LIST_SLOTS - 1) + if excluded { LIST_SLOTS } else { 0 };
+    unsafe { &mut LISTS.as_mut()[slot] }
+}
+
 #[inline(always)]
 fn cont() -> &'static mut [[[i16; CONT_N]; CONT_N]; 2] {
     unsafe { CONT.as_mut() }
@@ -681,9 +705,9 @@ impl Searcher {
                 // enough to skip it; nothing here would overturn it.
                 && !(tt_depth >= depth - 3 && tt_score < pc_beta)
             {
-                let mut list = MoveList::new();
-                generate(pos, &mut list, GenKind::Noisy);
-                self.score_moves::<-20>(pos, &mut list, tt_move, ply);
+                let list = list_at(ply, !excluded.is_null());
+                generate(pos, list, GenKind::Noisy);
+                self.score_moves::<-20>(pos, list, tt_move, ply);
                 for i in 0..list.n {
                     let m = list.pick(i);
                     // The capture has to be able to reach the raised beta on
@@ -719,12 +743,12 @@ impl Searcher {
         }
 
         // --- move loop
-        let mut list = MoveList::new();
-        generate(pos, &mut list, GenKind::All);
+        let list = list_at(ply, !excluded.is_null());
+        generate(pos, list, GenKind::All);
         if list.n == 0 {
             return if in_check { -MATE + ply as i32 } else { 0 };
         }
-        self.score_moves::<-20>(pos, &mut list, tt_move, ply);
+        self.score_moves::<-20>(pos, list, tt_move, ply);
 
         let mut best = -INF;
         let mut best_move = Move::NULL;
@@ -991,8 +1015,8 @@ impl Searcher {
             }
         }
 
-        let mut list = MoveList::new();
-        generate(pos, &mut list, if in_check { GenKind::All } else { GenKind::Noisy });
+        let list = list_at(ply, false);
+        generate(pos, list, if in_check { GenKind::All } else { GenKind::Noisy });
         if list.n == 0 {
             return if in_check { -MATE + ply as i32 } else { best };
         }
@@ -1001,9 +1025,9 @@ impl Searcher {
         // threshold stands. Out of check it discards them, which is what makes
         // the cheaper threshold safe.
         if in_check {
-            self.score_moves::<-20>(pos, &mut list, tt_move, ply);
+            self.score_moves::<-20>(pos, list, tt_move, ply);
         } else {
-            self.score_moves::<0>(pos, &mut list, tt_move, ply);
+            self.score_moves::<0>(pos, list, tt_move, ply);
         }
 
         let mut best_move = Move::NULL;

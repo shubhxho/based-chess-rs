@@ -11,6 +11,10 @@ use core::mem::MaybeUninit;
 
 pub const MAX_MOVES: usize = 256;
 
+/// `Copy` only so that a `[MoveList; N]` array can be built in a const
+/// initialiser for the per-ply arena. Nothing copies one at runtime -- the
+/// search hands out `&mut` to a slot.
+#[derive(Clone, Copy)]
 pub struct MoveList {
     pub mv: [Move; MAX_MOVES],
     pub sc: [i32; MAX_MOVES],
