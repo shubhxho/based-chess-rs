@@ -121,6 +121,29 @@ separates a position a static evaluation can learn from a position decided by a
 tactic. Relabelling is not a repeatable lever. It is worth exactly as much as
 the teacher improvement behind it.
 
+**The blend between the teacher's score and the game result** is already where
+it should be. `EVAL_W` decides how much of the target is the search's evaluation
+and how much is who actually won; it sits at 0.9. Moving it, measured over 1000
+games each against the shipping network:
+
+| `EVAL_W` | meaning | result |
+|---|---|---|
+| 0.7 | triple the weight on game outcomes | **-67.2 ± 21.9** |
+| 0.95 | slightly less outcome | -6.6 [-16.7, +3.5] over 3000 games |
+| 1.0 | ignore outcomes entirely | -7.6 ± 21.5 |
+
+The curve is sharp on one side and flat on the other, and 0.9 is at the top of
+it. A game result is a delayed and noisy verdict on one position — the side that
+was winning here often lost for reasons forty plies away — while the search's
+score is a direct opinion about this position. Ten percent of the target is
+apparently the right amount of that noise: enough to anchor the network to
+something outside its own search, not enough to drown the signal.
+
+`EVAL_W=0.95` is the reason the confirmation runs exist. Its first 1000 games
+read +6.3 and looked like a small win; two more opening sets took it to -3.6 and
+-11.2, and the pooled 3000 games put it slightly *below* the network it was
+meant to beat.
+
 ---
 
 ## How it's trained
