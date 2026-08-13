@@ -266,12 +266,17 @@ the current engine.
 - Distilled from itself. With no external engine available, the ceiling is the
   teacher's own search quality rather than a stronger reference.
 - Computing mobility and king-attacker features used to cost real throughput:
-  2.5 Mnps against 3.1 for the hand-crafted evaluator on the same core. A
-  direct-mapped cache of finished evaluations, keyed on the Zobrist key, has
-  since closed that gap — `bench 13`, median of five runs, is 2.98 Mnps with the
-  network against 3.02 without it. The search asks about the same position often
-  enough (transpositions, re-searches, null-move verification) that most of the
-  feature extraction was repeat work.
+  2.5 Mnps against 3.1 for the hand-crafted evaluator on the same core. That gap
+  is now closed and slightly reversed — `bench 13`, median of five runs, is
+  **3.37 Mnps with the network against 3.25 without it**. A direct-mapped cache
+  of finished evaluations did most of it: the search asks about the same
+  position often enough (transpositions, re-searches, null-move verification)
+  that a good deal of the feature extraction was repeat work. The rest came from
+  answering the pawn-structure questions for the whole board with file fills
+  instead of pawn by pawn. The network build being the faster of the two is not
+  a claim that a network is cheaper than a hand-crafted evaluator; it is that
+  the cache and the extraction rewrite between them now more than cover the
+  difference.
 - Accumulators are refreshed in full rather than updated incrementally. At 32
   neurons a matrix row is four NEON registers, and most of the 166 non-piece-
   square rows change on almost every move anyway, so an incremental update would
