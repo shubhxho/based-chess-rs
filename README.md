@@ -55,9 +55,18 @@ That was the whole difference:
 Same 32 neurons. Same optimiser. Same data. Five kilobytes of extra input beat
 four times the hidden width.
 
-Nor was it data-starved: retraining on 3.36M positions instead of 2M moves the
-fit by nothing (r 0.970 → 0.968). Width didn't matter, data didn't matter, the
-input set was the whole thing.
+Nor was it data-starved at that size: retraining on 3.36M positions instead of
+2M moves the fit by nothing (r 0.970 → 0.968). Width didn't matter, and at that
+scale data didn't either — the input set was the whole thing.
+
+"At that scale" is doing real work in that sentence, and it took a later
+experiment to find the edge of it. Deduplicating every shard ever generated into
+one 10.2M-position set and training on all of it is worth **+15.5 Elo, 95%
+confidence [+5.6, +25.5]**, pooled over 3000 games against the network it
+replaced. Three independent sets of openings, +23.7, +8.0 and +14.9 — which is
+also a fair illustration of why one 1000-game match is a sample rather than a
+result. So the data ceiling was real where it was measured and simply not where
+it was assumed: three times the data changed nothing, five times it did.
 
 The one thing that did move it later was the *teacher*. Relabelling the whole
 set with a search about 30 Elo stronger, at 6,000 nodes a move instead of 5,000
@@ -384,7 +393,7 @@ hits both halves and cancels. Point it at two copies of the same binary and it
 says 0 ms, ±3 ms, over 21 pairs. That ±3 ms is the floor. Anything smaller than
 it was never a result, and I have the retracted claims to prove it.
 
-The correctness check is the node count: 1,400,014 at `bench 13` and 9,326,301
+The correctness check is the node count: 1,281,983 at `bench 13` and 9,903,943
 at `bench 18`. If a change moves either number it changed the search, whatever
 it says on the label — and then benchmarks cannot settle it and it has to go and
 play games.

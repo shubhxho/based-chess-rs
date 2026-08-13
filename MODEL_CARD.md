@@ -125,13 +125,17 @@ The teacher is the engine's **own alpha-beta search** — the distillation
 principle behind DeepMind's searchless grandmaster-level chess, at a size that
 fits in L1 cache rather than a TPU pod. The student never searches.
 
-- **Data**: 3.4M positions from engine self-play out of randomised openings of
-  8 to 16 plies, labelled at 6k nodes/move by the current engine. Positions are
-  deduplicated by Zobrist key across the whole run, and the first two plies of
-  real play are skipped — those are the engine repairing whatever the random
-  opening did. Earlier releases used 3.36M positions labelled at 3k and 5k
-  nodes by weaker versions of the same search; those shards are kept, not
-  mixed in, so each network has one teacher rather than an average of several.
+- **Data**: 10.2M positions from engine self-play out of randomised openings of
+  8 to 16 plies, labelled at 3k to 6k nodes/move, deduplicated by FEN across
+  every generation run ever made. The first two plies of real play are skipped —
+  those are the engine repairing whatever the random opening did.
+
+  This supersedes the previous release, which trained on 3.4M positions from a
+  single generation on the theory that one teacher beats an average of several.
+  Measured over 3000 games, that theory is worth **-15.5 Elo**: training on
+  everything, older labels included, beats training on the newest shard alone by
+  +15.5 with 95% confidence [+5.6, +25.5]. The older labels are weaker but they
+  are not noise, and there are seven million of them.
 - **Filtering**: positions are dropped when the side to move is in check or the
   best move is a capture. There the tactic decides the game, not the static
   evaluation, and training on them only teaches the network to imitate search —

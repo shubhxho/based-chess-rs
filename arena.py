@@ -9,6 +9,7 @@ Usage: arena.py ENGINE_A ENGINE_B [games] ["nodes 20000"|"movetime 100"] [concur
 """
 
 import math
+import os
 import multiprocessing as mp
 import random
 import subprocess
@@ -142,7 +143,11 @@ def main():
     limit = sys.argv[4] if len(sys.argv) > 4 else "movetime 100"
     conc = int(sys.argv[5]) if len(sys.argv) > 5 else 8
 
-    jobs = [(a, b, 9000 + i, limit) for i in range(pairs)]
+    # Openings are seeded per pair. The base is settable so a result can be
+    # confirmed against a genuinely different set of openings rather than a
+    # replay of the same ones -- a single 1000-game match is one sample.
+    base = int(os.environ.get("SEED_BASE", "9000"))
+    jobs = [(a, b, base + i, limit) for i in range(pairs)]
     score, n, w, d, l = 0.0, 0, 0, 0, 0
     with mp.Pool(conc) as pool:
         for res in pool.imap_unordered(play, jobs):
