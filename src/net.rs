@@ -197,10 +197,11 @@ pub fn features_both(pos: &Position, persp: usize, a: &mut [u16; MAX_F], b: &mut
     // filled in during the mobility walk and emitted after both colours are
     // done, because the pieces that bear on white's king are black's, and they
     // are not seen until the second pass.
-    let zone = [
-        king_attacks(pos.king_sq(WHITE)) | bit(pos.king_sq(WHITE)),
-        king_attacks(pos.king_sq(BLACK)) | bit(pos.king_sq(BLACK)),
-    ];
+    // The king bitboard already *is* `bit(king_sq)`, so reuse it rather than
+    // recovering a square from it and shifting a one back up.
+    let wk = pos.piece[KING_P] & pos.color[WHITE];
+    let bk = pos.piece[KING_P] & pos.color[BLACK];
+    let zone = [king_attacks(lsb(wk)) | wk, king_attacks(lsb(bk)) | bk];
     let mut attackers = [0usize; 2];
 
     for c in 0..2 {
@@ -211,6 +212,10 @@ pub fn features_both(pos: &Position, persp: usize, a: &mut [u16; MAX_F], b: &mut
         let them = c ^ 1;
         let our_pawns = pos.pieces(c, PAWN_P);
         let their_pawns = pos.pieces(them, PAWN_P);
+        // Hoisted out of the mobility walk: a stack array indexed by a value
+        // the compiler cannot fold sits in memory unless the loop is unrolled.
+        let their_zone = zone[them];
+        let mut their_attackers = 0usize;
 
         // A fact whose index depends only on relative colour.
         macro_rules! put {
@@ -250,11 +255,13 @@ pub fn features_both(pos: &Position, persp: usize, a: &mut [u16; MAX_F], b: &mut
                 };
                 let m = popcount(att & !pos.color[c]) as usize;
                 put!(MOB, 4 * 12, (pt - 1) * 12 + m.min(11));
-                if att & zone[them] != 0 {
-                    attackers[them] += 1;
+                if att & their_zone != 0 {
+                    their_attackers += 1;
                 }
             }
         }
+        // Each entry is written by exactly one pass, since `them` is `c ^ 1`.
+        attackers[them] = their_attackers;
 
         // --- pawn structure, asked of the whole board instead of pawn by pawn
         //
