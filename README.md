@@ -83,6 +83,19 @@ Weighting the older shards down on top of that, on the theory that the newer
 teacher knows more, loses 24 ± 22. The old positions are worth as much as the
 new ones; it is only their stale *labels* that aren't.
 
+A third round of relabelling, run later against the engine as it is now, lost
+**44 ± 22 over 1000 games** — the clearest negative result here, and worth
+reading as the boundary of the trick that worked twice. Relabelling pays when
+the new teacher is genuinely stronger than the one that wrote the labels. These
+labels had already been written by a 6,000-node search; the engine doing the
+rewriting searches a slightly smaller tree per node but is not a materially
+stronger teacher at the same budget, so there was no new signal to add. What the
+round did change was the sample: 3.26M positions rather than the full 10.2M, and
+a further 105k dropped because their new score cleared the 2,000cp bar that
+separates a position a static evaluation can learn from a position decided by a
+tactic. Relabelling is not a repeatable lever. It is worth exactly as much as
+the teacher improvement behind it.
+
 ---
 
 ## How it's trained
