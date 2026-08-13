@@ -92,7 +92,23 @@ Weighting the older shards down on top of that, on the theory that the newer
 teacher knows more, loses 24 ± 22. The old positions are worth as much as the
 new ones; it is only their stale *labels* that aren't.
 
-A third round of relabelling, run later against the engine as it is now, lost
+Two further rounds of relabelling both lost, and the second one is the
+informative one. By then the teacher really was stronger — the +15.5 Elo network
+below — and all 10.2M positions were rescored by it rather than a third of them.
+The result was the best fit this project has produced, **r=0.9750** against the
+shipping network's 0.9609, and it lost by **41 ± 22 over 1000 games**.
+
+Put beside the +15.5 Elo result, that suggests what the labels are actually
+worth. Training on every shard ever made — ten million positions carrying labels
+from several generations of teacher, most of them weaker than today's — beats
+training on one clean generation. Rewriting all of those labels with a single
+current teacher, however strong, throws that away: it makes every label agree,
+and agreeing labels agree with the student's own biases too. Diversity in the
+teaching, not quality, looks like the thing being paid for. The fit gets better
+and the engine gets worse, which is the whole argument for judging networks by
+games.
+
+The first of the two rounds, run before that teacher existed, lost
 **44 ± 22 over 1000 games** — the clearest negative result here, and worth
 reading as the boundary of the trick that worked twice. Relabelling pays when
 the new teacher is genuinely stronger than the one that wrote the labels. These
