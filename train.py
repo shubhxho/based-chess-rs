@@ -34,7 +34,8 @@ import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
 
-IN = 934                 # feature rows; must match net.rs
+KB = int(os.environ.get("NET_KB", "1"))   # king buckets; must match net.rs
+IN = 934 * KB            # feature rows; must match net.rs
 MAX_F = 96               # feature slots per perspective
 PAD = IN                 # index of the permanent zero row
 H = int(os.environ.get("NET_H", "32"))
