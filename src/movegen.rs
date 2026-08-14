@@ -30,6 +30,7 @@ pub struct MoveList {
 /// memset and memcpy per node, which is what put `_platform_memmove` in the
 /// profile. Nothing is initialised here -- `push` writes slot `n` before `n`
 /// grows, and `get` is only ever called below `len`.
+#[derive(Clone, Copy)]
 pub struct Tried {
     mv: [MaybeUninit<Move>; MAX_MOVES],
     n: usize,
@@ -45,6 +46,10 @@ impl Tried {
             *self.mv.get_unchecked_mut(self.n) = MaybeUninit::new(m);
         }
         self.n += 1;
+    }
+    #[inline(always)]
+    pub fn clear(&mut self) {
+        self.n = 0;
     }
     #[inline(always)]
     pub fn len(&self) -> usize {

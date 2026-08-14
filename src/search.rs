@@ -155,6 +155,16 @@ static CONT: SyncCell<[[[i16; CONT_N]; CONT_N]; 2]> = SyncCell::new([[[0; CONT_N
 const LIST_SLOTS: usize = MAX_PLY + 8;
 static LISTS: SyncCell<[MoveList; LIST_SLOTS * 2]> = SyncCell::new([MoveList::new(); LIST_SLOTS * 2]);
 
+/// Same treatment for the two lists of moves already tried at a node: 520 bytes
+/// each, per node, for the same reason and with the same fix.
+static TRIED: SyncCell<[[Tried; 2]; LIST_SLOTS * 2]> = SyncCell::new([[Tried::new(); 2]; LIST_SLOTS * 2]);
+
+#[inline(always)]
+fn tried_at(ply: usize, excluded: bool) -> &'static mut [Tried; 2] {
+    let slot = ply.min(LIST_SLOTS - 1) + if excluded { LIST_SLOTS } else { 0 };
+    unsafe { &mut TRIED.as_mut()[slot] }
+}
+
 #[inline(always)]
 fn list_at(ply: usize, excluded: bool) -> &'static mut MoveList {
     let slot = ply.min(LIST_SLOTS - 1) + if excluded { LIST_SLOTS } else { 0 };
@@ -753,8 +763,12 @@ impl Searcher {
         let mut best = -INF;
         let mut best_move = Move::NULL;
         let mut bound = BOUND_UPPER;
-        let mut searched_quiets = Tried::new();
-        let mut searched_noisy = Tried::new();
+        let tried = tried_at(ply, !excluded.is_null());
+        tried[0].clear();
+        tried[1].clear();
+        let (searched_quiets, searched_noisy) = tried.split_at_mut(1);
+        let searched_quiets = &mut searched_quiets[0];
+        let searched_noisy = &mut searched_noisy[0];
         let mut moves_played = 0i32;
         let mut skip_quiets = false;
         let lmp_limit = (3 + depth * depth) / (2 - improving as i32);
@@ -915,7 +929,7 @@ impl Searcher {
                     }
                     if score >= beta {
                         bound = BOUND_LOWER;
-                        self.update_histories(pos, m, ply, depth, &searched_quiets, &searched_noisy, noisy);
+                        self.update_histories(pos, m, ply, depth, searched_quiets, searched_noisy, noisy);
                         break;
                     }
                 }
