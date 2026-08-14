@@ -10,17 +10,17 @@ tags:
 library_name: mlx
 ---
 
-# Sable — a 30 KB standalone chess evaluation network
+# Sable — a 60 KB standalone chess evaluation network
 
 The complete evaluation function for the [Sable](https://github.com/shubhxho/sable)
 chess engine, distilled from that engine's own search and trained with
 [MLX](https://github.com/ml-explore/mlx) on Apple silicon.
 
-**30,512 bytes.** It is the entire evaluation — there is no hand-crafted term
+**60,976 bytes.** It is the entire evaluation — there is no hand-crafted term
 underneath it, and no framework needed to run it.
 
 ```
-934 features -> 32 hidden (per perspective, shared) -> clipped ReLU -> 1 of 8 output buckets
+934 features -> 64 hidden (per perspective, shared) -> clipped ReLU -> 1 of 8 output buckets
 ```
 
 ## The input set is the whole story
@@ -64,7 +64,8 @@ load, from randomised openings, colours swapped on every pair:
 | 768-feature net **correcting** hand-crafted eval | +57 ± 28 Elo (600 games) |
 | **934-feature standalone net** vs hand-crafted eval | +35 ± 34 Elo (400 games) |
 | **934-feature standalone** vs the 768-feature hybrid | −3 ± 34 Elo (400 games) |
-| **this network** vs the previous release | +59.6 ± 21.9, +52.2 ± 21.8 (2000 games) |
+| **the rescaled 32-neuron net** vs the previous release | +59.6 ± 21.9, +52.2 ± 21.8 (2000 games) |
+| **this network** (64 neurons) vs that | +12.5 [+0.1, +24.9] (3000 games) |
 
 The last row is the one that decided what ships. The standalone network is
 statistically indistinguishable from the hybrid in games, while carrying no
@@ -92,12 +93,12 @@ one, and these match lengths cannot resolve a difference this small.
 
 | Tensor | Shape | Type | Bytes |
 |---|---|---|---|
-| `ft_w` | 934 x 32 | int8 | 29,888 |
-| `ft_b` | 32 | int16 | 64 |
-| `out_w` | 8 x 64 | int8 | 512 |
+| `ft_w` | 934 x 64 | int8 | 59,776 |
+| `ft_b` | 64 | int16 | 128 |
+| `out_w` | 8 x 128 | int8 | 1,024 |
 | `out_b` | 8 | int32 | 32 |
 | header | magic, inputs, hidden, buckets | uint32 | 16 |
-| | | **total** | **30,512** |
+| | | **total** | **60,976** |
 
 ### Feature-space layout
 

@@ -15,7 +15,16 @@
 //! Alongside the 768 piece-square planes sit 166 rows encoding mobility,
 //! passed pawns, pawn structure, rook files, the bishop pair, king attackers
 //! and king shelter — computed from the board and looked up in the same
-//! embedding table. Each row costs 32 bytes. The whole network is 30,508.
+//! embedding table. Each row costs 64 bytes. The whole network is 60,976.
+//!
+//! Width is worth something after all, and the paragraph above is the reason it
+//! looked like it wasn't. Every width comparison here was run before the
+//! trainer had an output gain, so a wider network was measured against a
+//! differently-*scaled* one rather than a narrower one. With that constant held
+//! fixed, 64 neurons beat 32 by about 16 Elo over 2000 games and 128 beat 64 by
+//! nothing at all — and 128 also spills the accumulator out of the register
+//! file. The plateau is real; it just starts one doubling later than the
+//! original sweep said.
 //!
 //! This file is the single source of truth for feature extraction. The trainer
 //! never re-implements it; it asks the engine for indices through `featdump`.
@@ -31,7 +40,7 @@ const BLOB: &[u8] = include_bytes!("../net.bin");
 const MAGIC: usize = 0x334C_4253; // "SBL3" little-endian
 
 /// Hidden neurons per perspective.
-pub const H: usize = 32;
+pub const H: usize = 64;
 /// Output-layer sets, indexed by remaining material.
 pub const BUCKETS: usize = 8;
 

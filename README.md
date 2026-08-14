@@ -198,6 +198,47 @@ each other's intervals, so the exact value is not the finding. It ships at 0.70,
 as `OUT_SCALE` in `train.py`, applied to the output layer at export so the
 network file stays the only description of what the engine computes.
 
+## The width sweep, rerun with the scale fixed
+
+Everything this file says above about width was measured before that constant
+existed, which means it was measured through it. Four architecture changes were
+tried again with the gain held at 0.70, each 1000 games at 20,000 nodes against
+the network the section above ships:
+
+| change | size | vs that network |
+|---|---|---|
+| 32 → 64 hidden neurons | 30 KB → 60 KB | **+12.5 [+0.1, +24.9]** over 3000 games |
+| squared clipped ReLU, 32 neurons | 30 KB | -3.8 ± 21.5 |
+| squared clipped ReLU, 64 neurons | 60 KB | +14.3 ± 21.6 |
+| four king buckets on the whole feature block, 32 neurons | 118 KB | +8.3 ± 21.5 |
+| king buckets and 64 neurons together | 235 KB | +4.9 ± 21.5 |
+
+Only the first survives. Every one of those five had measured *negative* before
+the gain was fixed — the widest read -18.4 — so the earlier conclusion that
+width does nothing was an artifact of comparing differently-scaled evaluations.
+
+The width row is pooled over three matches and, deliberately, over **two
+separately trained networks**: the same recipe, the same seed, run twice. They
+came out at +13.6 ± 21.6 and +18.4 ± 21.6, and +6.3 ± 21.5. MLX's reductions are
+not bit-deterministic, so two runs land on different weights — validation loss
+0.00340 against 0.00341, indistinguishable — and then differ by twelve Elo in
+games. That spread is wider than any one match's interval and it is worth
+stating plainly: a single 1000-game match against a single trained network
+resolves neither the training run nor the opening set. The network that ships is
+the one measured at +6.3, because it is the one `NET_H=64 python train.py`
+reproduces; the +18 sibling was an export-time rescale of the same run.
+
+Width is not free either: 64 neurons is 6% more time per node, and a
+node-limited match hides that by construction. At a real time control, 600 games
+at 100ms a move, it wins by +18.0 ± 27.8.
+
+Width stops there. 128 neurons scores **exactly even**, -0.0 ± 21.5 over 1000
+games, and costs 85% more time per node — sixteen 128-bit accumulator registers
+per perspective is more than the register file has, so the inner loop starts
+spilling to memory. The king buckets are the more interesting negative: they
+help alone and *hurt* when combined with the extra width, which reads as two
+ways of spending the same capacity rather than two capacities.
+
 ---
 
 ## How it's trained

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Distil the engine's search into a 30 KB network, trained with MLX.
+"""Distil the engine's search into a 60 KB network, trained with MLX.
 
 The teacher is the engine's own alpha-beta search. Every training position
 carries the score that search returned at a fixed node count, plus the result of
@@ -7,7 +7,7 @@ the self-play game it came from. The student is a static evaluation that never
 searches -- the idea behind DeepMind's searchless grandmaster-level chess, at a
 size that fits in L1 cache rather than a TPU pod.
 
-    934 -> 32 (per perspective, shared weights) -> clipped ReLU -> 1 of 8 buckets
+    934 -> 64 (per perspective, shared weights) -> clipped ReLU -> 1 of 8 buckets
 
 Two things here are deliberate and load-bearing.
 
@@ -34,11 +34,10 @@ import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
 
-KB = int(os.environ.get("NET_KB", "1"))   # king buckets; must match net.rs
-IN = 934 * KB            # feature rows; must match net.rs
+IN = 934                 # feature rows; must match net.rs
 MAX_F = 96               # feature slots per perspective
 PAD = IN                 # index of the permanent zero row
-H = int(os.environ.get("NET_H", "32"))
+H = int(os.environ.get("NET_H", "64"))
 BUCKETS = int(os.environ.get("NET_B", "8"))
 QA, QB = 127, 64         # int8 scales for the two layers
 SCALE = 400              # network units -> centipawns
