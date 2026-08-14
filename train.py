@@ -46,6 +46,7 @@ WEIGHTED = os.environ.get("WEIGHTED", "1") != "0"
 WEIGHT_CLAMP = float(os.environ.get("WEIGHT_CLAMP", "3"))
 SHARD_DECAY = float(os.environ.get("SHARD_DECAY", "1.0"))
 SIGMOID_K = float(os.environ.get("SIG_K", "400"))
+OUT_SCALE = float(os.environ.get("OUT_SCALE", "0.7"))   # export-time gain; see export()
 ENGINE = os.environ.get("ENGINE", "./target/release/sable")
 
 FEAT_MAGIC = b"SBF2"     # featdump stream header
@@ -243,11 +244,26 @@ def clip_weights(model):
 # ---------------------------------------------------------------------------
 
 def export(model, path=None):
+    """Quantise and write the network, quieter than it was trained.
+
+    OUT_SCALE multiplies the whole output layer, so every evaluation comes back
+    smaller by the same factor and the ranking of positions is untouched. It is
+    the last thing applied and it is not part of the objective, because it is
+    not about fitting the teacher: a network trained to reproduce the search's
+    score reproduces its *spread* too, and the search plays worse when handed
+    one. Measured against the same network exported at several gains, all else
+    equal, over 1000 games each at 20,000 nodes -- see MODEL_CARD.md.
+
+    Scaling the exported weights rather than the score in net.rs keeps the
+    network file the single description of what the engine computes, so the
+    trainer's own quantised reference still agrees with the engine byte for
+    byte.
+    """
     path = path or os.environ.get("NET_OUT", "net.bin")
     ft = np.array(model.ft)
     ft_b = np.array(model.ft_b)
-    out = np.array(model.out)
-    out_b = np.array(model.out_b)
+    out = np.array(model.out) * OUT_SCALE
+    out_b = np.array(model.out_b) * OUT_SCALE
 
     ft_q = np.clip(np.round(ft * QA), -127, 127).astype(np.int8)
     ft_b_q = np.clip(np.round(ft_b * QA), -32767, 32767).astype(np.int16)
@@ -293,7 +309,10 @@ def main():
     mx.random.seed(seed)
 
     fens, sc, wdl, age = read_labels(shards, limit)
-    us, them, buckets, width = dump_features(fens, f"data/feat_{limit or 'all'}.bin")
+    # The feature map is part of the cache key. Changing IN changes what every
+    # index means, and a cache named only for the position count would be read
+    # back as indices into a table that no longer exists.
+    us, them, buckets, width = dump_features(fens, f"data/feat_{limit or 'all'}_{IN}.bin")
     n = len(sc)
     print(
         f"{n} positions, {epochs} epochs, {(us.nbytes + them.nbytes)/1e6:.0f} MB of "

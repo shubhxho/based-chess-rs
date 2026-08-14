@@ -144,6 +144,60 @@ read +6.3 and looked like a small win; two more opening sets took it to -3.6 and
 -11.2, and the pooled 3000 games put it slightly *below* the network it was
 meant to beat.
 
+## How loud the evaluation is
+
+Everything above compares networks that were assumed to be on the same scale.
+They were not, and the difference is worth more than any of it.
+
+A network distilled from a search learns to reproduce that search's score, and
+that includes reproducing its *spread*. Over 20,000 positions the network that
+shipped until now evaluated with a standard deviation of 549 centipawns against
+the teacher's 654 — it systematically understated how good good positions are.
+Retraining the same architecture on the same data fixed that: the new network
+lands at 642, almost exactly the teacher's spread, and fits better on every
+measure, r 0.9811 against 0.9794 and a mean error of 82cp against 102cp.
+
+It lost by **38.0 ± 21.7 over 1000 games**.
+
+Multiplying that network's output layer by a constant is then the only variable
+left. It cannot change which position the network prefers — the ranking is
+identical, r does not move — and it scales every evaluation by the same factor.
+Sweeping it, 1000 games each against the shipping network, on the same 10.2M
+positions and the same 15 epochs:
+
+| output gain | result vs the shipping network |
+|---|---|
+| 1.00 | **-38.0 ± 21.7** |
+| 0.90 | +7.0 |
+| 0.85 | +19 over 2000 games |
+| 0.80 | +43.3 |
+| 0.75 | +56.1 |
+| 0.70 | **+59.6 ± 21.9**, and +52.2 ± 21.8 on a second set of openings |
+| 0.65 | +53.9 ± 21.8 |
+| 0.60 | +58.6 ± 21.8 |
+| 0.55 | +47.9 ± 21.7 |
+
+A hundred Elo separates the top of that curve from the bottom, and nothing the
+network knows changes anywhere along it. What changes is how loudly it says it.
+The search does not consume the evaluation as a number; it compares it against
+margins — reverse futility, razoring, the null-move verification bound, the
+static side of late-move reductions. Those margins are in centipawns and they
+were tuned against a quiet evaluation. Hand the search a correctly calibrated
+one and every threshold fires at the wrong depth, in the direction of pruning
+too little where the evaluation is now bolder.
+
+That reframes the relabelling failures above. The best fit this project ever
+produced lost by 41 Elo, and the reading at the time was that fitting the
+teacher too well is itself the problem. A simpler explanation is available now:
+a network that fits its teacher better also inherits its spread more faithfully,
+and nothing was correcting the scale. That experiment is worth rerunning at a
+gain that was never a free parameter before.
+
+The curve is flat between 0.60 and 0.75 and the three points there are within
+each other's intervals, so the exact value is not the finding. It ships at 0.70,
+as `OUT_SCALE` in `train.py`, applied to the output layer at export so the
+network file stays the only description of what the engine computes.
+
 ---
 
 ## How it's trained

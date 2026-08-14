@@ -64,6 +64,7 @@ load, from randomised openings, colours swapped on every pair:
 | 768-feature net **correcting** hand-crafted eval | +57 ± 28 Elo (600 games) |
 | **934-feature standalone net** vs hand-crafted eval | +35 ± 34 Elo (400 games) |
 | **934-feature standalone** vs the 768-feature hybrid | −3 ± 34 Elo (400 games) |
+| **this network** vs the previous release | +59.6 ± 21.9, +52.2 ± 21.8 (2000 games) |
 
 The last row is the one that decided what ships. The standalone network is
 statistically indistinguishable from the hybrid in games, while carrying no
@@ -143,8 +144,15 @@ fits in L1 cache rather than a TPU pod. The student never searches.
 - **Objective**: MSE in win-probability space,
   `sigmoid(net / 400)` against `0.9 * sigmoid(search / 400) + 0.1 * result`.
 - **Optimiser**: AdamW, batch 16384, lr 1e-2 with one warmup epoch then cosine
-  decay over 30 epochs. 5% of positions are held out; the exported network is
+  decay over 15 epochs. 5% of positions are held out; the exported network is
   the epoch that did best on them, not the last one.
+- **Output gain**: the exported output layer is multiplied by `OUT_SCALE`, 0.70.
+  This is not part of the objective and it does not change which position the
+  network prefers; it only makes every evaluation quieter by a constant. A
+  network trained to reproduce a search's score reproduces its spread as well,
+  and the search plays substantially worse when handed one. The same network
+  exported at gain 1.00 loses 38.0 ± 21.7 to the previous release; at 0.70 it
+  wins by 59.6 ± 21.9. See README.md for the full sweep.
 
 Data volume is not the constraint either: retraining on the full 3.36M against
 2M moves the fit by nothing worth reporting (r 0.970 -> 0.968, RMSE 130.1 ->
