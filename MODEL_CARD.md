@@ -59,12 +59,16 @@ model-index:
           name: Chess play, absolute rating anchor
         dataset:
           type: stockfish-uci-elo
-          name: Stockfish with UCI_LimitStrength, four settings
+          name: Stockfish with UCI_LimitStrength, five settings from 2600 to 3000
         metrics:
           - type: elo
-            name: Implied Elo on Stockfish's UCI_Elo scale
+            name: Implied Elo on Stockfish's UCI_Elo scale (0.5 crossover)
             value: 2800
-            args: 200 games per setting at 100ms/move; anchors spread 2741-2881, so treat as +/-70
+            args: >-
+              1500 games, 300 at each of five settings, 100ms/move. Maximum-likelihood
+              fit 2819 +/- 19, crossover interpolation 2783; quote as +/-40. Stockfish's
+              nominal scale measures compressed here (fitted slope 0.83), so the crossover
+              is the slope-independent estimate.
             verified: false
       - task:
           type: other
@@ -238,14 +242,28 @@ For an absolute figure, the engine was played against Stockfish under
 
 | Stockfish `UCI_Elo` | score | implied |
 |---|---|---|
-| 2200 | 0.958 | 2741 |
-| 2500 | 0.853 | 2805 |
-| 2800 | 0.465 | **2776** |
-| 3000 | 0.335 | 2881 |
+| 2600 | 0.772 | 2812 |
+| 2700 | 0.638 | 2799 |
+| 2800 | 0.472 | 2780 |
+| 2900 | 0.410 | 2837 |
+| 3000 | 0.328 | 2876 |
 
-Call it **2800**. The 2800 row deserves the most weight because it is nearest
-parity and extrapolates least. The four anchors disagree by 140 Elo, and that
-spread is the honest precision — this locates the engine on someone else's scale
+Call it **2800**, and mean it loosely. A maximum-likelihood fit over all 1500
+games says 2819 ± 19; the point where the score actually crosses 0.5 says 2783.
+Quote the range, not either end — ±40 is honest, ±19 is not.
+
+They disagree for a reason worth knowing if you ever calibrate anything this
+way. The one-parameter fit leaves residuals that drift monotonically with the
+setting (-0.008, -0.027, -0.056, +0.024, +0.067), meaning this engine loses less
+to Stockfish's strongest settings than the logistic model predicts. Letting the
+slope float fits it at 0.83 — a hundred of Stockfish's nominal points behave like
+roughly eighty-three real ones across this range. `UCI_LimitStrength` hits its
+target by degrading play in discrete internal steps, so its scale has no
+particular reason to be linear, and measured here it isn't.
+
+That is why the 0.5 crossover is the defensible number: two engines scoring 0.5
+against each other are equal by definition, and that point doesn't depend on the
+slope being correct. This locates the engine on someone else's approximate scale
 rather than rating it, and it is not a CCRL or FIDE number.
 
 ## The output gain

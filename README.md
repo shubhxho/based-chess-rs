@@ -360,22 +360,32 @@ each, 100ms a move:
 
 | Stockfish `UCI_Elo` | score | implied |
 |---|---|---|
-| 2200 | 0.958 | 2741 |
-| 2500 | 0.853 | 2805 |
-| 2800 | 0.465 | **2776** |
-| 3000 | 0.335 | 2881 |
+| 2600 | 0.772 | 2812 |
+| 2700 | 0.638 | 2799 |
+| 2800 | 0.472 | 2780 |
+| 2900 | 0.410 | 2837 |
+| 3000 | 0.328 | 2876 |
 
-**Somewhere around 2800.** Trust the 2800 row over the others: it is the
-near-parity match, where a score of 0.465 needs the least extrapolation to turn
-into a rating.
+**About 2800.** Fitting one rating to all 1500 games by maximum likelihood gives
+2819 ± 19; interpolating the point where the score crosses 0.5 gives 2783. I
+would quote the range rather than either endpoint, and ±40 is honest where ±19
+is not.
 
-Now the caveats, which matter more than the number. The four anchors disagree by
-140 Elo, and that spread *is* the precision — it would be dishonest to quote
-2776 to four digits from this. Stockfish's `UCI_Elo` is its own approximate
-self-calibration, fitted at longer time controls than the 100ms used here. So
-this locates the engine on a scale rather than rating it, and it is emphatically
-not a CCRL or FIDE figure. `tests/calibrate.py` reproduces the whole thing; it
-needs Stockfish on `PATH`, which nothing else in this repo does.
+The reason those two disagree is the interesting part, and it is not noise. The
+residuals from the one-parameter fit drift monotonically — -0.008, -0.027,
+-0.056, +0.024, +0.067 as the setting rises — which means the engine loses less
+to Stockfish's strongest settings than a logistic curve says it should. Let the
+slope float and it fits at 0.83: a hundred of Stockfish's nominal points behave
+like about eighty-three real ones over this range. `UCI_LimitStrength` reaches
+its target by degrading play in discrete internal steps, so there is no reason
+its scale should be linear, and here it isn't.
+
+That is why the crossover is the number worth quoting. Where two engines score
+0.5 against each other they are equal by definition, and that point doesn't care
+whether the slope is right — which is fortunate, because it isn't.
+`tests/calibrate.py` reproduces all of it and needs Stockfish on `PATH`, which
+nothing else in this repo does. It is still someone else's approximate
+self-calibration and still not a CCRL or FIDE number.
 
 
 ---

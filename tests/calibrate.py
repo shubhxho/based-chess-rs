@@ -179,6 +179,55 @@ def main():
               "and this engine's disagree about what an Elo is, and the single "
               "number above is hiding it.", flush=True)
 
+        R2, s = fit_rating_and_slope(points)
+        print(f"\nallowing the scale to stretch: crossover {R2:.0f}, slope {s:.2f}",
+              flush=True)
+        if abs(s - 1.0) > 0.05:
+            direction = "compressed" if s < 1 else "stretched"
+            print(f"  Stockfish's nominal Elo steps are {direction} relative to real "
+                  f"strength differences here: 100 of its points move the score by "
+                  f"what {100 * s:.0f} true Elo would.", flush=True)
+        print("  The crossover is the number to quote. Where the score is 0.5 the two "
+              "engines are equal by definition, so that point does not depend on the "
+              "slope being right -- and the slope is not right.", flush=True)
+
+
+def fit_rating_and_slope(points):
+    """Fit the rating *and* how much a nominal Elo point is actually worth.
+
+    The one-parameter fit assumes Stockfish's scale and a real Elo scale are the
+    same thing. They are not: `UCI_LimitStrength` reaches its target by degrading
+    play in discrete internal steps, so the spacing is lumpy and the implied
+    strength difference across a 400-point span need not be 400 points.
+
+    Letting the slope float absorbs that into one interpretable number. The
+    crossover it returns is where the two engines score 0.5 against each other,
+    which is slope-independent and therefore the honest thing to publish.
+    """
+    def logL(R, s):
+        total = 0.0
+        for E, p, n in points:
+            q = 1.0 / (1.0 + 10 ** (s * (E - R) / 400.0))
+            q = min(max(q, 1e-9), 1 - 1e-9)
+            total += n * (p * math.log(q) + (1 - p) * math.log(1 - q))
+        return total
+
+    best = None
+    for si in range(40, 161):                     # slope 0.40 .. 1.60
+        s = si / 100.0
+        lo, hi = 1000.0, 4000.0
+        for _ in range(200):                      # ternary search, logL is unimodal in R
+            m1, m2 = lo + (hi - lo) / 3, hi - (hi - lo) / 3
+            if logL(m1, s) < logL(m2, s):
+                lo = m1
+            else:
+                hi = m2
+        R = (lo + hi) / 2
+        v = logL(R, s)
+        if best is None or v > best[0]:
+            best = (v, R, s)
+    return best[1], best[2]
+
 
 if __name__ == "__main__":
     main()
