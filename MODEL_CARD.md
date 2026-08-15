@@ -23,6 +23,15 @@ underneath it, and no framework needed to run it.
 934 features -> 64 hidden (per perspective, shared) -> clipped ReLU -> 1 of 8 output buckets
 ```
 
+The engine around it plays at roughly **2800 Elo**, anchored against Stockfish's
+`UCI_Elo` settings. That anchor is worth about ±70, for reasons set out under
+[Playing strength](#playing-strength).
+
+If you read one section, make it [the output gain](#the-output-gain). A single
+constant multiplying the output layer — which cannot change which position the
+network prefers — was worth about 60 Elo, and getting it wrong had been
+poisoning every architecture comparison in this project for months.
+
 ## The input set is the whole story
 
 The obvious design uses the standard NNUE input: 768 binary features, one per
@@ -86,6 +95,56 @@ Worth being straight about: the standalone net fits the teacher much better
 (RMSE 130 vs 161 cp) than the hybrid but does not out-play it. Better regression
 against a search's output is not the same thing as better move ordering inside
 one, and these match lengths cannot resolve a difference this small.
+
+For an absolute figure, the engine was played against Stockfish under
+`UCI_LimitStrength`, 200 games at each setting, 100ms a move:
+
+| Stockfish `UCI_Elo` | score | implied |
+|---|---|---|
+| 2200 | 0.958 | 2741 |
+| 2500 | 0.853 | 2805 |
+| 2800 | 0.465 | **2776** |
+| 3000 | 0.335 | 2881 |
+
+Call it **2800**. The 2800 row deserves the most weight because it is nearest
+parity and extrapolates least. The four anchors disagree by 140 Elo, and that
+spread is the honest precision — this locates the engine on someone else's scale
+rather than rating it, and it is not a CCRL or FIDE number.
+
+## The output gain
+
+This is the part worth reading even if nothing else here interests you.
+
+A network distilled from a search learns to reproduce that search's score, and
+that includes reproducing its **spread**. Measured over 20,000 positions, the
+previous release evaluated with a standard deviation of 549 centipawns where its
+teacher sat at 654 — it had been quietly understating every position for its
+whole life. Retraining the same architecture on the same data fixed that, landing
+at 642, and improved every fit statistic: r from 0.9794 to 0.9811, mean error
+from 102cp to 82cp.
+
+That better network lost by **38.0 ± 21.7 over 1000 games**.
+
+Multiplying its output layer by a constant is the only thing that then separates
+the two. It cannot reorder the network's preferences — r does not move — it only
+changes how loud the evaluation is. Swept at 1000 games each against the previous
+release: gain 1.00 gives -38.0, 0.90 gives +7.0, 0.80 gives +43.3, 0.70 gives
++59.6, 0.60 gives +58.6, 0.55 gives +47.9.
+
+A hundred Elo across that curve, with the network knowing exactly the same things
+at every point on it. The likely mechanism is that a search never consumes a
+static evaluation alone — it compares it against margins, in centipawns, for
+reverse futility, razoring, null-move verification and late-move reductions.
+Those margins were tuned against an evaluation that happened to speak quietly.
+Fix the network's calibration without fixing them and every threshold fires in
+the wrong place.
+
+It ships at `OUT_SCALE = 0.70`, applied to the output layer at export rather than
+to the score in the engine, so this file stays the single description of what the
+engine computes. Rerunning the sweep against the 64-neuron network put 0.55
+through 0.80 all within noise of 0.70 across another 5000 games: the plateau is
+wide and did not move with the architecture. The 60 Elo comes from not being at
+1.00, not from finding a precise value.
 
 ## Architecture
 
@@ -231,15 +290,20 @@ Little-endian, tightly packed, no framework dependency:
 ```
 magic   u32   0x334C4253 ("SBL3")
 inputs  u32   934
-hidden  u32   32
+hidden  u32   64
 buckets u32   8
-ft_w    i8[934 * 32]     row-major [feature][neuron]
-ft_b    i16[32]
-out_w   i8[8 * 64]       row-major [bucket][neuron];
-                         within a bucket, first 32 = side to move,
-                         last 32 = opponent
+ft_w    i8[934 * 64]     row-major [feature][neuron]
+ft_b    i16[64]
+out_w   i8[8 * 128]      row-major [bucket][neuron];
+                         within a bucket, first 64 = side to move,
+                         last 64 = opponent
 out_b   i32[8]
 ```
+
+The header carries `inputs`, `hidden` and `buckets`, so read those rather than
+hardcoding them — this network was 32 hidden neurons until recently and the
+loader rejects a file whose header disagrees with the build rather than
+misreading it.
 
 ```python
 import struct, numpy as np
@@ -265,7 +329,8 @@ for i in $(seq 1 9); do
   ./target/release/sable <<< "datagen 400000 5000 $((i*7919))" > data/shard$i.txt &
 done; wait
 
-python train.py 3400000 16      # dumps features via the engine, writes net.bin
+python train.py 10220706 15     # dumps features via the engine, writes net.bin
+                                # NET_H=64 and OUT_SCALE=0.70 are the defaults
 cargo build --release           # net.bin is include_bytes!'d into the binary
 cp target/release/sable sable-std
 
@@ -285,12 +350,15 @@ the current engine.
 
 ## Limitations
 
-- Distilled from itself. With no external engine available, the ceiling is the
-  teacher's own search quality rather than a stronger reference.
-- Computing mobility and king-attacker features used to cost real throughput:
-  2.5 Mnps against 3.1 for the hand-crafted evaluator on the same core. That gap
-  is now closed and slightly reversed — `bench 13`, median of five runs, is
-  **3.37 Mnps with the network against 3.25 without it**. A direct-mapped cache
+- Distilled from itself. The ceiling is the engine's own search quality rather
+  than a stronger reference. Stockfish appears in this repository only as a
+  measuring stick; nothing it plays has ever been trained on.
+- The 2800 figure is an anchor, not a rating. Four Stockfish settings imply
+  ratings spread across 140 Elo, and Stockfish's own `UCI_Elo` calibration is
+  approximate and fitted at longer time controls than the 100ms used here.
+- Computing mobility and king-attacker features costs throughput: the engine
+  runs about **3.1 Mnps** at `bench 13` on one M-series core, and widening the
+  hidden layer to 64 neurons cost 8% per node on its own. A direct-mapped cache
   of finished evaluations did most of it: the search asks about the same
   position often enough (transpositions, re-searches, null-move verification)
   that a good deal of the feature extraction was repeat work. The rest came from
@@ -299,8 +367,8 @@ the current engine.
   a claim that a network is cheaper than a hand-crafted evaluator; it is that
   the cache and the extraction rewrite between them now more than cover the
   difference.
-- Accumulators are refreshed in full rather than updated incrementally. At 32
-  neurons a matrix row is four NEON registers, and most of the 166 non-piece-
+- Accumulators are refreshed in full rather than updated incrementally. At 64
+  neurons a matrix row is eight NEON registers, and most of the 166 non-piece-
   square rows change on almost every move anyway, so an incremental update would
   only cover the piece-square part. The eval cache took the easy half of that win
   for a fraction of the complexity, and the refresh itself now keeps both

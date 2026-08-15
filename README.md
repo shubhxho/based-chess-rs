@@ -1,8 +1,17 @@
 # Sable
 
-A chess engine written in Rust. It plays UCI, evaluates positions with a small
+A chess engine written in Rust. It plays UCI, evaluates positions with a 60 KB
 neural network, and that network was trained on games the engine played against
-itself.
+itself. It lands somewhere around **2800 Elo** — see [What that adds up
+to](#what-that-adds-up-to) for how that was measured and why the number carries
+a wide error bar.
+
+This file is written as a lab notebook rather than a feature list. Most of it is
+things that didn't work, because those are the parts I'd have wanted to read
+first, and one of them turned out to be worth more than everything else here
+combined: for months I was measuring every architecture change through an
+uncontrolled variable, and [everything I concluded from
+that](#how-loud-the-evaluation-is) was wrong.
 
 It is `#![no_std]`: no allocator, no third-party crate, no libc call anywhere in
 the source. Every conversation with the kernel is a hand-written `svc #0x80`
@@ -29,8 +38,15 @@ plays **165 Elo worse** than the hand-crafted evaluator it was meant to replace.
 
 The natural reaction is "too small, make it bigger." So I swept the hidden layer
 from 16 neurons to 128 — an 8x range — and the fit against the teacher barely
-moved: r hovered around 0.93 the whole way. That flatness is the actual finding.
-Capacity was never the constraint.
+moved: r hovered around 0.93 the whole way. That flatness looked like the actual
+finding, and I wrote for a long time that capacity was never the constraint.
+
+I was about half right, and it took until much later to find out which half.
+Width does buy something — just not enough to rescue this input set, and not
+enough to show up in the fit at all. The story of how that stayed hidden is
+[further down](#the-width-sweep-rerun-with-the-scale-fixed), because it turns on
+a mistake that was contaminating every comparison in this file, including this
+one.
 
 The constraint is that piece-square features describe where pieces **are**, and
 almost everything that decides a chess position is about where pieces can
@@ -42,9 +58,10 @@ So the budget went into the input instead of the hidden layer. Alongside the 768
 piece-square planes there are now 166 rows encoding mobility, passed pawns by
 rank, isolated and doubled pawns, rooks on open and half-open files, the bishop
 pair, king attackers, and king shelter — all computed from the board and looked
-up in the same embedding table. Each row costs 32 bytes.
+up in the same embedding table.
 
-That was the whole difference:
+That was the whole difference. These were all measured back when the hidden
+layer was 32 neurons, so the sizes are the old ones:
 
 | Input set | Size | r vs teacher | RMSE |
 |---|---|---|---|
@@ -95,8 +112,9 @@ new ones; it is only their stale *labels* that aren't.
 Two further rounds of relabelling both lost, and the second one is the
 informative one. By then the teacher really was stronger — the +15.5 Elo network
 below — and all 10.2M positions were rescored by it rather than a third of them.
-The result was the best fit this project has produced, **r=0.9750** against the
-shipping network's 0.9609, and it lost by **41 ± 22 over 1000 games**.
+The result was the best fit this project had produced at the time, **r=0.9750**
+against the then-shipping network's 0.9609, and it lost by **41 ± 22 over 1000
+games**.
 
 Put beside the +15.5 Elo result, that suggests what the labels are actually
 worth. Training on every shard ever made — ten million positions carrying labels
@@ -146,67 +164,33 @@ meant to beat.
 
 ## How loud the evaluation is
 
-The two sections below are worth **+63.0 ± 12.6 Elo** together, over 3000 games
-at 20,000 nodes a move against the network that shipped before them: +62.9,
-+65.7 and +59.3 across three independent sets of openings. That is the largest
-single step this project has measured, and almost all of it is one constant.
+This is the part I did not see coming, and it is worth more than everything
+above it put together.
 
-Fixed nodes is the measurement this file uses everywhere, because it does not
-move with machine load. It also gives the new network its 8% slower evaluation
-for free. On the clock, against the same opponent: **+42.3 ± 24.3** over 800
-games at 100ms a move, and **+51.6 ± 34.4** over 400 at 300ms. So roughly twenty
-Elo of the sixty-three is the node-limited harness being generous, and the
-remainder is real at any time control tested. The gap shrinks as the clock
-grows, which is what a constant per-node overhead against a deeper tree should
-do.
+It started as routine housekeeping. I retrained the shipping network — same
+architecture, same 10.2M positions, same everything — expecting a net I could
+use as a baseline for architecture experiments. It came out *better* by every
+measure I had. Correlation with the teacher went from 0.9794 to 0.9811. Mean
+error dropped from 102 centipawns to 82.
 
-The size of the win depends on how hard the engine is thinking, and not in the
-direction a tuning artifact would predict. Against the same opponent, 1000 games
-at each budget:
+Then it lost by **38.0 ± 21.7 over 1000 games**.
 
-| nodes per move | result |
-|---|---|
-| 5,000 | +27.5 ± 21.6 |
-| 10,000 | +55.4 ± 21.8 |
-| 20,000 | +63.0 ± 12.6 (3000 games) |
-| 50,000 | +63.2 ± 21.9 |
-| 100,000 | +62.5 ± 21.9 |
-| 200,000 | +55.0 ± 21.8 |
+I nearly filed that under "fit isn't Elo" — this file already says that in three
+places — and moved on. What stopped me was checking the one statistic I had
+never looked at: not how *close* the evaluations were, but how *spread out*.
+Over 20,000 positions the old network's evaluations had a standard deviation of
+549 centipawns. The teacher's were 654. The old network had been quietly
+understating every position for its entire life, and my better retrain had fixed
+that, landing at 642 — faithful to the teacher, right where a good student
+should be.
 
-The constant was tuned at 20,000 nodes, so the thing to check was whether it
-stops paying away from where it was fitted. Mostly it does not: the win grows
-from 5k to 20k and then holds within its own error bars out to 200k, ten times
-past the tuning point. What falls off is the shallow end — at 5,000 nodes the
-win is less than half. That fits the mechanism: a shallow search prunes less and
-leans on the static evaluation less, so how loud that evaluation is matters
-less.
+The fix, if that was really the problem, is embarrassingly small: multiply the
+output layer by a constant. It cannot change which position the network prefers,
+the ranking is untouched, r does not move by a thousandth. It only changes how
+loudly the network says what it already thought. Sweeping it, 1000 games each
+against the old network:
 
-The 200k point is the one to keep an eye on. It reads seven Elo below 100k,
-which a single 1000-game match cannot distinguish from noise, but it is also the
-direction a fixed constant would drift if the search's margins matter less as
-the tree deepens. Not evidence of anything yet; a reason to re-measure the gain
-at a long time control before trusting it there.
-
-Everything above compares networks that were assumed to be on the same scale.
-They were not, and the difference is worth more than any of it.
-
-A network distilled from a search learns to reproduce that search's score, and
-that includes reproducing its *spread*. Over 20,000 positions the network that
-shipped until now evaluated with a standard deviation of 549 centipawns against
-the teacher's 654 — it systematically understated how good good positions are.
-Retraining the same architecture on the same data fixed that: the new network
-lands at 642, almost exactly the teacher's spread, and fits better on every
-measure, r 0.9811 against 0.9794 and a mean error of 82cp against 102cp.
-
-It lost by **38.0 ± 21.7 over 1000 games**.
-
-Multiplying that network's output layer by a constant is then the only variable
-left. It cannot change which position the network prefers — the ranking is
-identical, r does not move — and it scales every evaluation by the same factor.
-Sweeping it, 1000 games each against the shipping network, on the same 10.2M
-positions and the same 15 epochs:
-
-| output gain | result vs the shipping network |
+| output gain | result |
 |---|---|
 | 1.00 | **-38.0 ± 21.7** |
 | 0.90 | +7.0 |
@@ -218,47 +202,140 @@ positions and the same 15 epochs:
 | 0.60 | +58.6 ± 21.8 |
 | 0.55 | +47.9 ± 21.7 |
 
-A hundred Elo separates the top of that curve from the bottom, and nothing the
-network knows changes anywhere along it. What changes is how loudly it says it.
-The search does not consume the evaluation as a number; it compares it against
-margins — reverse futility, razoring, the null-move verification bound, the
-static side of late-move reductions. Those margins are in centipawns and they
-were tuned against a quiet evaluation. Hand the search a correctly calibrated
-one and every threshold fires at the wrong depth, in the direction of pruning
-too little where the evaluation is now bolder.
+A hundred Elo between the top of that curve and the bottom, and the network
+knows exactly the same things at every point on it.
 
-That reframes the relabelling failures above. The best fit this project ever
-produced lost by 41 Elo, and the reading at the time was that fitting the
-teacher too well is itself the problem. A simpler explanation is available now:
-a network that fits its teacher better also inherits its spread more faithfully,
-and nothing was correcting the scale. That experiment is worth rerunning at a
-gain that was never a free parameter before.
+Here is what I think is going on. The search never consumes the evaluation as a
+number on its own — it consumes it as one side of a comparison against a margin.
+Reverse futility, razoring, the null-move verification bound, the static side of
+late-move reductions: all of them ask "is this evaluation more than N centipawns
+above beta?" Those margins are constants, tuned over months against a network
+that happened to speak quietly. Hand the search a correctly calibrated
+evaluation and every one of those thresholds is now effectively too small, so it
+prunes in places it shouldn't. The network got better and the system got worse,
+because only half the system was updated.
 
-The curve is flat between 0.60 and 0.75 and the three points there are within
-each other's intervals, so the exact value is not the finding. It ships at 0.70,
-as `OUT_SCALE` in `train.py`, applied to the output layer at export so the
-network file stays the only description of what the engine computes.
+Two things convinced me this isn't an artifact of where I fitted it.
 
-That sweep was run on the 32-neuron network, so it was worth asking whether the
-optimum moves with the architecture. Rerun against the 64-neuron network that
-ships now, 1000 games each: 0.55 at -4.2, 0.60 at +4.5, 0.65 at -3.8, 0.75 at
--11.1, 0.80 at -3.8, all ± 21.5. Five thousand games and not one of them is
-distinguishable from 0.70. The plateau is wide and it did not move.
+**It doesn't need tuning.** The gain shipped at 0.70, and when I later reran the
+sweep against the wider network that ships now, 1000 games at each of 0.55,
+0.60, 0.65, 0.75 and 0.80 came back at -4.2, +4.5, -3.8, -11.1 and -3.8, all
+± 21.5. Five thousand games, and not one of them can be told apart from 0.70.
+The plateau is wide, it sits in the same place for both architectures, and the
+sixty Elo comes from *not being at 1.00* rather than from finding a precise
+value. These are also the cleanest measurements in this file, incidentally: one
+set of weights rescaled several ways, so no retraining variance enters at all.
 
-That is the useful shape of this parameter. Being at 1.00 costs sixty Elo
-because it is far outside the flat region, not because the value needs tuning —
-anything from about 0.55 to 0.80 buys the same thing. Worth knowing before
-spending games on a third decimal place. These sweeps are also the only
-measurements in this file with no retraining variance in them: one set of
-weights, rescaled, so nothing moves but the constant.
+**It doesn't fall off with depth.** The constant was fitted at 20,000 nodes a
+move, which is exactly where an overfitted parameter would look best. 1000 games
+at each budget against the same opponent:
+
+| nodes per move | result |
+|---|---|
+| 5,000 | +27.5 ± 21.6 |
+| 10,000 | +55.4 ± 21.8 |
+| 20,000 | +63.0 ± 12.6 (3000 games) |
+| 50,000 | +63.2 ± 21.9 |
+| 100,000 | +62.5 ± 21.9 |
+| 200,000 | +55.0 ± 21.8 |
+
+The win holds inside its own error bars from 20k out to 200k, ten times past the
+tuning point. What drops away is the *shallow* end — at 5,000 nodes it is less
+than half. That is the right direction for the explanation above: a shallow
+search prunes less and leans on the static evaluation less often, so how loud it
+is matters less. The 200k reading sits seven Elo under 100k, which one match
+cannot separate from noise, but it is also the shape a fixed constant would make
+if it slowly stopped suiting a deeper tree. Unresolved, and worth re-measuring
+before anyone trusts 0.70 at long time controls.
+
+Fixed nodes is what this file measures, because it doesn't move with machine
+load — and because it hands the new network its slower evaluation for free. On
+the clock the same comparison gives **+42.3 ± 24.3** over 800 games at 100ms a
+move and **+51.6 ± 34.4** over 400 at 300ms. So about twenty of the sixty-three
+Elo is the harness being generous, and the rest is real at every time control I
+tried.
+
+Pooled over three independent sets of openings at 20,000 nodes, the gain plus
+the width change below is worth **+63.0 ± 12.6 Elo** over the previous release:
++62.9, +65.7, +59.3. Those three agree far more closely than any earlier result
+in this file, which is what an effect well clear of the noise floor looks like.
+
+One last thing this reframes. Two rounds of relabelling above lost while fitting
+the teacher better than anything before them, and I read that at the time as
+evidence that fitting too well is itself harmful. There is a duller explanation
+available now: a network that fits its teacher more closely also inherits its
+spread more closely, and nothing in that pipeline was correcting the scale. Both
+of those experiments deserve rerunning at a gain — a knob that did not exist
+when they were judged.
+
+It lives in `train.py` as `OUT_SCALE`, applied to the output layer at export
+rather than to the score in `net.rs`, so `net.bin` stays the single description
+of what the engine computes and the trainer's own quantised reference still
+agrees with the engine byte for byte.
+
+## The width sweep, rerun with the scale fixed
+
+Once the gain existed, every architecture claim in this file became suspect —
+they were all measured before it, which means they were all measured *through*
+it. A wide network and a narrow one trained the same way don't just differ in
+width; they differ in how loud they are, and I now knew that was worth sixty
+Elo. So I went back and ran them again with the gain pinned at 0.70, 1000 games
+each at 20,000 nodes:
+
+| change | size | vs that network |
+|---|---|---|
+| 32 → 64 hidden neurons | 30 KB → 60 KB | **+12.5 [+0.1, +24.9]** over 3000 games |
+| squared clipped ReLU, 32 neurons | 30 KB | -3.8 ± 21.5 |
+| squared clipped ReLU, 64 neurons | 60 KB | +14.3 ± 21.6 |
+| four king buckets on the whole feature block, 32 neurons | 118 KB | +8.3 ± 21.5 |
+| king buckets and 64 neurons together | 235 KB | +4.9 ± 21.5 |
+
+Only the first survives. Every one of those five had measured *negative* the
+first time round — the widest of them read -18.4 — so "width does nothing" was
+never a fact about width. It was an artifact of comparing evaluations that were
+on different scales.
+
+That width row is pooled over three matches and — deliberately — over **two
+separately trained networks**. Same recipe, same seed, run twice. They measured
++13.6 ± 21.6 and +18.4 ± 21.6, and +6.3 ± 21.5.
+
+That gap is worth dwelling on. MLX's reductions aren't bit-deterministic, so two
+identical runs land on different weights. Their validation losses were 0.00340
+and 0.00341 — indistinguishable, as you'd hope. In games they were twelve Elo
+apart, which is wider than any single match's confidence interval. The
+uncomfortable implication is that one 1000-game match against one trained
+network resolves neither the opening set nor the training run, and most of this
+file is built out of exactly that. I have tried to say so wherever it matters.
+
+The network that ships is the one that measured **+6.3**, not the +18 sibling,
+because it is the one `NET_H=64 python train.py` actually reproduces. The
+sibling was an export-time rescale of the same run and I would rather ship the
+weaker reproducible artifact than the stronger unreproducible one.
+
+Width is not free either: 64 neurons is 6% more time per node, and a
+node-limited match hides that by construction. At a real time control, 600 games
+at 100ms a move, it wins by +18.0 ± 27.8.
+
+And then width stops, immediately. 128 neurons scores **exactly even** — -0.0 ±
+21.5 over 1000 games — while costing 85% more time per node, because sixteen
+128-bit accumulator registers per perspective is more than the register file
+holds and the inner loop starts spilling to memory. So the original plateau was
+real. It just started one doubling later than I measured it, and the fit
+statistics never showed the difference at any point.
+
+The king buckets are the more interesting failure. They help on their own and
+*hurt* once the network is also wider, which reads less like two independent
+improvements and more like two ways of spending the same capacity.
 
 ## What that adds up to
 
-Every number in this file is a margin over some other build of this engine,
-which says nothing about where the engine actually stands. Two things fix that.
+Every number so far is a margin over some other build of this same engine, which
+tells you the direction of travel and nothing about where it has arrived. Two
+measurements fix that.
 
-The first is a gauntlet against every binary this repo has kept, 600 games each
-at 20,000 nodes a move, with a self-play control to check the harness itself:
+First, a gauntlet against every binary this repo has kept — 600 games each at
+20,000 nodes a move, plus a self-play control to check the harness isn't lying
+to me:
 
 | opponent | result |
 |---|---|
@@ -270,15 +347,16 @@ at 20,000 nodes a move, with a self-play control to check the harness itself:
 | `sable-net-v1` | +150.7 ± 30.5 |
 | `sable-hce`, the hand-crafted evaluator | +156.2 ± 30.7 |
 
-The control is the row that makes the rest readable: the same binary against
-itself reads +5.2 with zero comfortably inside the interval, so colour swapping
-and pairing are not leaking an advantage. `sable-old` and `sable-std` returning
-byte-identical scores is not a coincidence either — they evaluate every position
-the same and therefore play the same games.
+The control row is what makes the rest readable. The same binary against itself
+comes back at +5.2 with zero comfortably inside the interval, so colour swapping
+and pair ordering aren't quietly handing anyone an advantage. And `sable-old`
+and `sable-std` returning byte-identical scores isn't a fluke — they evaluate
+every position identically, so they play identical games.
 
-The second is an outside anchor. Stockfish with `UCI_LimitStrength` plays to a
-nominal rating, so playing against a few of those settings puts a number on a
-scale that exists outside this repository. At 100ms a move, 200 games each:
+Second, an outside anchor, because nothing above escapes this repository.
+Stockfish with `UCI_LimitStrength` plays to a nominal rating, so playing it at
+several settings puts the engine on a scale someone else maintains. 200 games at
+each, 100ms a move:
 
 | Stockfish `UCI_Elo` | score | implied |
 |---|---|---|
@@ -287,54 +365,18 @@ scale that exists outside this repository. At 100ms a move, 200 games each:
 | 2800 | 0.465 | **2776** |
 | 3000 | 0.335 | 2881 |
 
-**About 2800.** The 2800 row is the one to trust — it is the near-parity match,
-where a score of 0.465 needs the smallest extrapolation. The four anchors spread
-across 140 Elo, and that spread is the honest precision here: Stockfish's own
-`UCI_Elo` calibration is approximate and was fitted at longer time controls than
-100ms, so this is an anchor rather than a rating. It is not a CCRL or FIDE
-number and should not be quoted as one. `tests/calibrate.py` reproduces it, and
+**Somewhere around 2800.** Trust the 2800 row over the others: it is the
+near-parity match, where a score of 0.465 needs the least extrapolation to turn
+into a rating.
+
+Now the caveats, which matter more than the number. The four anchors disagree by
+140 Elo, and that spread *is* the precision — it would be dishonest to quote
+2776 to four digits from this. Stockfish's `UCI_Elo` is its own approximate
+self-calibration, fitted at longer time controls than the 100ms used here. So
+this locates the engine on a scale rather than rating it, and it is emphatically
+not a CCRL or FIDE figure. `tests/calibrate.py` reproduces the whole thing; it
 needs Stockfish on `PATH`, which nothing else in this repo does.
 
-## The width sweep, rerun with the scale fixed
-
-Everything this file says above about width was measured before that constant
-existed, which means it was measured through it. Four architecture changes were
-tried again with the gain held at 0.70, each 1000 games at 20,000 nodes against
-the network the section above ships:
-
-| change | size | vs that network |
-|---|---|---|
-| 32 → 64 hidden neurons | 30 KB → 60 KB | **+12.5 [+0.1, +24.9]** over 3000 games |
-| squared clipped ReLU, 32 neurons | 30 KB | -3.8 ± 21.5 |
-| squared clipped ReLU, 64 neurons | 60 KB | +14.3 ± 21.6 |
-| four king buckets on the whole feature block, 32 neurons | 118 KB | +8.3 ± 21.5 |
-| king buckets and 64 neurons together | 235 KB | +4.9 ± 21.5 |
-
-Only the first survives. Every one of those five had measured *negative* before
-the gain was fixed — the widest read -18.4 — so the earlier conclusion that
-width does nothing was an artifact of comparing differently-scaled evaluations.
-
-The width row is pooled over three matches and, deliberately, over **two
-separately trained networks**: the same recipe, the same seed, run twice. They
-came out at +13.6 ± 21.6 and +18.4 ± 21.6, and +6.3 ± 21.5. MLX's reductions are
-not bit-deterministic, so two runs land on different weights — validation loss
-0.00340 against 0.00341, indistinguishable — and then differ by twelve Elo in
-games. That spread is wider than any one match's interval and it is worth
-stating plainly: a single 1000-game match against a single trained network
-resolves neither the training run nor the opening set. The network that ships is
-the one measured at +6.3, because it is the one `NET_H=64 python train.py`
-reproduces; the +18 sibling was an export-time rescale of the same run.
-
-Width is not free either: 64 neurons is 6% more time per node, and a
-node-limited match hides that by construction. At a real time control, 600 games
-at 100ms a move, it wins by +18.0 ± 27.8.
-
-Width stops there. 128 neurons scores **exactly even**, -0.0 ± 21.5 over 1000
-games, and costs 85% more time per node — sixteen 128-bit accumulator registers
-per perspective is more than the register file has, so the inner loop starts
-spilling to memory. The king buckets are the more interesting negative: they
-help alone and *hurt* when combined with the extra width, which reads as two
-ways of spending the same capacity rather than two capacities.
 
 ---
 
@@ -537,9 +579,9 @@ and my test data wasn't.
 
 | Suite | Result |
 |---|---|
-| Classic perft (startpos, kiwipete, positions 3–6) | 6/6 exact, to depth 7 |
+| Classic perft (startpos, kiwipete, positions 3–6) | 6/6 exact, to depth 8 |
 | Oracle-verified edge cases (castling, ep pins, promotion races) | 20/20 exact |
-| Randomised positions, depth 4 | 119/119 exact |
+| Randomised positions, depth 4 and depth 5 | 119/119 exact at both |
 | Rust NEON inference vs NumPy reference | 80/80 identical |
 | Insufficient material evaluates to exactly 0 | K vs K, K+N vs K |
 
@@ -548,7 +590,7 @@ guard. When I removed a redundant legality check on the transposition move, the
 node count stayed at exactly 1,321,821 — proof the change was a pure speedup and
 not a silent behaviour change.
 
-Throughput is around 2.7 Mnps on a single M-series core.
+Throughput is around 3.1 Mnps on a single M-series core.
 
 Matches are run at a fixed node count rather than a fixed time, so results don't
 shift with machine load, and colours are swapped on every opening pair. Every
@@ -559,9 +601,12 @@ result below is 20,000 nodes per move, self-play from randomised openings:
 | 1.1 (before correction history and the time-management rework) | 800 | 0.546 | **+32 ±24** |
 | 1.1, at 100,000 nodes per move | 300 | 0.533 | +23 ±39 |
 | the same build without ProbCut and killer hygiene | 2400 | 0.508 | +6 ±14 |
-| `sable-std` (1.0 network build) | 200 | 0.578 | +54 ±49 |
-| `sable-net` (first network release) | 200 | 0.573 | +51 ±49 |
-| `sable-hce` (same search, no network) | 200 | 0.635 | +96 ±50 |
+
+Those were search changes, measured against the network of the day. The
+[gauntlet above](#what-that-adds-up-to) is the current picture against every old
+binary, at 600 games each rather than 200 — the three rows this table used to
+carry for `sable-std`, `sable-net` and `sable-hce` are superseded by it, and
+they were all short enough to have ±49 intervals anyway.
 
 The search change also pays for itself in nodes: `bench 12` reaches the same
 depth on 677k nodes where 1.1 needed 854k, a 21% reduction.
@@ -733,6 +778,7 @@ publish_hf.py    uploads the network to the Hugging Face Hub
 src/tests.rs     unit tests (cargo test)
 tests/           perft suites, the python-chess oracle, inference verification
 tests/paircmp.sh paired A/B timing -- the only honest way to read a change here
+tests/calibrate.py  rating anchor against Stockfish (needs it on PATH)
 .github/         CI: fmt, clippy -D warnings, tests, perft, size budget
 ```
 
@@ -742,8 +788,16 @@ with the format documented well enough to read it without this engine.
 
 ## Honest limitations
 
-- It is distilled from itself. With no external engine available, the ceiling is
-  the teacher's own search quality, not a stronger reference.
+- It is distilled from itself. The ceiling is its own search quality, not a
+  stronger reference — Stockfish appears here only as a measuring stick, never
+  as a teacher, and nothing it plays has ever been trained on.
+- The rating is an anchor, not a rating. See [What that adds up
+  to](#what-that-adds-up-to): four Stockfish settings disagree by 140 Elo, and
+  Stockfish's own `UCI_Elo` calibration is approximate.
+- Most single results here are one 1000-game match, and two identically-trained
+  networks have measured twelve Elo apart. Treat any margin under about 20 Elo
+  as a hint rather than a result unless it was confirmed on a second set of
+  openings, which the important ones were.
 - Accumulators are refreshed in full rather than updated incrementally. Only the
   768 piece-square rows could be updated that way at all — mobility, king
   attackers and most of the other 166 rows change on nearly every move — so an
