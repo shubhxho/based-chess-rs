@@ -212,6 +212,19 @@ each other's intervals, so the exact value is not the finding. It ships at 0.70,
 as `OUT_SCALE` in `train.py`, applied to the output layer at export so the
 network file stays the only description of what the engine computes.
 
+That sweep was run on the 32-neuron network, so it was worth asking whether the
+optimum moves with the architecture. Rerun against the 64-neuron network that
+ships now, 1000 games each: 0.55 at -4.2, 0.60 at +4.5, 0.65 at -3.8, 0.75 at
+-11.1, 0.80 at -3.8, all ± 21.5. Five thousand games and not one of them is
+distinguishable from 0.70. The plateau is wide and it did not move.
+
+That is the useful shape of this parameter. Being at 1.00 costs sixty Elo
+because it is far outside the flat region, not because the value needs tuning —
+anything from about 0.55 to 0.80 buys the same thing. Worth knowing before
+spending games on a third decimal place. These sweeps are also the only
+measurements in this file with no retraining variance in them: one set of
+weights, rescaled, so nothing moves but the constant.
+
 ## The width sweep, rerun with the scale fixed
 
 Everything this file says above about width was measured before that constant
