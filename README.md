@@ -160,6 +160,25 @@ remainder is real at any time control tested. The gap shrinks as the clock
 grows, which is what a constant per-node overhead against a deeper tree should
 do.
 
+The size of the win depends on how hard the engine is thinking, and not in the
+direction a tuning artifact would predict. Against the same opponent, 1000 games
+at each budget:
+
+| nodes per move | result |
+|---|---|
+| 5,000 | +27.5 ± 21.6 |
+| 10,000 | +55.4 ± 21.8 |
+| 20,000 | +63.0 ± 12.6 (3000 games) |
+| 50,000 | +63.2 ± 21.9 |
+| 100,000 | +62.5 ± 21.9 |
+
+The constant was tuned at 20,000 nodes, so the thing to check was whether it
+stops paying away from where it was fitted. It does the opposite: the win grows
+from 5k to 20k and then sits flat out to 100k, a factor of five past the tuning
+point. What falls off is the shallow end, which fits the mechanism — at 5,000
+nodes the search prunes less and leans on the static evaluation less, so how
+loud that evaluation is matters less.
+
 Everything above compares networks that were assumed to be on the same scale.
 They were not, and the difference is worth more than any of it.
 
