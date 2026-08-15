@@ -287,12 +287,20 @@ release: gain 1.00 gives -38.0, 0.90 gives +7.0, 0.80 gives +43.3, 0.70 gives
 +59.6, 0.60 gives +58.6, 0.55 gives +47.9.
 
 A hundred Elo across that curve, with the network knowing exactly the same things
-at every point on it. The likely mechanism is that a search never consumes a
-static evaluation alone — it compares it against margins, in centipawns, for
-reverse futility, razoring, null-move verification and late-move reductions.
-Those margins were tuned against an evaluation that happened to speak quietly.
-Fix the network's calibration without fixing them and every threshold fires in
-the wrong place.
+at every point on it. The mechanism is that a search never consumes a static
+evaluation alone — it compares it against margins, in centipawns, for reverse
+futility, razoring, null-move verification and late-move reductions. Those
+margins were tuned against an evaluation that happened to speak quietly. Fix the
+network's calibration without fixing them and every threshold fires in the wrong
+place.
+
+That is testable, and tested. Taking the natural-scale network and widening all
+five margins together recovers 56 Elo of the 83 it otherwise loses (-82.8 at the
+tuned values, -45.1 at 1.43x, -26.5 at 2x, 1000 games each). So the margins are
+about two-thirds of the effect. The rest is presumably the eval-scale quantities
+that scaling five constants doesn't reach — the aspiration window, the
+correction-history tables, and every static evaluation stored in the
+transposition table — all of which one constant on the network fixes at once.
 
 It ships at `OUT_SCALE = 0.70`, applied to the output layer at export rather than
 to the score in the engine, so this file stays the single description of what the

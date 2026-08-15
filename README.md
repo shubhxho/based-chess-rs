@@ -215,6 +215,35 @@ evaluation and every one of those thresholds is now effectively too small, so it
 prunes in places it shouldn't. The network got better and the system got worse,
 because only half the system was updated.
 
+That is a testable story, so I tested it. `MARGIN` in `search.rs` scales all five
+of those thresholds at once. If the margins really are the mechanism, then taking
+the *natural-scale* network — the one that loses by 38 — and widening the margins
+to match should recover the loss. 1000 games at each setting, against the engine
+that ships:
+
+| `MARGIN` | vs shipped |
+|---|---|
+| 100 (the tuned values) | -82.8 ± 22.1 |
+| 143 | -45.1 ± 21.7 |
+| 200 | **-26.5 ± 21.6** |
+
+So the mechanism is real and it is most of the story: widening five constants
+recovers 56 Elo of an 83 Elo hole, monotonically, with no retraining anywhere.
+It is also **not all** of the story, because the best margin setting still lands
+27 Elo behind simply shipping a quieter network.
+
+I don't have a clean answer for the remaining 27. The honest candidates are the
+eval-scale quantities `MARGIN` doesn't touch — the aspiration window's initial
+delta, the correction-history tables which learn a correction *in centipawns*
+and so have their own implicit scale, and every static evaluation that gets
+written into the transposition table and compared against later. Scaling the
+network is a single change that fixes all of them at once, which is probably why
+it wins. Scaling the margins fixes five of them by hand.
+
+That is the argument for the gain being a real fix rather than a hack, and also
+the argument against the version of this section I wrote first, which claimed
+the margins were simply *the* explanation. They are about two-thirds of it.
+
 Two things convinced me this isn't an artifact of where I fitted it.
 
 **It doesn't need tuning.** The gain shipped at 0.70, and when I later reran the
