@@ -31,8 +31,15 @@ Elo worse** than the hand-crafted evaluator it replaces.
 
 The instinct is that it's too small. It isn't. Sweeping the hidden layer from 16
 to 128 neurons — an 8x range — barely moves the fit against the teacher; r sits
-near 0.93 the whole way. That flatness is the finding: capacity was never the
-constraint.
+near 0.93 the whole way. That flatness is the finding: capacity was not the
+binding constraint.
+
+It was not *nothing*, either, and it took a later result to separate the two.
+Every width comparison here predates the output gain below, so each one measured
+a wide network against a differently-scaled narrow one. Held at a fixed gain, 64
+neurons beat 32 by +12.5 Elo [+0.1, +24.9] over 3000 games and 128 beat 64 by
+nothing at all. The plateau is real; it starts one doubling later than this
+sweep said, and the fit numbers never showed the difference.
 
 Piece-square features describe where pieces **are**. Almost everything that
 decides a chess position is about where they can **go**. A knight's value swings
@@ -42,7 +49,7 @@ recoverable from a one-hot square index at any width.
 So the budget went into the input. Alongside the 768 piece-square planes sit 166
 rows encoding mobility, passed pawns by rank, isolated and doubled pawns, rooks
 on open and half-open files, the bishop pair, king attackers and king shelter.
-Each row costs 32 bytes.
+Each row costs 64 bytes.
 
 | Input set | Size | r vs teacher | MAE | RMSE |
 |---|---|---|---|---|
@@ -69,8 +76,8 @@ load, from randomised openings, colours swapped on every pair:
 | **this network** vs the previous release | **+63.0 ± 12.6** (3000 games) |
 | the same, on the clock | +42.3 ± 24.3 at 100ms, +51.6 ± 34.4 at 300ms |
 
-The last row is the one that decided what ships. The standalone network is
-statistically indistinguishable from the hybrid in games, while carrying no
+The fourth row is the one that decided the shape of this network. The standalone
+version is statistically indistinguishable from the hybrid in games, while carrying no
 hand-crafted evaluation at all and tracking the teacher considerably better. The
 same feature idea that turned a −165 Elo replacement into a viable one is what
 makes the standalone version possible.
