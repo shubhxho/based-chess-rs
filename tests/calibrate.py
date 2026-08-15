@@ -108,8 +108,44 @@ def play(args):
     return results
 
 
+def fit_rating(points):
+    """One rating that best explains every match at once.
+
+    Reading a rating off a single setting throws away the other matches and puts
+    all the weight on whichever one happened to land nearest parity. Instead fit
+    the single R that maximises the likelihood of all the observed scores under
+    the logistic model, treating each game as a Bernoulli trial with a draw
+    counted as half.
+
+    The likelihood is unimodal in R, so a bisection on its derivative is enough
+    and does not need a dependency to do it.
+    """
+    def dlogL(R):
+        # d/dR of sum n_i * [p_i log q_i + (1-p_i) log (1-q_i)], q_i the model's
+        # expected score. The constant factor ln(10)/400 is dropped: only the
+        # root matters.
+        return sum(n * (p - 1.0 / (1.0 + 10 ** ((E - R) / 400.0)))
+                   for E, p, n in points)
+
+    lo, hi = 0.0, 4000.0
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        if dlogL(mid) > 0:
+            lo = mid
+        else:
+            hi = mid
+    R = (lo + hi) / 2
+    # Standard error from the observed Fisher information: the curvature of the
+    # same log-likelihood at its peak.
+    c = math.log(10) / 400.0
+    info = sum(n * c * c * (q := 1.0 / (1.0 + 10 ** ((E - R) / 400.0))) * (1 - q)
+               for E, _, n in points)
+    return R, (1.96 / math.sqrt(info) if info > 0 else float("inf"))
+
+
 def main():
     ours, limit, games = sys.argv[1], sys.argv[2], int(sys.argv[3])
+    points = []
     for elo in [int(x) for x in sys.argv[4:]]:
         jobs = [(ours, elo, 5000 + i, limit) for i in range(games // 2)]
         score = n = 0
@@ -119,13 +155,29 @@ def main():
                     score += r
                     n += 1
         p = score / n
+        points.append((elo, p, n))
         if 0 < p < 1:
             diff = -400 * math.log10(1 / p - 1)
             se = 400 / math.log(10) * math.sqrt(p * (1 - p) / n) / (p * (1 - p))
             print(f"SF UCI_Elo {elo}: {n} games score {p:.3f}  "
                   f"implied {elo + diff:+.0f} ({diff:+.0f} vs SF) +/- {1.96*se:.0f}", flush=True)
         else:
+            # A shutout carries no information about *how much* stronger, only
+            # that it is. Keep it in the fit, where it still constrains R.
             print(f"SF UCI_Elo {elo}: {n} games score {p:.3f}  (shutout)", flush=True)
+
+    if len(points) > 1:
+        R, ci = fit_rating(points)
+        print(f"\nmaximum-likelihood fit over {sum(n for _, _, n in points)} games: "
+              f"{R:.0f} +/- {ci:.0f}", flush=True)
+        print("residuals (observed score - model's expectation):", flush=True)
+        for E, p, n in points:
+            q = 1.0 / (1.0 + 10 ** ((E - R) / 400.0))
+            print(f"  vs {E}: observed {p:.3f}  expected {q:.3f}  "
+                  f"{'+' if p >= q else ''}{p - q:.3f}", flush=True)
+        print("\nA systematic drift in those residuals means Stockfish's own scale "
+              "and this engine's disagree about what an Elo is, and the single "
+              "number above is hiding it.", flush=True)
 
 
 if __name__ == "__main__":
