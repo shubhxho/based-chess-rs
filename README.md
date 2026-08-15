@@ -171,13 +171,21 @@ at each budget:
 | 20,000 | +63.0 ± 12.6 (3000 games) |
 | 50,000 | +63.2 ± 21.9 |
 | 100,000 | +62.5 ± 21.9 |
+| 200,000 | +55.0 ± 21.8 |
 
 The constant was tuned at 20,000 nodes, so the thing to check was whether it
-stops paying away from where it was fitted. It does the opposite: the win grows
-from 5k to 20k and then sits flat out to 100k, a factor of five past the tuning
-point. What falls off is the shallow end, which fits the mechanism — at 5,000
-nodes the search prunes less and leans on the static evaluation less, so how
-loud that evaluation is matters less.
+stops paying away from where it was fitted. Mostly it does not: the win grows
+from 5k to 20k and then holds within its own error bars out to 200k, ten times
+past the tuning point. What falls off is the shallow end — at 5,000 nodes the
+win is less than half. That fits the mechanism: a shallow search prunes less and
+leans on the static evaluation less, so how loud that evaluation is matters
+less.
+
+The 200k point is the one to keep an eye on. It reads seven Elo below 100k,
+which a single 1000-game match cannot distinguish from noise, but it is also the
+direction a fixed constant would drift if the search's margins matter less as
+the tree deepens. Not evidence of anything yet; a reason to re-measure the gain
+at a long time control before trusting it there.
 
 Everything above compares networks that were assumed to be on the same scale.
 They were not, and the difference is worth more than any of it.
