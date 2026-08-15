@@ -1,13 +1,53 @@
 ---
 license: mit
+library_name: mlx
+pipeline_tag: other
+inference: false
+language:
+  - en
 tags:
   - chess
+  - chess-engine
   - nnue
   - mlx
+  - apple-silicon
   - quantization
   - int8
   - distillation
-library_name: mlx
+  - knowledge-distillation
+  - self-play
+  - uci
+  - rust
+  - no-std
+  - edge
+metrics:
+  - elo
+  - pearsonr
+co2_eq_emissions:
+  emissions: 1.4
+  source: "estimated: 6 minutes of Apple M-series GPU at roughly 20W, at 0.7 kgCO2eq/kWh"
+  training_type: "distillation from self-play search labels"
+  geographical_location: "India"
+  hardware_used: "Apple M-series (MLX, unified memory)"
+model-index:
+  - name: sable-chess-net
+    results:
+      - task:
+          type: other
+          name: Chess play (engine strength)
+        dataset:
+          type: self-play
+          name: Sable self-play, 10.1M deduplicated positions
+        metrics:
+          - type: elo
+            name: Elo vs previous release (3000 games, 20k nodes/move)
+            value: 63.0
+          - type: elo
+            name: Elo anchored to Stockfish UCI_Elo (200 games per setting, 100ms/move)
+            value: 2800
+          - type: pearsonr
+            name: Correlation with teacher search (rank quality, gain-invariant)
+            value: 0.9803
 ---
 
 # Sable — a 60 KB standalone chess evaluation network
@@ -32,11 +72,53 @@ constant multiplying the output layer — which cannot change which position the
 network prefers — was worth about 60 Elo, and getting it wrong had been
 poisoning every architecture comparison in this project for months.
 
+## What this is, in one paragraph
+
+It's the evaluation function out of a chess engine I wrote. The engine searched
+its own games, and this network was trained to guess what that search would have
+said without doing the search. It's 60 KB of int8 weights, it runs on integer
+SIMD with no framework underneath it, and it is not a PyTorch model — you can't
+`from_pretrained` it. If you want to *use* it, you want
+[the engine](https://github.com/shubhxho/sable); if you want to *read* it, the
+[format section](#format) is complete enough to parse `net.bin` in twenty lines
+of NumPy, which is included below.
+
+- **Developed by:** [@shubhxho](https://huggingface.co/shubhxho)
+- **Model type:** quantised int8 feedforward evaluation network (NNUE-style), distilled from tree search
+- **Inputs:** 934 sparse binary features per side, computed by the engine
+- **Output:** one scalar, centipawns, from the side to move's point of view
+- **Trained with:** [MLX](https://github.com/ml-explore/mlx) on Apple silicon
+- **License:** MIT
+- **Repository:** https://github.com/shubhxho/sable
+
+## What it's for, and what it isn't
+
+**Use it for:** running the Sable engine; reading a small, complete, honestly
+documented example of a quantisation-aware distilled evaluation; lifting the
+format or the training loop for your own engine. The whole thing is MIT and I'd
+be glad to see it reused.
+
+**Don't expect it to:** work as a general chess model, produce moves on its own,
+or load into a transformers pipeline. It has no notion of a legal move. Hand it
+a position and it returns a number; everything that makes that number useful —
+move generation, search, pruning, time management — lives in the engine, and the
+number is close to meaningless without it. The gain section below is a long
+argument for exactly that point: the same weights are worth a hundred Elo more
+or less depending on the search wrapped around them.
+
+**Bias and risk, honestly:** it's a chess evaluator. The realistic harm is
+someone cheating at online chess with it, which is true of every engine ever
+published and which this one is far too weak to be attractive for. The more
+interesting caveat is epistemic: it was distilled entirely from its own search,
+so it has inherited that search's blind spots and there is no external teacher
+anywhere in the loop to catch them.
+
 ## The input set is the whole story
 
 The obvious design uses the standard NNUE input: 768 binary features, one per
-(piece, colour, square). Built that way, at this size, the network plays **165
-Elo worse** than the hand-crafted evaluator it replaces.
+(piece, colour, square). I built that first. At this size it played **165 Elo
+worse** than the hand-crafted evaluator it was supposed to replace, which was a
+memorable afternoon.
 
 The instinct is that it's too small. It isn't. Sweeping the hidden layer from 16
 to 128 neurons — an 8x range — barely moves the fit against the teacher; r sits
@@ -50,15 +132,18 @@ neurons beat 32 by +12.5 Elo [+0.1, +24.9] over 3000 games and 128 beat 64 by
 nothing at all. The plateau is real; it starts one doubling later than this
 sweep said, and the fit numbers never showed the difference.
 
-Piece-square features describe where pieces **are**. Almost everything that
-decides a chess position is about where they can **go**. A knight's value swings
-wildly with what it attacks; a rook's with whether its file is open. Neither is
-recoverable from a one-hot square index at any width.
+Here's the actual problem. Piece-square features describe where pieces **are**,
+and almost everything that decides a chess position is about where they can
+**go**. A knight on d5 is worth wildly different amounts depending on what it
+attacks. A rook is worth much more on an open file. Neither fact is recoverable
+from a one-hot square index, no matter how wide you make the layer behind it —
+the information simply isn't in the input.
 
-So the budget went into the input. Alongside the 768 piece-square planes sit 166
-rows encoding mobility, passed pawns by rank, isolated and doubled pawns, rooks
-on open and half-open files, the bishop pair, king attackers and king shelter.
-Each row costs 64 bytes.
+So the budget went into the input instead of the hidden layer. Alongside the 768
+piece-square planes sit 166 rows encoding mobility, passed pawns by rank,
+isolated and doubled pawns, rooks on open and half-open files, the bishop pair,
+king attackers and king shelter — all computed from the board by the engine and
+looked up in the same embedding table. Each row costs 64 bytes.
 
 | Input set | Size | r vs teacher | MAE | RMSE |
 |---|---|---|---|---|
@@ -261,11 +346,16 @@ against a better opponent is the expected shape of an improvement.
 
 ### Features come from the engine, never from the trainer
 
-The trainer does not compute features. It asks the engine for them through a
-`featdump` command that emits the active indices per position. Two
-implementations of one feature map is a bug class that yields a network which
-loads, runs, and is quietly wrong — very hard to find afterwards. `src/net.rs`
-is the single source of truth for both training and inference.
+The trainer doesn't compute features. It asks the engine for them, through a
+`featdump` command that dumps the active indices for each position, and reads
+them back.
+
+This is worth the awkwardness. Two implementations of one feature map is a bug
+class where the trainer and the engine quietly disagree about what feature 431
+means, and what you get is a network that loads cleanly, runs at full speed, and
+plays slightly badly for reasons nothing will point you at. I would rather pipe
+a gigabyte of indices through a subprocess than debug that. `src/net.rs` is the
+single source of truth for both sides.
 
 ### Quantisation-aware by construction
 
@@ -277,11 +367,29 @@ model.ft = mx.clip(model.ft, -127.0 / QA, 127.0 / QA)
 model.out = mx.clip(model.out, -127.0 / QB, 127.0 / QB)
 ```
 
-So the exported network computes the function the trainer converged to. Verified,
-not asserted: `net.bin` is replayed through an independent NumPy reference that
-reproduces the Rust inference operation for operation, and the two agree on
-80/80 test positions. The only disagreement ever seen was Python's floor
-division against Rust's truncation on negative scores — a bug in the reference.
+So the exported network computes the function the trainer actually converged to,
+rather than a rounded-off approximation of it.
+
+Verified rather than asserted: `net.bin` gets replayed through an independent
+NumPy reference that reproduces the Rust inference operation for operation, and
+the two agree on 80/80 test positions. The only disagreement that check has ever
+turned up was Python's floor division against Rust's truncation on negative
+scores — which was a bug in the reference, not the engine, and exactly the kind
+of thing the check exists to find.
+
+## How to get started
+
+The fastest path is the engine itself:
+
+```bash
+git clone https://github.com/shubhxho/sable && cd sable
+cargo build --release
+./target/release/sable          # then speak UCI, or type `bench 13`, `eval`, `d`
+```
+
+`net.bin` is baked into the binary with `include_bytes!`, so the build already
+contains this network — there's nothing to download at runtime. To read the
+weights directly instead, see the NumPy snippet under [Format](#format).
 
 ## Format
 
@@ -374,6 +482,32 @@ the current engine.
   for a fraction of the complexity, and the refresh itself now keeps both
   perspectives in registers for the whole feature list rather than storing the
   accumulator back to memory once per row.
+
+## Environmental impact
+
+Rounding to something honest: about **six minutes** of Apple M-series GPU time
+per training run, on hardware that draws roughly 20W doing this. Call it 1.4
+gCO2eq — a gram and a half, less than boiling a mug of water. The 10.1M-position
+dataset it trains on took considerably longer to generate than the network takes
+to train, and the arena matches behind the Elo figures in this card dwarf both:
+several tens of thousands of games at 20,000 nodes each. If you want the real
+carbon cost of this project, it's in the measurement, not the training.
+
+## Citation
+
+```bibtex
+@software{sable_chess_net,
+  author  = {shubhxho},
+  title   = {Sable: a 60 KB distilled chess evaluation network},
+  year    = {2026},
+  url     = {https://github.com/shubhxho/sable},
+  note    = {Trained with MLX on Apple silicon; int8 quantisation-aware}
+}
+```
+
+## Contact
+
+Issues and questions: https://github.com/shubhxho/sable/issues
 
 ## License
 

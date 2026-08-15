@@ -420,13 +420,15 @@ which was a bug in the reference.
 
 ## What's inside
 
+The short version, before the long one:
+
 | Layer | Implementation |
 |---|---|
 | Board | Bitboards, 12 piece planes plus a mailbox, incremental Zobrist |
 | Attacks | Magic bitboards; the magics are *searched* at startup, so they validate themselves |
 | Movegen | Fully legal — pins, check evasions and en-passant discovery all resolved during generation |
 | Search | Fail-soft PVS with TT, null move, ProbCut, LMR, singular extensions, SEE and history pruning, static-eval correction history |
-| Eval | 934 -> 32 -> 1, int8, eight output buckets by material, NEON inference |
+| Eval | 934 -> 64 -> 1, int8, eight output buckets by material, NEON inference |
 | I/O | Raw `read` / `write` / `poll` / `mmap`, hand-rolled integer formatting |
 
 ### Talking to the kernel
@@ -574,8 +576,9 @@ out keeps them there — the same trick applies to the correction tables.
 
 Move generation is checked against `python-chess`, because I didn't trust my own
 memory of perft constants — and I was right not to. Half the "known" values I
-first wrote down were wrong, and the oracle is what told me the engine was fine
-and my test data wasn't.
+first wrote down were wrong. The oracle is what told me the engine was fine and
+my test data wasn't, which is a humbling way to spend an evening and the reason
+every correctness claim below is checked against something I didn't write.
 
 | Suite | Result |
 |---|---|
@@ -656,7 +659,8 @@ python arena.py ./sable-std ./sable-hce 400 "nodes 20000" 9
 
 ## Things that didn't work
 
-Recorded because a negative result nobody writes down gets re-attempted.
+Recorded because a negative result nobody writes down just gets re-attempted,
+usually by me, usually six weeks later.
 
 **First, how any of this gets measured.** This machine drifts. In one afternoon
 the same untouched binary reported medians of 495, 476, 455 and 428 ms — a
