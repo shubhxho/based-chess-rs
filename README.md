@@ -146,6 +146,11 @@ meant to beat.
 
 ## How loud the evaluation is
 
+The two sections below are worth **+63.0 ± 12.6 Elo** together, over 3000 games
+at 20,000 nodes a move against the network that shipped before them: +62.9,
++65.7 and +59.3 across three independent sets of openings. That is the largest
+single step this project has measured, and almost all of it is one constant.
+
 Everything above compares networks that were assumed to be on the same scale.
 They were not, and the difference is worth more than any of it.
 
