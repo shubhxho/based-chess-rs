@@ -252,6 +252,49 @@ spending games on a third decimal place. These sweeps are also the only
 measurements in this file with no retraining variance in them: one set of
 weights, rescaled, so nothing moves but the constant.
 
+## What that adds up to
+
+Every number in this file is a margin over some other build of this engine,
+which says nothing about where the engine actually stands. Two things fix that.
+
+The first is a gauntlet against every binary this repo has kept, 600 games each
+at 20,000 nodes a move, with a self-play control to check the harness itself:
+
+| opponent | result |
+|---|---|
+| the engine against itself (control) | +5.2 ± 34.1 |
+| the previous release | +63.0 ± 12.6 (3000 games) |
+| `sable-new` | +112.7 ± 29.3 |
+| `sable-old`, `sable-std` | +130.3 ± 29.8 (both — they play identically) |
+| `sable-net` | +132.9 ± 29.9 |
+| `sable-net-v1` | +150.7 ± 30.5 |
+| `sable-hce`, the hand-crafted evaluator | +156.2 ± 30.7 |
+
+The control is the row that makes the rest readable: the same binary against
+itself reads +5.2 with zero comfortably inside the interval, so colour swapping
+and pairing are not leaking an advantage. `sable-old` and `sable-std` returning
+byte-identical scores is not a coincidence either — they evaluate every position
+the same and therefore play the same games.
+
+The second is an outside anchor. Stockfish with `UCI_LimitStrength` plays to a
+nominal rating, so playing against a few of those settings puts a number on a
+scale that exists outside this repository. At 100ms a move, 200 games each:
+
+| Stockfish `UCI_Elo` | score | implied |
+|---|---|---|
+| 2200 | 0.958 | 2741 |
+| 2500 | 0.853 | 2805 |
+| 2800 | 0.465 | **2776** |
+| 3000 | 0.335 | 2881 |
+
+**About 2800.** The 2800 row is the one to trust — it is the near-parity match,
+where a score of 0.465 needs the smallest extrapolation. The four anchors spread
+across 140 Elo, and that spread is the honest precision here: Stockfish's own
+`UCI_Elo` calibration is approximate and was fitted at longer time controls than
+100ms, so this is an anchor rather than a rating. It is not a CCRL or FIDE
+number and should not be quoted as one. `tests/calibrate.py` reproduces it, and
+needs Stockfish on `PATH`, which nothing else in this repo does.
+
 ## The width sweep, rerun with the scale fixed
 
 Everything this file says above about width was measured before that constant
