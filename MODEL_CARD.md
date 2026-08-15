@@ -34,20 +34,72 @@ model-index:
     results:
       - task:
           type: other
-          name: Chess play (engine strength)
+          name: Chess play, head-to-head vs the previous release
         dataset:
-          type: self-play
-          name: Sable self-play, 10.1M deduplicated positions
+          type: self-play-head-to-head
+          name: Randomised 8-ply openings, colours swapped every pair
         metrics:
           - type: elo
-            name: Elo vs previous release (3000 games, 20k nodes/move)
+            name: Elo at 20,000 nodes/move
             value: 63.0
+            args: 3000 games, three independent opening sets, 95% CI +/-12.6
+            verified: false
           - type: elo
-            name: Elo anchored to Stockfish UCI_Elo (200 games per setting, 100ms/move)
+            name: Elo at 100ms/move
+            value: 42.3
+            args: 800 games, 95% CI +/-24.3
+            verified: false
+          - type: elo
+            name: Elo at 300ms/move
+            value: 51.6
+            args: 400 games, 95% CI +/-34.4
+            verified: false
+      - task:
+          type: other
+          name: Chess play, absolute rating anchor
+        dataset:
+          type: stockfish-uci-elo
+          name: Stockfish with UCI_LimitStrength, four settings
+        metrics:
+          - type: elo
+            name: Implied Elo on Stockfish's UCI_Elo scale
             value: 2800
+            args: 200 games per setting at 100ms/move; anchors spread 2741-2881, so treat as +/-70
+            verified: false
+      - task:
+          type: other
+          name: Chess play, gauntlet vs earlier builds
+        dataset:
+          type: self-play-gauntlet
+          name: Every historical binary kept in the repository
+        metrics:
+          - type: elo
+            name: Elo vs the hand-crafted evaluator it replaced
+            value: 156.2
+            args: 600 games at 20,000 nodes/move, 95% CI +/-30.7
+            verified: false
+          - type: elo
+            name: Elo vs the first network release
+            value: 150.7
+            args: 600 games at 20,000 nodes/move, 95% CI +/-30.5
+            verified: false
+          - type: elo
+            name: Self-play control, same binary both sides
+            value: 5.2
+            args: 400 games; zero inside the 95% CI of +/-34.1, so the harness is unbiased
+            verified: false
+      - task:
+          type: other
+          name: Regression against the teacher search
+        dataset:
+          type: self-play-held-out-positions
+          name: 20,000 held-out positions labelled by the engine's own search
+        metrics:
           - type: pearsonr
-            name: Correlation with teacher search (rank quality, gain-invariant)
+            name: Correlation with teacher score (invariant under the output gain)
             value: 0.9803
+            args: quantised int8 weights, as shipped
+            verified: false
 ---
 
 # Sable — a 60 KB standalone chess evaluation network
