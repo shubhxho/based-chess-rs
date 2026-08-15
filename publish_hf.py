@@ -20,6 +20,9 @@ for local, remote in [
     ("train.py", "train.py"),
     ("src/net.rs", "reference/net.rs"),
     ("arena.py", "arena.py"),
+    # The card quotes an Elo anchored against Stockfish. Ship the harness that
+    # produced it, so the claim can be checked rather than taken on trust.
+    ("tests/calibrate.py", "calibrate.py"),
 ]:
     if not os.path.exists(local):
         print(f"  skip {local} (missing)")
