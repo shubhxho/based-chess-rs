@@ -67,6 +67,7 @@ load, from randomised openings, colours swapped on every pair:
 | **the rescaled 32-neuron net** vs the previous release | +59.6 ± 21.9, +52.2 ± 21.8 (2000 games) |
 | **this network** (64 neurons) vs that | +12.5 [+0.1, +24.9] (3000 games) |
 | **this network** vs the previous release | **+63.0 ± 12.6** (3000 games) |
+| the same, on the clock | +42.3 ± 24.3 at 100ms, +51.6 ± 34.4 at 300ms |
 
 The last row is the one that decided what ships. The standalone network is
 statistically indistinguishable from the hybrid in games, while carrying no

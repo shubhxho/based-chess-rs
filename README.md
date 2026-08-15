@@ -151,6 +151,15 @@ at 20,000 nodes a move against the network that shipped before them: +62.9,
 +65.7 and +59.3 across three independent sets of openings. That is the largest
 single step this project has measured, and almost all of it is one constant.
 
+Fixed nodes is the measurement this file uses everywhere, because it does not
+move with machine load. It also gives the new network its 8% slower evaluation
+for free. On the clock, against the same opponent: **+42.3 ± 24.3** over 800
+games at 100ms a move, and **+51.6 ± 34.4** over 400 at 300ms. So roughly twenty
+Elo of the sixty-three is the node-limited harness being generous, and the
+remainder is real at any time control tested. The gap shrinks as the clock
+grows, which is what a constant per-node overhead against a deeper tree should
+do.
+
 Everything above compares networks that were assumed to be on the same scale.
 They were not, and the difference is worth more than any of it.
 
