@@ -296,9 +296,14 @@ def quantised_eval(ft_q, ft_b_q, out_q, out_b_q, us, them, bucket):
 # ---------------------------------------------------------------------------
 
 def main():
+    # DATA_DIR lets a relabelled copy of the same shards be trained from without
+    # moving files around. The FEN order has to match the feature cache, which it
+    # does as long as the relabelled shards keep their names and line order --
+    # relabelling rewrites scores in place and touches neither.
+    data_dir = os.environ.get("DATA_DIR", "data")
     shards = sorted(
-        os.path.join("data", f)
-        for f in os.listdir("data")
+        os.path.join(data_dir, f)
+        for f in os.listdir(data_dir)
         if f.startswith("aug") and f.endswith(".txt")
     )
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else None

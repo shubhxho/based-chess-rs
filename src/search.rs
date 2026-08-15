@@ -20,6 +20,8 @@
 //! reject a move runs first. Ordering quality is what makes the pruning safe,
 //! so the history tables get as much attention as the pruning rules do.
 
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
 use crate::bb::*;
 use crate::eval::*;
 use crate::io::{move_str, Out};
@@ -28,6 +30,7 @@ use crate::pos::*;
 use crate::sys::{self, SyncCell};
 use crate::tt::*;
 
+#[derive(Clone, Copy)]
 pub struct Limits {
     pub depth: i32,
     pub nodes: u64,
@@ -38,6 +41,23 @@ pub struct Limits {
     pub infinite: bool,
 }
 impl Limits {
+    /// All-zero, which is not a usable set of limits -- it is the initialiser
+    /// for the searcher array. A static only reaches BSS when every byte of its
+    /// initialiser is zero, and `MAX_THREADS` searchers carrying `MAX_DEPTH`
+    /// and `u64::MAX` would otherwise be half a megabyte of the binary image.
+    /// Every entry point sets real limits before searching.
+    pub const fn zeroed() -> Limits {
+        Limits {
+            depth: 0,
+            nodes: 0,
+            movetime: 0,
+            time: [0, 0],
+            inc: [0, 0],
+            movestogo: 0,
+            infinite: false,
+        }
+    }
+
     pub const fn new() -> Limits {
         Limits {
             depth: MAX_DEPTH,
@@ -68,6 +88,16 @@ const NO_PIECE_TO: usize = 0;
 const CONT_N: usize = 769;
 
 pub struct Searcher {
+    /// Index into every per-thread table below. Thread 0 is the one that owns
+    /// the clock, the node budget, stdin and the output.
+    pub id: usize,
+    /// How many threads this search is running with, so the single-threaded
+    /// path can keep its exact node accounting.
+    pub threads: usize,
+    /// First iteration this thread runs. Helpers start a little deeper than
+    /// each other so that they diverge immediately instead of all re-deriving
+    /// the same first few plies before the shared table pulls them apart.
+    pub start_depth: i32,
     pub nodes: u64,
     pub seldepth: usize,
     pub stop: bool,
@@ -104,7 +134,15 @@ pub struct Searcher {
     lmr: [[i32; 64]; 64],
 }
 
-pub static SEARCHER: SyncCell<Searcher> = SyncCell::new(Searcher {
+/// The most search threads that can be asked for. Every per-thread table below
+/// is sized by this, and they are all zero-initialised, so the cost of the
+/// ceiling is address space rather than binary.
+pub const MAX_THREADS: usize = 8;
+
+const NEW_SEARCHER: Searcher = Searcher {
+    id: 0,
+    threads: 0,
+    start_depth: 0,
     nodes: 0,
     seldepth: 0,
     stop: false,
@@ -116,7 +154,7 @@ pub static SEARCHER: SyncCell<Searcher> = SyncCell::new(Searcher {
     best_score: 0,
     silent: false,
     ignore_stdin: false,
-    move_overhead: 25,
+    move_overhead: 0,
     killers: [[Move::NULL; 2]; MAX_PLY + 4],
     history: [[[0; 64]; 64]; 2],
     capt_hist: [[[0; 7]; 64]; 12],
@@ -126,7 +164,29 @@ pub static SEARCHER: SyncCell<Searcher> = SyncCell::new(Searcher {
     pv: [[Move::NULL; MAX_PLY]; MAX_PLY],
     pv_len: [0; MAX_PLY],
     lmr: [[0; 64]; 64],
-});
+};
+
+static SEARCHERS: SyncCell<[Searcher; MAX_THREADS]> = SyncCell::new([NEW_SEARCHER; MAX_THREADS]);
+
+/// Set once the search should wind up, by whichever thread decides it. Helpers
+/// watch it; the main thread is the only one that sets it from a real limit.
+static STOP: AtomicBool = AtomicBool::new(false);
+
+/// Each thread's node count, republished every thousand nodes so the main
+/// thread can hold the whole search to one budget without reading another
+/// thread's fields directly.
+#[allow(clippy::declare_interior_mutable_const)]
+const ZERO_U64: AtomicU64 = AtomicU64::new(0);
+static NODE_PUB: [AtomicU64; MAX_THREADS] = [ZERO_U64; MAX_THREADS];
+
+/// Total nodes across every thread taking part in the current search.
+pub fn total_nodes(threads: usize) -> u64 {
+    let mut t = 0;
+    for n in NODE_PUB.iter().take(threads.clamp(1, MAX_THREADS)) {
+        t += n.load(Ordering::Relaxed);
+    }
+    t
+}
 
 /// Continuation history: indexed by the previous move's `piece*64+to`, then
 /// this move's. Two plies back, which is where most of the signal is.
@@ -135,7 +195,8 @@ pub static SEARCHER: SyncCell<Searcher> = SyncCell::new(Searcher {
 /// only lands in BSS when its *entire* initialiser is zero, and `Searcher` has
 /// non-zero fields. Keeping these 2.4 MB separate is the difference between a
 /// 200 KB binary and a 2.6 MB one.
-static CONT: SyncCell<[[[i16; CONT_N]; CONT_N]; 2]> = SyncCell::new([[[0; CONT_N]; CONT_N]; 2]);
+static CONT: SyncCell<[[[[i16; CONT_N]; CONT_N]; 2]; MAX_THREADS]> =
+    SyncCell::new([[[[0; CONT_N]; CONT_N]; 2]; MAX_THREADS]);
 
 /// One move list per ply, rather than one per node on the stack.
 ///
@@ -153,27 +214,29 @@ static CONT: SyncCell<[[[i16; CONT_N]; CONT_N]; 2]> = SyncCell::new([[[0; CONT_N
 /// one ply (it only triggers when nothing is excluded yet), so the second bank
 /// is enough.
 const LIST_SLOTS: usize = MAX_PLY + 8;
-static LISTS: SyncCell<[MoveList; LIST_SLOTS * 2]> = SyncCell::new([MoveList::new(); LIST_SLOTS * 2]);
+static LISTS: SyncCell<[[MoveList; LIST_SLOTS * 2]; MAX_THREADS]> =
+    SyncCell::new([[MoveList::new(); LIST_SLOTS * 2]; MAX_THREADS]);
 
 /// Same treatment for the two lists of moves already tried at a node: 520 bytes
 /// each, per node, for the same reason and with the same fix.
-static TRIED: SyncCell<[[Tried; 2]; LIST_SLOTS * 2]> = SyncCell::new([[Tried::new(); 2]; LIST_SLOTS * 2]);
+static TRIED: SyncCell<[[[Tried; 2]; LIST_SLOTS * 2]; MAX_THREADS]> =
+    SyncCell::new([[[Tried::new(); 2]; LIST_SLOTS * 2]; MAX_THREADS]);
 
 #[inline(always)]
-fn tried_at(ply: usize, excluded: bool) -> &'static mut [Tried; 2] {
+fn tried_at(id: usize, ply: usize, excluded: bool) -> &'static mut [Tried; 2] {
     let slot = ply.min(LIST_SLOTS - 1) + if excluded { LIST_SLOTS } else { 0 };
-    unsafe { &mut TRIED.as_mut()[slot] }
+    unsafe { &mut TRIED.as_mut()[id][slot] }
 }
 
 #[inline(always)]
-fn list_at(ply: usize, excluded: bool) -> &'static mut MoveList {
+fn list_at(id: usize, ply: usize, excluded: bool) -> &'static mut MoveList {
     let slot = ply.min(LIST_SLOTS - 1) + if excluded { LIST_SLOTS } else { 0 };
-    unsafe { &mut LISTS.as_mut()[slot] }
+    unsafe { &mut LISTS.as_mut()[id][slot] }
 }
 
 #[inline(always)]
-fn cont() -> &'static mut [[[i16; CONT_N]; CONT_N]; 2] {
-    unsafe { CONT.as_mut() }
+fn cont(id: usize) -> &'static mut [[[i16; CONT_N]; CONT_N]; 2] {
+    unsafe { &mut CONT.as_mut()[id] }
 }
 
 /// Static-eval correction history.
@@ -197,26 +260,34 @@ const CORR_GRAIN: i32 = 256;
 const CORR_MAX: i32 = CORR_GRAIN * 48;
 /// Ceiling on the three of them combined, in centipawns.
 const CORR_CLAMP: i32 = 72;
-static CORR_PAWN: SyncCell<[[i32; CORR_N]; 2]> = SyncCell::new([[0; CORR_N]; 2]);
-static CORR_NP: SyncCell<[[i32; CORR_N]; 2]> = SyncCell::new([[0; CORR_N]; 2]);
-static CORR_CONT: SyncCell<[[i32; CONT_N]; 2]> = SyncCell::new([[0; CONT_N]; 2]);
+static CORR_PAWN: SyncCell<[[[i32; CORR_N]; 2]; MAX_THREADS]> =
+    SyncCell::new([[[0; CORR_N]; 2]; MAX_THREADS]);
+static CORR_NP: SyncCell<[[[i32; CORR_N]; 2]; MAX_THREADS]> =
+    SyncCell::new([[[0; CORR_N]; 2]; MAX_THREADS]);
+static CORR_CONT: SyncCell<[[[i32; CONT_N]; 2]; MAX_THREADS]> =
+    SyncCell::new([[[0; CONT_N]; 2]; MAX_THREADS]);
 
 #[inline(always)]
-fn corr_pawn() -> &'static mut [[i32; CORR_N]; 2] {
-    unsafe { CORR_PAWN.as_mut() }
+fn corr_pawn(id: usize) -> &'static mut [[i32; CORR_N]; 2] {
+    unsafe { &mut CORR_PAWN.as_mut()[id] }
 }
 #[inline(always)]
-fn corr_np() -> &'static mut [[i32; CORR_N]; 2] {
-    unsafe { CORR_NP.as_mut() }
+fn corr_np(id: usize) -> &'static mut [[i32; CORR_N]; 2] {
+    unsafe { &mut CORR_NP.as_mut()[id] }
 }
 #[inline(always)]
-fn corr_cont() -> &'static mut [[i32; CONT_N]; 2] {
-    unsafe { CORR_CONT.as_mut() }
+fn corr_cont(id: usize) -> &'static mut [[i32; CONT_N]; 2] {
+    unsafe { &mut CORR_CONT.as_mut()[id] }
 }
 
 #[inline(always)]
 pub fn searcher() -> &'static mut Searcher {
-    unsafe { SEARCHER.as_mut() }
+    searcher_at(0)
+}
+
+#[inline(always)]
+pub fn searcher_at(i: usize) -> &'static mut Searcher {
+    unsafe { &mut SEARCHERS.as_mut()[i.min(MAX_THREADS - 1)] }
 }
 
 /// Scale a millisecond budget by a per-mille factor. `u64::MAX` means "no
@@ -258,6 +329,25 @@ fn ln1024(x: u32) -> i32 {
     (log2 as i64 * 709 / 1024) as i32
 }
 
+/// Scale on every margin that is compared against a static evaluation.
+///
+/// These margins are in centipawns and they were tuned, over months, against an
+/// evaluation that turned out to be understating positions by about a third.
+/// The network now ships deliberately quiet to match them, which works but fixes
+/// the wrong half of the system: a quieter evaluation is also a less accurate
+/// one everywhere else it is used, including the correction tables and the
+/// transposition table.
+///
+/// This is the other half. `MARGIN` scales the thresholds instead, so a network
+/// exported at its natural scale can be handed to a search whose margins have
+/// been widened to match. 100 leaves the tuned values exactly as they were.
+const MARGIN: i32 = 100;
+
+#[inline(always)]
+const fn margin(cp: i32) -> i32 {
+    cp * MARGIN / 100
+}
+
 impl Searcher {
     pub fn init_tables(&mut self) {
         for d in 1..64 {
@@ -267,26 +357,38 @@ impl Searcher {
         }
     }
 
+    /// Fields the array initialiser had to leave zero so that the whole of it
+    /// would sit in BSS rather than in the binary.
+    pub fn init_defaults(&mut self, id: usize) {
+        self.id = id;
+        self.threads = 1;
+        self.start_depth = 0;
+        self.move_overhead = 25;
+        self.limits = Limits::new();
+    }
+
     pub fn clear(&mut self) {
         self.killers = [[Move::NULL; 2]; MAX_PLY + 4];
         self.history = [[[0; 64]; 64]; 2];
         self.capt_hist = [[[0; 7]; 64]; 12];
         self.counter = [[Move::NULL; 64]; 12];
-        for t in cont().iter_mut() {
+        for t in cont(self.id).iter_mut() {
             for r in t.iter_mut() {
                 r.fill(0);
             }
         }
-        for t in corr_pawn().iter_mut() {
+        for t in corr_pawn(self.id).iter_mut() {
             t.fill(0);
         }
-        for t in corr_np().iter_mut() {
+        for t in corr_np(self.id).iter_mut() {
             t.fill(0);
         }
-        for t in corr_cont().iter_mut() {
+        for t in corr_cont(self.id).iter_mut() {
             t.fill(0);
         }
-        crate::net::clear_cache();
+        if self.id == 0 {
+            crate::net::clear_cache();
+        }
     }
 
     /// The static evaluation after the correction tables have had their say.
@@ -294,12 +396,12 @@ impl Searcher {
     #[inline(always)]
     fn corrected_eval(&self, pos: &Position, ply: usize, raw: i32) -> i32 {
         let stm = pos.stm;
-        let mut c = corr_pawn()[stm][pos.pawn_key as usize & (CORR_N - 1)] * 3 / 2;
-        c += corr_np()[stm][pos.np_key as usize & (CORR_N - 1)];
+        let mut c = corr_pawn(self.id)[stm][pos.pawn_key as usize & (CORR_N - 1)] * 3 / 2;
+        c += corr_np(self.id)[stm][pos.np_key as usize & (CORR_N - 1)];
         if ply > 0 {
             let prev = self.stack[ply - 1].piece_to;
             if prev != NO_PIECE_TO {
-                c += corr_cont()[stm][prev];
+                c += corr_cont(self.id)[stm][prev];
             }
         }
         let c = (c / (CORR_GRAIN * 2)).clamp(-CORR_CLAMP, CORR_CLAMP);
@@ -317,12 +419,12 @@ impl Searcher {
             *e = ((*e * (256 - weight) + scaled * weight) / 256).clamp(-CORR_MAX, CORR_MAX);
         };
         let stm = pos.stm;
-        blend(&mut corr_pawn()[stm][pos.pawn_key as usize & (CORR_N - 1)]);
-        blend(&mut corr_np()[stm][pos.np_key as usize & (CORR_N - 1)]);
+        blend(&mut corr_pawn(self.id)[stm][pos.pawn_key as usize & (CORR_N - 1)]);
+        blend(&mut corr_np(self.id)[stm][pos.np_key as usize & (CORR_N - 1)]);
         if ply > 0 {
             let prev = self.stack[ply - 1].piece_to;
             if prev != NO_PIECE_TO {
-                blend(&mut corr_cont()[stm][prev]);
+                blend(&mut corr_cont(self.id)[stm][prev]);
             }
         }
     }
@@ -360,25 +462,47 @@ impl Searcher {
         self.hard = (optimum * 4).min(avail * 3 / 4).max(1);
     }
 
+    /// Only thread 0 owns the clock, the node budget and stdin. Helper threads
+    /// run until it tells them to stop, and the flag is the only thing they
+    /// look at -- a helper that decided for itself when the search was over
+    /// would leave the main thread waiting on a join it could not hurry.
     #[inline(always)]
     fn check_stop(&mut self) {
         if self.stop {
             return;
         }
-        if self.nodes >= self.limits.nodes {
+        // A single-threaded search keeps its exact node accounting: `bench` and
+        // `datagen` reproduce node-for-node, and every measurement in this repo
+        // was taken against a node limit that lands on the node.
+        if self.threads <= 1 && self.nodes >= self.limits.nodes {
             self.stop = true;
             return;
         }
-        if self.nodes & 2047 == 0 {
-            if !self.limits.infinite && self.elapsed() >= self.hard {
-                self.stop = true;
-            }
-            // Only a UCI search treats stdin as a controller. `datagen` and
-            // `relabel` are fed their work on stdin, and polling it there both
-            // costs the scan and risks eating input that is not a command.
-            if !self.silent && !self.ignore_stdin && crate::uci::interrupted() {
-                self.stop = true;
-            }
+        if self.nodes & 1023 != 0 {
+            return;
+        }
+        NODE_PUB[self.id].store(self.nodes, Ordering::Relaxed);
+        if STOP.load(Ordering::Relaxed) {
+            self.stop = true;
+            return;
+        }
+        if self.id != 0 {
+            return;
+        }
+        if self.threads > 1 && total_nodes(self.threads) >= self.limits.nodes {
+            self.stop = true;
+        }
+        if !self.limits.infinite && self.elapsed() >= self.hard {
+            self.stop = true;
+        }
+        // Only a UCI search treats stdin as a controller. `datagen` and
+        // `relabel` are fed their work on stdin, and polling it there both
+        // costs the scan and risks eating input that is not a command.
+        if !self.silent && !self.ignore_stdin && crate::uci::interrupted() {
+            self.stop = true;
+        }
+        if self.stop {
+            STOP.store(true, Ordering::Relaxed);
         }
     }
 
@@ -392,7 +516,9 @@ impl Searcher {
         self.best = Move::NULL;
         self.best_score = 0;
         self.set_clocks(pos.stm);
-        tt().new_search();
+        if self.id == 0 {
+            tt().new_search();
+        }
         for n in self.stack.iter_mut() {
             n.mv = Move::NULL;
             n.excluded = Move::NULL;
@@ -423,7 +549,8 @@ impl Searcher {
         let mut prev_best = Move::NULL;
         let mut prev_score = 0i32;
 
-        for depth in 1..=max_depth {
+        let first = if self.start_depth > 0 { self.start_depth.min(max_depth) } else { 1 };
+        for depth in first..=max_depth {
             let mut delta = 10 + (score * score) / 12_000;
             let (mut alpha, mut beta) =
                 if depth < 4 { (-INF, INF) } else { ((score - delta).max(-INF), (score + delta).min(INF)) };
@@ -483,16 +610,20 @@ impl Searcher {
             prev_score = score;
 
             // Starting depth d+1 costs roughly 1.5x what depth d did; if that
-            // would not fit in the soft budget, stop while we are ahead.
-            let soft = scale_ms(scale_ms(self.soft, STABILITY[stability]), fall);
-            if !self.limits.infinite && self.limits.movetime == 0 && self.elapsed() * 3 / 2 >= soft {
-                break;
-            }
-            if self.limits.movetime > 0 && self.elapsed() >= self.soft {
-                break;
-            }
-            if score.abs() >= MATE_IN_MAX && depth >= 4 {
-                break;
+            // would not fit in the soft budget, stop while we are ahead. Only
+            // the main thread may act on this: a helper that stopped early
+            // would stop helping while the search was still running.
+            if self.id == 0 {
+                let soft = scale_ms(scale_ms(self.soft, STABILITY[stability]), fall);
+                if !self.limits.infinite && self.limits.movetime == 0 && self.elapsed() * 3 / 2 >= soft {
+                    break;
+                }
+                if self.limits.movetime > 0 && self.elapsed() >= self.soft {
+                    break;
+                }
+                if score.abs() >= MATE_IN_MAX && depth >= 4 {
+                    break;
+                }
             }
         }
 
@@ -515,8 +646,9 @@ impl Searcher {
         } else {
             out.s(b" score cp ").i(score as i64);
         }
-        out.s(b" nodes ").u(self.nodes);
-        out.s(b" nps ").u(self.nodes * 1000 / ms.max(1));
+        let nodes = if self.threads > 1 { total_nodes(self.threads).max(self.nodes) } else { self.nodes };
+        out.s(b" nodes ").u(nodes);
+        out.s(b" nps ").u(nodes * 1000 / ms.max(1));
         out.s(b" hashfull ").u(tt().hashfull() as u64);
         out.s(b" time ").u(ms);
         out.s(b" pv");
@@ -667,13 +799,13 @@ impl Searcher {
         if !pv_node && !in_check && excluded.is_null() && beta.abs() < MATE_IN_MAX {
             // Reverse futility: so far ahead that even giving up material
             // repeatedly would not drop us below beta.
-            if depth < 9 && eval - 75 * depth + 60 * improving as i32 >= beta {
+            if depth < 9 && eval - margin(75) * depth + margin(60) * improving as i32 >= beta {
                 return beta + (eval - beta) / 3;
             }
 
             // Razoring: so far behind that only a tactic saves us; let the
             // quiescence search look for one.
-            if depth <= 5 && eval + 180 * depth < alpha {
+            if depth <= 5 && eval + margin(180) * depth < alpha {
                 let v = self.qsearch(pos, alpha - 1, alpha, ply, false);
                 if v < alpha {
                     return v;
@@ -688,7 +820,7 @@ impl Searcher {
                 && !self.stack[ply.saturating_sub(1)].mv.is_null()
                 && pos.has_big_pieces(pos.stm)
             {
-                let r = 4 + depth / 3 + ((eval - beta) / 200).min(3);
+                let r = 4 + depth / 3 + ((eval - beta) / margin(200)).min(3);
                 pos.make_null();
                 self.stack[ply].mv = Move::NULL;
                 self.stack[ply].piece_to = NO_PIECE_TO;
@@ -708,14 +840,14 @@ impl Searcher {
             // certainly have beaten the real beta too. Each candidate is sifted
             // by quiescence first, so the reduced search only runs for captures
             // that already look like they clear the raised bar.
-            let pc_beta = beta + 180;
+            let pc_beta = beta + margin(180);
             if depth >= 5
                 && pc_beta.abs() < MATE_IN_MAX
                 // A shallower table entry that already failed this test is
                 // enough to skip it; nothing here would overturn it.
                 && !(tt_depth >= depth - 3 && tt_score < pc_beta)
             {
-                let list = list_at(ply, !excluded.is_null());
+                let list = list_at(self.id, ply, !excluded.is_null());
                 generate(pos, list, GenKind::Noisy);
                 self.score_moves::<-20>(pos, list, tt_move, ply);
                 for i in 0..list.n {
@@ -753,7 +885,7 @@ impl Searcher {
         }
 
         // --- move loop
-        let list = list_at(ply, !excluded.is_null());
+        let list = list_at(self.id, ply, !excluded.is_null());
         generate(pos, list, GenKind::All);
         if list.n == 0 {
             return if in_check { -MATE + ply as i32 } else { 0 };
@@ -763,7 +895,7 @@ impl Searcher {
         let mut best = -INF;
         let mut best_move = Move::NULL;
         let mut bound = BOUND_UPPER;
-        let tried = tried_at(ply, !excluded.is_null());
+        let tried = tried_at(self.id, ply, !excluded.is_null());
         tried[0].clear();
         tried[1].clear();
         let (searched_quiets, searched_noisy) = tried.split_at_mut(1);
@@ -800,7 +932,7 @@ impl Searcher {
                     let lmr_depth = (depth
                         - (self.lmr[depth.min(63) as usize][(moves_played as usize).min(63)] >> 10))
                         .max(0);
-                    if lmr_depth < 8 && eval + 120 + 110 * lmr_depth <= alpha {
+                    if lmr_depth < 8 && eval + margin(120) + margin(110) * lmr_depth <= alpha {
                         skip_quiets = true;
                         continue;
                     }
@@ -857,6 +989,16 @@ impl Searcher {
             // reduction is actually on the table.
             let will_reduce = depth >= 2 && moves_played >= 2 + root as i32;
             let gives = will_reduce && gives_check(pos, m);
+            // Read before the move is made, which is the only time it means
+            // anything. `history_of` indexes the butterfly table by `pos.stm`
+            // and reads the victim off `pos.piece_at(to)`; after `make` the
+            // side to move is the opponent and that square holds the piece that
+            // just arrived. Asked afterwards it returned the opponent's history
+            // for the move, and for a capture the history of capturing the
+            // capturer -- so every reduction was being adjusted by a number
+            // about a different move. The pruning path a few lines above always
+            // asked before the move and was never affected.
+            let hist = if will_reduce { self.history_of(pos, m, ply, moved, to, noisy) as i32 } else { 0 };
             pos.make(m);
             tt().prefetch(pos.key);
             self.stack[ply].mv = m;
@@ -897,8 +1039,7 @@ impl Searcher {
                     }
                     // Moves with a good history are reduced less, and vice
                     // versa; this is where ordering pays for the pruning.
-                    let h = self.history_of(pos, m, ply, moved, to, noisy) as i32;
-                    r -= (h * 1024) / 8192;
+                    r -= (hist * 1024) / 8192;
                     r = r.clamp(0, (new_depth - 1).max(0) * 1024);
                 }
                 let rd = new_depth - (r >> 10);
@@ -1029,7 +1170,7 @@ impl Searcher {
             }
         }
 
-        let list = list_at(ply, false);
+        let list = list_at(self.id, ply, false);
         generate(pos, list, if in_check { GenKind::All } else { GenKind::Noisy });
         if list.n == 0 {
             return if in_check { -MATE + ply as i32 } else { best };
@@ -1151,10 +1292,10 @@ impl Searcher {
                 let mut s = self.history[stm][from][to] as i32;
                 let idx = moved * 64 + to + 1;
                 if prev != NO_PIECE_TO {
-                    s += cont()[0][prev][idx] as i32;
+                    s += cont(self.id)[0][prev][idx] as i32;
                 }
                 if prev2 != NO_PIECE_TO {
-                    s += cont()[1][prev2][idx] as i32;
+                    s += cont(self.id)[1][prev2][idx] as i32;
                 }
                 s
             };
@@ -1173,10 +1314,10 @@ impl Searcher {
         // move can be ordered late and then reduced as though nothing were
         // known about it.
         if ply > 0 && self.stack[ply - 1].piece_to != NO_PIECE_TO {
-            s += cont()[0][self.stack[ply - 1].piece_to][idx] as i32;
+            s += cont(self.id)[0][self.stack[ply - 1].piece_to][idx] as i32;
         }
         if ply > 1 && self.stack[ply - 2].piece_to != NO_PIECE_TO {
-            s += cont()[1][self.stack[ply - 2].piece_to][idx] as i32;
+            s += cont(self.id)[1][self.stack[ply - 2].piece_to][idx] as i32;
         }
         s.clamp(-16_384, 16_384) as i16
     }
@@ -1200,13 +1341,13 @@ impl Searcher {
         if ply > 0 {
             let p = self.stack[ply - 1].piece_to;
             if p != NO_PIECE_TO {
-                Self::gravity(&mut cont()[0][p][idx], bonus);
+                Self::gravity(&mut cont(self.id)[0][p][idx], bonus);
             }
         }
         if ply > 1 {
             let p = self.stack[ply - 2].piece_to;
             if p != NO_PIECE_TO {
-                Self::gravity(&mut cont()[1][p][idx], bonus);
+                Self::gravity(&mut cont(self.id)[1][p][idx], bonus);
             }
         }
     }
@@ -1263,6 +1404,121 @@ impl Searcher {
             let victim = if q.is_ep() { PAWN_P } else { pos.piece_at(to) as usize };
             Self::gravity(&mut self.capt_hist[moved][to][victim.min(6)], malus);
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Lazy SMP
+// ---------------------------------------------------------------------------
+//
+// Every thread runs the whole iterative deepening loop over its own copy of the
+// position, with its own history, killers, correction tables and move lists.
+// Nothing is divided up and nothing is handed between them. The only thing they
+// share is the transposition table, and that is the whole mechanism: a helper
+// that reaches a node first leaves the answer there, and the thread that
+// arrives second gets a cutoff it would otherwise have had to search for. The
+// gain is not from doing different work on purpose, it is from the table making
+// their work different as a side effect.
+//
+// Which is also why they start at staggered depths. Started together, several
+// threads spend the first few iterations deriving identical trees before the
+// table has anything in it to tell them apart.
+
+/// One `Position` per helper, from `mmap` rather than a static array.
+///
+/// A `Position` carries 4096 game keys and a 136-entry undo stack, so it is
+/// about forty kilobytes, and `Position::empty()` is not all-zero -- an empty
+/// square is 6 and "no en passant" is 64. Eight of them as a static would be a
+/// third of a megabyte of non-zero bytes in the binary image. From `mmap` they
+/// cost nothing until a thread is actually asked for.
+static HELPER_POS: SyncCell<[*mut Position; MAX_THREADS]> =
+    SyncCell::new([core::ptr::null_mut(); MAX_THREADS]);
+
+fn helper_pos(id: usize) -> *mut Position {
+    let slots = unsafe { HELPER_POS.as_mut() };
+    if slots[id].is_null() {
+        slots[id] = sys::mmap(core::mem::size_of::<Position>()) as *mut Position;
+    }
+    slots[id]
+}
+
+/// Helper entry point. The argument is the thread id, passed in the pointer
+/// itself rather than through a box there is no allocator to make.
+extern "C" fn helper_entry(arg: *mut u8) -> *mut u8 {
+    let id = arg as usize;
+    if id == 0 || id >= MAX_THREADS {
+        return core::ptr::null_mut();
+    }
+    let p = helper_pos(id);
+    if p.is_null() {
+        return core::ptr::null_mut();
+    }
+    // Never written to: a helper is silent, so `go` takes no branch that
+    // touches it.
+    let mut out = Out::new();
+    searcher_at(id).go(unsafe { &mut *p }, &mut out);
+    core::ptr::null_mut()
+}
+
+/// Reset every per-thread table for the threads that are actually in use.
+/// Clearing all `MAX_THREADS` would memset twenty megabytes on a `ucinewgame`
+/// that is going to be searched with one thread.
+pub fn clear_all(threads: usize) {
+    for i in 0..threads.clamp(1, MAX_THREADS) {
+        searcher_at(i).clear();
+    }
+}
+
+/// Run one search on `threads` threads and print for the main one.
+pub fn go_threaded(pos: &mut Position, out: &mut Out, threads: usize) {
+    let n = threads.clamp(1, MAX_THREADS);
+    STOP.store(false, Ordering::Relaxed);
+    for p in NODE_PUB.iter().take(n) {
+        p.store(0, Ordering::Relaxed);
+    }
+
+    let main = searcher_at(0);
+    main.threads = n;
+    main.start_depth = 0;
+    if n == 1 {
+        main.go(pos, out);
+        return;
+    }
+
+    let limits = main.limits;
+    let overhead = main.move_overhead;
+    let mut handles: [Option<sys::Thread>; MAX_THREADS] = [None; MAX_THREADS];
+    for (i, h) in handles.iter_mut().enumerate().take(n).skip(1) {
+        let dst = helper_pos(i);
+        if dst.is_null() {
+            continue;
+        }
+        // Zeroed pages from `mmap` are a valid `Position` -- every field is an
+        // integer or an array of them -- so this overwrites rather than reads.
+        unsafe { (*dst).clone_from(pos) };
+        let hs = searcher_at(i);
+        hs.threads = n;
+        hs.limits = limits;
+        // Only thread 0 owns the budget and the clock. A helper with its own
+        // copy of them would stop on its own and stop helping.
+        hs.limits.nodes = u64::MAX;
+        hs.limits.depth = MAX_DEPTH;
+        hs.limits.infinite = true;
+        hs.move_overhead = overhead;
+        hs.silent = true;
+        hs.ignore_stdin = true;
+        hs.start_depth = 1 + (i % 4) as i32;
+        *h = sys::spawn(helper_entry, i as *mut u8);
+    }
+
+    searcher_at(0).go(pos, out);
+
+    // The main thread has its move; everyone else is now doing work nobody will
+    // read. Joining before returning is what keeps the next `position` command
+    // from landing while a helper still holds a pointer into this one.
+    STOP.store(true, Ordering::Relaxed);
+    for h in handles.iter().take(n).skip(1).flatten() {
+        sys::join(*h);
     }
 }
 
