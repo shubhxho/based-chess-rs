@@ -41,7 +41,7 @@ model-index:
         metrics:
           - type: elo
             name: Elo at 20,000 nodes/move
-            value: 63.0
+            value: 62.6
             args: 3000 games, three independent opening sets, 95% CI +/-12.6
             verified: false
           - type: elo
@@ -120,7 +120,7 @@ underneath it, and no framework needed to run it.
 ```
 
 The engine around it plays at roughly **2800 Elo**, anchored against Stockfish's
-`UCI_Elo` settings. That anchor is worth about ±70, for reasons set out under
+`UCI_Elo` settings. That anchor is worth about ±40, for reasons set out under
 [Playing strength](#playing-strength).
 
 If you read one section, make it [the output gain](#the-output-gain). A single
@@ -212,35 +212,70 @@ four times the hidden width.
 
 ## Playing strength
 
-Measured at a fixed 20,000 nodes per move so results don't move with machine
-load, from randomised openings, colours swapped on every pair:
+Everything here is measured from randomised openings with colours swapped on
+every pair. Fixed node counts are the default, because they don't move with
+machine load; where a clock is used it says so.
 
-| Matchup | Result |
+### This network against the one it replaces
+
+| Conditions | Games | Result |
+|---|---|---|
+| 20,000 nodes/move, three independent opening sets | 3000 | **+62.6 ± 12.6** |
+| 100ms/move | 800 | +42.3 ± 24.3 |
+| 300ms/move | 400 | +51.6 ± 34.4 |
+
+The three fixed-node sets were +62.9, +65.7 and +59.3, which agree far more
+closely than most results in this project — that is what an effect well clear of
+the noise floor looks like. The clock figures are lower because this network is
+8% slower per node and a node-limited match hides that by construction; about
+twenty of the sixty-three Elo is the harness being generous.
+
+### Across search budgets
+
+The output gain that produces most of that win was tuned at 20,000 nodes, so the
+obvious worry is that it only pays there. 1000 games at each budget, same
+opponent:
+
+| Nodes/move | Result |
 |---|---|
-| 768-feature net **replacing** hand-crafted eval | −165 ± 69 Elo (200 games) |
-| 768-feature net **correcting** hand-crafted eval | +57 ± 28 Elo (600 games) |
-| **934-feature standalone net** vs hand-crafted eval | +35 ± 34 Elo (400 games) |
-| **934-feature standalone** vs the 768-feature hybrid | −3 ± 34 Elo (400 games) |
-| **the rescaled 32-neuron net** vs the previous release | +59.6 ± 21.9, +52.2 ± 21.8 (2000 games) |
-| **this network** (64 neurons) vs that | +12.5 [+0.1, +24.9] (3000 games) |
-| **this network** vs the previous release | **+63.0 ± 12.6** (3000 games) |
-| the same, on the clock | +42.3 ± 24.3 at 100ms, +51.6 ± 34.4 at 300ms |
+| 5,000 | +27.5 ± 21.6 |
+| 10,000 | +55.4 ± 21.8 |
+| 20,000 | +62.6 ± 12.6 |
+| 50,000 | +63.2 ± 21.9 |
+| 100,000 | +62.5 ± 21.9 |
+| 200,000 | +55.0 ± 21.8 |
 
-The fourth row is the one that decided the shape of this network. The standalone
-version is statistically indistinguishable from the hybrid in games, while carrying no
-hand-crafted evaluation at all and tracking the teacher considerably better. The
-same feature idea that turned a −165 Elo replacement into a viable one is what
-makes the standalone version possible.
+Flat from 20k out to 200k, ten times past the tuning point. What falls away is
+the shallow end, which is the right direction: a shallower search prunes less and
+consults the static evaluation less often.
 
-Worth being straight about: the standalone net fits the teacher much better
-(RMSE 130 vs 161 cp) than the hybrid but does not out-play it. Better regression
-against a search's output is not the same thing as better move ordering inside
-one, and these match lengths cannot resolve a difference this small.
+### Against every older build
 
-For an absolute figure, the engine was played against Stockfish under
-`UCI_LimitStrength`, 200 games at each setting, 100ms a move:
+600 games each at 20,000 nodes against the historical binaries, plus a
+400-game self-play control to check the harness. The previous-release row is the
+pooled 3000-game result from above, not a 600-game match:
 
-| Stockfish `UCI_Elo` | score | implied |
+| Opponent | Result |
+|---|---|
+| the same binary, both sides (control) | +5.2 ± 34.1 |
+| the previous release | +62.6 ± 12.6 |
+| `sable-new` | +112.7 ± 29.3 |
+| `sable-old`, `sable-std` | +130.3 ± 29.8 |
+| `sable-net` | +132.9 ± 29.9 |
+| `sable-net-v1` | +150.7 ± 30.5 |
+| `sable-hce`, the hand-crafted evaluator | +156.2 ± 30.7 |
+
+The control is the row that makes the others readable — zero sits comfortably
+inside its interval, so colour swapping and pair ordering aren't leaking an
+advantage. `sable-old` and `sable-std` return byte-identical scores because they
+evaluate every position identically and therefore play identical games.
+
+### On an outside scale
+
+Against Stockfish under `UCI_LimitStrength`, **300 games at each of five
+settings**, 100ms a move:
+
+| Stockfish `UCI_Elo` | Score | Implied |
 |---|---|---|
 | 2600 | 0.772 | 2812 |
 | 2700 | 0.638 | 2799 |
@@ -265,6 +300,27 @@ That is why the 0.5 crossover is the defensible number: two engines scoring 0.5
 against each other are equal by definition, and that point doesn't depend on the
 slope being correct. This locates the engine on someone else's approximate scale
 rather than rating it, and it is not a CCRL or FIDE number.
+`tests/calibrate.py` reproduces all of it.
+
+### Older results, kept for the record
+
+These decided the *shape* of the network and are not measurements of what ships
+now. Match lengths were much shorter, which is why the intervals are so wide:
+
+| Matchup | Result |
+|---|---|
+| 768-feature net **replacing** hand-crafted eval | −165 ± 69 Elo (200 games) |
+| 768-feature net **correcting** hand-crafted eval | +57 ± 28 Elo (600 games) |
+| 934-feature standalone net vs hand-crafted eval | +35 ± 34 Elo (400 games) |
+| 934-feature standalone vs the 768-feature hybrid | −3 ± 34 Elo (400 games) |
+| the rescaled 32-neuron net vs the previous release | +59.6 ± 21.9, +52.2 ± 21.8 (2000 games) |
+| this 64-neuron network vs that | +12.5 [+0.1, +24.9] (3000 games) |
+
+The fourth row is the one that decided the architecture: the standalone network
+was statistically indistinguishable from the hybrid while carrying no
+hand-crafted evaluation at all. Worth being straight about — it fit the teacher
+much better (RMSE 130 vs 161 cp) without out-playing it, and 400 games could
+never have resolved a difference that small.
 
 ## The output gain
 
@@ -539,11 +595,11 @@ the current engine.
 - Distilled from itself. The ceiling is the engine's own search quality rather
   than a stronger reference. Stockfish appears in this repository only as a
   measuring stick; nothing it plays has ever been trained on.
-- The 2800 figure is an anchor, not a rating. Four Stockfish settings imply
-  ratings spread across 140 Elo, and Stockfish's own `UCI_Elo` calibration is
+- The 2800 figure is an anchor, not a rating. Five Stockfish settings imply
+  ratings spread across 96 Elo, and Stockfish's own `UCI_Elo` calibration is
   approximate and fitted at longer time controls than the 100ms used here.
 - Computing mobility and king-attacker features costs throughput: the engine
-  runs about **3.1 Mnps** at `bench 13` on one M-series core, and widening the
+  runs about **3.3 Mnps** at `bench 13` on one M-series core, and widening the
   hidden layer to 64 neurons cost 8% per node on its own. A direct-mapped cache
   of finished evaluations did most of it: the search asks about the same
   position often enough (transpositions, re-searches, null-move verification)

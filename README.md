@@ -147,7 +147,7 @@ games each against the shipping network:
 | `EVAL_W` | meaning | result |
 |---|---|---|
 | 0.7 | triple the weight on game outcomes | **-67.2 ± 21.9** |
-| 0.95 | slightly less outcome | -6.6 [-16.7, +3.5] over 3000 games |
+| 0.95 | slightly less outcome | -2.8 [-15.3, +9.6] over 3000 games |
 | 1.0 | ignore outcomes entirely | -7.6 ± 21.5 |
 
 The curve is sharp on one side and flat on the other, and 0.9 is at the top of
@@ -263,7 +263,7 @@ at each budget against the same opponent:
 |---|---|
 | 5,000 | +27.5 ± 21.6 |
 | 10,000 | +55.4 ± 21.8 |
-| 20,000 | +63.0 ± 12.6 (3000 games) |
+| 20,000 | +62.6 ± 12.6 (3000 games) |
 | 50,000 | +63.2 ± 21.9 |
 | 100,000 | +62.5 ± 21.9 |
 | 200,000 | +55.0 ± 21.8 |
@@ -285,7 +285,7 @@ Elo is the harness being generous, and the rest is real at every time control I
 tried.
 
 Pooled over three independent sets of openings at 20,000 nodes, the gain plus
-the width change below is worth **+63.0 ± 12.6 Elo** over the previous release:
+the width change below is worth **+62.6 ± 12.6 Elo** over the previous release:
 +62.9, +65.7, +59.3. Those three agree far more closely than any earlier result
 in this file, which is what an effect well clear of the noise floor looks like.
 
@@ -369,7 +369,7 @@ to me:
 | opponent | result |
 |---|---|
 | the engine against itself (control) | +5.2 ± 34.1 |
-| the previous release | +63.0 ± 12.6 (3000 games) |
+| the previous release | +62.6 ± 12.6 (3000 games) |
 | `sable-new` | +112.7 ± 29.3 |
 | `sable-old`, `sable-std` | +130.3 ± 29.8 (both — they play identically) |
 | `sable-net` | +132.9 ± 29.9 |
@@ -384,8 +384,8 @@ every position identically, so they play identical games.
 
 Second, an outside anchor, because nothing above escapes this repository.
 Stockfish with `UCI_LimitStrength` plays to a nominal rating, so playing it at
-several settings puts the engine on a scale someone else maintains. 200 games at
-each, 100ms a move:
+several settings puts the engine on a scale someone else maintains. 300 games at
+each of five settings — 1500 in total — at 100ms a move:
 
 | Stockfish `UCI_Elo` | score | implied |
 |---|---|---|
@@ -632,7 +632,7 @@ guard. When I removed a redundant legality check on the transposition move, the
 node count stayed at exactly 1,321,821 — proof the change was a pure speedup and
 not a silent behaviour change.
 
-Throughput is around 3.1 Mnps on a single M-series core.
+Throughput is around 3.3 Mnps on a single M-series core.
 
 Matches are run at a fixed node count rather than a fixed time, so results don't
 shift with machine load, and colours are swapped on every opening pair. Every
@@ -712,7 +712,7 @@ hits both halves and cancels. Point it at two copies of the same binary and it
 says 0 ms, ±3 ms, over 21 pairs. That ±3 ms is the floor. Anything smaller than
 it was never a result, and I have the retracted claims to prove it.
 
-The correctness check is the node count: 1,281,983 at `bench 13` and 9,903,943
+The correctness check is the node count: 1,376,993 at `bench 13` and 12,865,968
 at `bench 18`. If a change moves either number it changed the search, whatever
 it says on the label — and then benchmarks cannot settle it and it has to go and
 play games.
@@ -835,7 +835,7 @@ with the format documented well enough to read it without this engine.
   stronger reference — Stockfish appears here only as a measuring stick, never
   as a teacher, and nothing it plays has ever been trained on.
 - The rating is an anchor, not a rating. See [What that adds up
-  to](#what-that-adds-up-to): four Stockfish settings disagree by 140 Elo, and
+  to](#what-that-adds-up-to): five Stockfish settings disagree by 96 Elo, and
   Stockfish's own `UCI_Elo` calibration is approximate.
 - Most single results here are one 1000-game match, and two identically-trained
   networks have measured twelve Elo apart. Treat any margin under about 20 Elo
