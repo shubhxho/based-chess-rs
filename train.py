@@ -46,7 +46,14 @@ WEIGHTED = os.environ.get("WEIGHTED", "1") != "0"
 WEIGHT_CLAMP = float(os.environ.get("WEIGHT_CLAMP", "3"))
 SHARD_DECAY = float(os.environ.get("SHARD_DECAY", "1.0"))
 SIGMOID_K = float(os.environ.get("SIG_K", "400"))
-OUT_SCALE = float(os.environ.get("OUT_SCALE", "0.7"))   # export-time gain; see export()
+# Export-time gain. `None` means "derive it from how loud this network actually
+# came out" -- see export(). Setting it pins the old constant behaviour.
+OUT_SCALE = float(os.environ["OUT_SCALE"]) if "OUT_SCALE" in os.environ else None
+# The evaluation spread the search's margins were tuned against, in centipawns:
+# the standard deviation of the shipping network's own output over self-play
+# positions. Every threshold in search.rs that is compared with a static
+# evaluation assumes roughly this scale.
+TARGET_STD = float(os.environ.get("TARGET_STD", "455.5"))
 ENGINE = os.environ.get("ENGINE", "./target/release/sable")
 
 FEAT_MAGIC = b"SBF2"     # featdump stream header
@@ -243,16 +250,25 @@ def clip_weights(model):
 # Export
 # ---------------------------------------------------------------------------
 
-def export(model, path=None):
-    """Quantise and write the network, quieter than it was trained.
+def export(model, path=None, gain=None):
+    """Quantise and write the network, at the loudness the search expects.
 
-    OUT_SCALE multiplies the whole output layer, so every evaluation comes back
-    smaller by the same factor and the ranking of positions is untouched. It is
+    The gain multiplies the whole output layer, so every evaluation comes back
+    scaled by the same factor and the ranking of positions is untouched. It is
     the last thing applied and it is not part of the objective, because it is
-    not about fitting the teacher: a network trained to reproduce the search's
-    score reproduces its *spread* too, and the search plays worse when handed
-    one. Measured against the same network exported at several gains, all else
-    equal, over 1000 games each at 20,000 nodes -- see MODEL_CARD.md.
+    not about fitting the teacher: a network trained to reproduce a search's
+    score reproduces that search's *spread* too, and this search plays worse
+    when handed one louder than its thresholds assume. Measured against the
+    same network exported at several gains, all else equal, over 1000 games
+    each at 20,000 nodes -- see MODEL_CARD.md.
+
+    0.7 was the right constant for one teacher. It is the wrong constant for
+    any other, and that is a trap rather than a knob: a teacher whose labels
+    are on a different scale -- a different engine, a different search depth --
+    produces a network whose natural spread is different, and the same 0.7
+    lands it somewhere the margins were never tuned for. So the gain is derived
+    instead, from what the trained network actually does, to put the spread on
+    TARGET_STD whatever it was trained against.
 
     Scaling the exported weights rather than the score in net.rs keeps the
     network file the single description of what the engine computes, so the
@@ -260,10 +276,12 @@ def export(model, path=None):
     byte.
     """
     path = path or os.environ.get("NET_OUT", "net.bin")
+    if gain is None:
+        gain = 0.7
     ft = np.array(model.ft)
     ft_b = np.array(model.ft_b)
-    out = np.array(model.out) * OUT_SCALE
-    out_b = np.array(model.out_b) * OUT_SCALE
+    out = np.array(model.out) * gain
+    out_b = np.array(model.out_b) * gain
 
     ft_q = np.clip(np.round(ft * QA), -127, 127).astype(np.int8)
     ft_b_q = np.clip(np.round(ft_b * QA), -32767, 32767).astype(np.int16)
@@ -277,7 +295,7 @@ def export(model, path=None):
     blob += out_b_q.tobytes()
     with open(path, "wb") as fh:
         fh.write(blob)
-    print(f"wrote {path}: {len(blob)} bytes ({len(blob)/1024:.1f} KB)")
+    print(f"wrote {path}: {len(blob)} bytes ({len(blob)/1024:.1f} KB), gain {gain:.3f}")
     return ft_q, ft_b_q, out_q, out_b_q
 
 
@@ -327,8 +345,27 @@ def main():
     # Held-out positions never touched by the optimiser. The exported network
     # is the epoch that did best here, not whatever the last epoch happened
     # to land on.
+    #
+    # Held out in contiguous blocks rather than at random. Consecutive lines of
+    # a shard are consecutive plies of one game, and two positions a ply apart
+    # differ by one move: a random split puts a position in training and its own
+    # successor in validation, so the validation loss is largely measuring
+    # whether the network memorised the training set -- it reads better than
+    # generalisation actually is, and it reads better for exactly the runs that
+    # memorise hardest. Blocks keep a game on one side of the line.
     val_n = min(200_000, n // 20)
-    val_idx = np.random.permutation(n)[:val_n]
+    block = 20_000
+    n_blocks = max(1, n // block)
+    want = max(1, val_n // block)
+    # Spread the held-out blocks evenly through the corpus so the split still
+    # covers every stage of every generation run.
+    stride = max(1, n_blocks // want)
+    val_parts = [
+        np.arange(b * block, min((b + 1) * block, n))
+        for b in range(0, n_blocks, stride)
+    ][:want]
+    val_idx = np.concatenate(val_parts)
+    val_n = len(val_idx)
     train_mask = np.ones(n, bool)
     train_mask[val_idx] = False
     train_idx = np.flatnonzero(train_mask)
@@ -359,7 +396,11 @@ def main():
     mx.eval(model.parameters())
     batch = 16384
     steps = len(train_idx) // batch
-    base_lr = float(os.environ.get("LR", "1e-2"))
+    # 1e-2 with AdamW drives a quarter of the hidden layer into the dead side
+    # of the clipped ReLU and never brings it back: measured 24 of 64 neurons
+    # never leaving zero, so the shipped width was effectively 33 rather than
+    # 64. Lower is both a better fit and a wider network for the same bytes.
+    base_lr = float(os.environ.get("LR", "3e-3"))
     opt = optim.AdamW(learning_rate=base_lr, weight_decay=0.0)
 
     def loss_fn(model, u, t, bk, y, w):
@@ -427,7 +468,31 @@ def main():
     if best[1] is not None:
         model.ft, model.ft_b, model.out, model.out_b = best[1]
         print(f"exporting best-val checkpoint (val {best[0]:.5f})")
-    ftq, fbq, oq, obq = export(model)
+
+    # How loud did this network come out? The gain that follows puts it on the
+    # scale the search's margins were tuned for, whatever teacher produced the
+    # labels.
+    sample = val_idx[: min(50_000, val_n)]
+    raw = []
+    for i in range(0, len(sample), batch):
+        idx = sample[i : i + batch]
+        raw.append(
+            np.array(
+                model(
+                    mx.array(us[idx].astype(np.int32)),
+                    mx.array(them[idx].astype(np.int32)),
+                    mx.array(buckets[idx]),
+                )
+            )
+            * SCALE
+        )
+    raw_std = float(np.std(np.concatenate(raw)))
+    gain = OUT_SCALE if OUT_SCALE is not None else TARGET_STD / max(raw_std, 1e-6)
+    print(
+        f"  raw eval std {raw_std:6.1f} cp, target {TARGET_STD:6.1f} cp -> gain {gain:.3f}"
+        + ("  (pinned by OUT_SCALE)" if OUT_SCALE is not None else "")
+    )
+    ftq, fbq, oq, obq = export(model, gain=gain)
 
     # How well does the quantised network track the teacher it was distilled
     # from? Reported on the quantised weights, since those are what ship.

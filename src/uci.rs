@@ -177,6 +177,14 @@ fn position() -> &'static mut Position {
     unsafe { POS.as_mut() }
 }
 
+/// How many search threads the GUI has asked for. Kept here rather than on the
+/// searcher because it outlives any one search and because `ucinewgame` needs
+/// it to know how many sets of history tables to clear.
+static THREADS: SyncCell<usize> = SyncCell::new(1);
+fn threads() -> usize {
+    unsafe { *THREADS.as_ref() }
+}
+
 /// Match a UCI move string against the legal moves; this is how promotion
 /// suffixes and castling get resolved without a second parser.
 fn find_move(pos: &Position, t: &[u8]) -> Move {
@@ -245,6 +253,7 @@ const BENCH_FENS: [&[u8]; 12] = [
 fn bench(depth: i32, out: &mut Out) {
     let s = searcher();
     let mut total = 0u64;
+    s.threads = 1;
     s.ignore_stdin = true;
     let t0 = sys::now_ms();
     for fen in BENCH_FENS {
@@ -285,7 +294,7 @@ pub fn run() -> ! {
                 out.s(b"id name Sable 1.2").nl();
                 out.s(b"id author built with Claude Code").nl();
                 out.s(b"option name Hash type spin default 64 min 1 max 4096").nl();
-                out.s(b"option name Threads type spin default 1 min 1 max 1").nl();
+                out.s(b"option name Threads type spin default 1 min 1 max 8").nl();
                 out.s(b"option name Move Overhead type spin default 25 min 0 max 5000").nl();
                 out.s(b"option name Clear Hash type button").nl();
                 out.s(b"uciok").nl();
@@ -295,7 +304,7 @@ pub fn run() -> ! {
             }
             b"ucinewgame" => {
                 tt().clear();
-                searcher().clear();
+                clear_all(threads());
                 position().set_startpos();
             }
             b"setoption" => {
@@ -316,10 +325,18 @@ pub fn run() -> ! {
                 }
                 match name {
                     b"Hash" => tt().resize(val.clamp(1, 4096) as usize),
-                    b"Move" => searcher().move_overhead = val.min(5000),
+                    b"Threads" => unsafe {
+                        *THREADS.as_mut() = (val as usize).clamp(1, MAX_THREADS);
+                    },
+                    b"Move" => {
+                        // Every thread reads its own copy during a search.
+                        for i in 0..MAX_THREADS {
+                            searcher_at(i).move_overhead = val.min(5000);
+                        }
+                    }
                     b"Clear" => {
                         tt().clear();
-                        searcher().clear();
+                        clear_all(threads());
                     }
                     _ => {}
                 }
@@ -395,7 +412,7 @@ pub fn run() -> ! {
                 if do_perft > 0 {
                     perft_divide(position(), do_perft, &mut out);
                 } else {
-                    s.go(position(), &mut out);
+                    go_threaded(position(), &mut out, threads());
                 }
             }
             b"perft" => {
@@ -424,6 +441,7 @@ pub fn run() -> ! {
                 let nodes = parse_u64(t.next().unwrap_or(b"6000")).max(100);
                 tt().resize(8);
                 let s = searcher();
+                s.threads = 1;
                 s.silent = true;
                 while with_line(&mut out, |body, out| {
                     let bar = match body.iter().position(|&c| c == b'|') {

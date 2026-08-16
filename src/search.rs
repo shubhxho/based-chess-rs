@@ -94,6 +94,12 @@ pub struct Searcher {
     /// How many threads this search is running with, so the single-threaded
     /// path can keep its exact node accounting.
     pub threads: usize,
+    /// The iteration the root is currently on. Extensions are capped against
+    /// this rather than against the requested maximum depth.
+    pub root_depth: i32,
+    /// Ply above which null-move pruning is verified rather than trusted. Zero
+    /// means "not currently inside a verification search".
+    nmp_min_ply: usize,
     /// First iteration this thread runs. Helpers start a little deeper than
     /// each other so that they diverge immediately instead of all re-deriving
     /// the same first few plies before the shared table pulls them apart.
@@ -142,11 +148,13 @@ pub const MAX_THREADS: usize = 8;
 const NEW_SEARCHER: Searcher = Searcher {
     id: 0,
     threads: 0,
+    root_depth: 0,
+    nmp_min_ply: 0,
     start_depth: 0,
     nodes: 0,
     seldepth: 0,
     stop: false,
-    limits: Limits::new(),
+    limits: Limits::zeroed(),
     start: 0,
     soft: 0,
     hard: 0,
@@ -188,15 +196,22 @@ pub fn total_nodes(threads: usize) -> u64 {
     t
 }
 
-/// Continuation history: indexed by the previous move's `piece*64+to`, then
-/// this move's. Two plies back, which is where most of the signal is.
+/// Continuation history: indexed by an earlier move's `piece*64+to`, then this
+/// move's.
+///
+/// Three tables, for the move one, two and four plies back. One and two plies
+/// carry most of the signal -- they are the reply and the follow-up -- but four
+/// is a different question and answers it independently: whether this move
+/// tends to work out in the plan the side to move started two of its own moves
+/// ago, rather than as an answer to what just happened.
 ///
 /// Deliberately a static of its own rather than a field of `Searcher`: a global
 /// only lands in BSS when its *entire* initialiser is zero, and `Searcher` has
 /// non-zero fields. Keeping these 2.4 MB separate is the difference between a
 /// 200 KB binary and a 2.6 MB one.
-static CONT: SyncCell<[[[[i16; CONT_N]; CONT_N]; 2]; MAX_THREADS]> =
-    SyncCell::new([[[[0; CONT_N]; CONT_N]; 2]; MAX_THREADS]);
+const CONT_PLIES: usize = 3;
+static CONT: SyncCell<[[[[i16; CONT_N]; CONT_N]; CONT_PLIES]; MAX_THREADS]> =
+    SyncCell::new([[[[0; CONT_N]; CONT_N]; CONT_PLIES]; MAX_THREADS]);
 
 /// One move list per ply, rather than one per node on the stack.
 ///
@@ -235,7 +250,7 @@ fn list_at(id: usize, ply: usize, excluded: bool) -> &'static mut MoveList {
 }
 
 #[inline(always)]
-fn cont(id: usize) -> &'static mut [[[i16; CONT_N]; CONT_N]; 2] {
+fn cont(id: usize) -> &'static mut [[[i16; CONT_N]; CONT_N]; CONT_PLIES] {
     unsafe { &mut CONT.as_mut()[id] }
 }
 
@@ -317,14 +332,24 @@ fn ln1024(x: u32) -> i32 {
     let lz = x.leading_zeros();
     let int_part = (31 - lz) as i32;
     // Mantissa bits below the leading one, as a fraction of 1024.
+    //
+    // The shift has to put the leading one *past* bit 63 so that the ten bits
+    // under it land in 63..54. `<< (lz + 1)` left it at bit 63 and the ten bits
+    // below it at 62..53, so `>> 54` returned only the leading one shifted down
+    // -- which for every input is exactly zero after `int_part` has accounted
+    // for it. The mantissa was therefore always 0 and this was a `floor(log2)`
+    // staircase, not a logarithm: `ln1024` returned the same value for 4, 5, 6
+    // and 7, and the reduction table stepped rather than sloped.
     let mant = if int_part > 0 {
-        ((x as u64) << (lz + 1) >> 54) as i32 // top 10 bits after the leading 1
+        (((x as u64) << (lz + 33)) >> 54) as i32 // ten bits under the leading 1
     } else {
         0
     };
-    // log2(x) ~ int + mant/1024, refined with a quadratic correction so the
-    // error at the midpoint (worst case for the linear form) is small.
-    let frac = mant - (mant * mant) / 3072;
+    // log2(1+f) ~ f + f(1-f)/3, which is within 0.017 of the true natural log
+    // across the whole range once scaled. The previous form *subtracted* the
+    // quadratic term, which is the wrong sign for log2(1+f) -- harmless only
+    // because `mant` could never be anything but zero.
+    let frac = mant + (mant * (1024 - mant)) / 3072;
     let log2 = int_part * 1024 + frac;
     (log2 as i64 * 709 / 1024) as i32
 }
@@ -352,7 +377,7 @@ impl Searcher {
     pub fn init_tables(&mut self) {
         for d in 1..64 {
             for m in 1..64 {
-                self.lmr[d][m] = 790 + ln1024(d as u32) * ln1024(m as u32) / 2417;
+                self.lmr[d][m] = 790 + ln1024(d as u32) * ln1024(m as u32) / 3051;
             }
         }
     }
@@ -363,6 +388,8 @@ impl Searcher {
         self.id = id;
         self.threads = 1;
         self.start_depth = 0;
+        self.root_depth = 0;
+        self.nmp_min_ply = 0;
         self.move_overhead = 25;
         self.limits = Limits::new();
     }
@@ -437,7 +464,12 @@ impl Searcher {
     fn set_clocks(&mut self, stm: usize) {
         self.start = sys::now_ms();
         if self.limits.movetime > 0 {
-            let t = self.limits.movetime.saturating_sub(self.move_overhead).max(1);
+            // The overhead covers a round trip through the GUI, which does not
+            // grow when the budget shrinks -- but surrendering a flat 25 ms of
+            // a 100 ms `movetime` is a quarter of the search. Cap it at an
+            // eighth so short budgets keep their proportion.
+            let ovh = self.move_overhead.min(self.limits.movetime / 8);
+            let t = self.limits.movetime.saturating_sub(ovh).max(1);
             self.soft = t;
             self.hard = t;
             return;
@@ -517,6 +549,11 @@ impl Searcher {
         self.best_score = 0;
         self.set_clocks(pos.stm);
         if self.id == 0 {
+            // Whoever ends a search leaves this latched. `go_threaded` clears it
+            // too, but `bench`, `datagen` and `relabel` come straight here, and
+            // a latch left over from a `stop` typed during the previous search
+            // would abort them at their first node check.
+            STOP.store(false, Ordering::Relaxed);
             tt().new_search();
         }
         for n in self.stack.iter_mut() {
@@ -551,6 +588,7 @@ impl Searcher {
 
         let first = if self.start_depth > 0 { self.start_depth.min(max_depth) } else { 1 };
         for depth in first..=max_depth {
+            self.root_depth = depth;
             let mut delta = 10 + (score * score) / 12_000;
             let (mut alpha, mut beta) =
                 if depth < 4 { (-INF, INF) } else { ((score - delta).max(-INF), (score + delta).min(INF)) };
@@ -750,6 +788,9 @@ impl Searcher {
                 return tt_score;
             }
         }
+        // A node whose best-known move is a capture is a node where the quiet
+        // moves are probably not the answer; the reduction formula uses this.
+        let tt_capture = !tt_move.is_null() && pos_is_noisy(pos, tt_move);
         // No legality check on the table move: it is only ever *compared*
         // against generated moves, never made. A colliding entry can therefore
         // only cost a little ordering quality, never correctness -- and the
@@ -799,7 +840,13 @@ impl Searcher {
         if !pv_node && !in_check && excluded.is_null() && beta.abs() < MATE_IN_MAX {
             // Reverse futility: so far ahead that even giving up material
             // repeatedly would not drop us below beta.
-            if depth < 9 && eval - margin(75) * depth + margin(60) * improving as i32 >= beta {
+            // A quiet table move is the table saying it already looked and
+            // found something better than standing pat; taking the shortcut over
+            // the top of it is where this margin is least trustworthy.
+            if depth < 9
+                && (tt_move.is_null() || tt_capture)
+                && eval - margin(75) * depth + margin(60) * improving as i32 >= beta
+            {
                 return beta + (eval - beta) / 3;
             }
 
@@ -817,6 +864,7 @@ impl Searcher {
             // pieces, where zugzwang makes the assumption false.
             if depth >= 3
                 && eval >= beta
+                && ply >= self.nmp_min_ply
                 && !self.stack[ply.saturating_sub(1)].mv.is_null()
                 && pos.has_big_pieces(pos.stm)
             {
@@ -831,7 +879,28 @@ impl Searcher {
                 }
                 if v >= beta {
                     // Never return an unproven mate from a null move.
-                    return if v >= MATE_IN_MAX { beta } else { v };
+                    if v >= MATE_IN_MAX {
+                        return beta;
+                    }
+                    // Shallow null moves are cheap enough to believe. Deep ones
+                    // are where zugzwang actually bites, and `has_big_pieces` is
+                    // a crude guard against it -- a side with pieces can still
+                    // be in zugzwang. So past a depth the cutoff is confirmed by
+                    // a real search of the same reduced depth with null moves
+                    // switched off underneath it, which is what `nmp_min_ply`
+                    // does: it marks the plies the verification owns.
+                    if self.nmp_min_ply != 0 || depth < 10 {
+                        return v;
+                    }
+                    self.nmp_min_ply = ply + 3 * (depth - r).max(0) as usize / 4;
+                    let ver = self.negamax(pos, depth - r, beta - 1, beta, ply, false, false);
+                    self.nmp_min_ply = 0;
+                    if self.stop {
+                        return 0;
+                    }
+                    if ver >= beta {
+                        return v;
+                    }
                 }
             }
 
@@ -880,7 +949,12 @@ impl Searcher {
 
         // Internal iterative reduction: with no table move, this node is not
         // worth its nominal depth — the ordering will be poor either way.
-        if tt_move.is_null() && depth >= 4 && !in_check {
+        // `excluded` matters here: a singular search deliberately hides the
+        // table move, and this cannot tell that apart from a node that never had
+        // one. Without the guard, every singular verification was also reduced
+        // for having no table move -- which is the one thing it was guaranteed
+        // to be missing.
+        if tt_move.is_null() && excluded.is_null() && depth >= 4 && !in_check {
             depth -= 1 + pv_node as i32;
         }
 
@@ -921,6 +995,10 @@ impl Searcher {
 
             // --- move-level pruning, only once a fallback score exists
             if !root && best > -MATE_IN_MAX && !in_check {
+                // Both branches want it now, so it is computed once above them.
+                let lmr_depth = (depth
+                    - (self.lmr[depth.min(63) as usize][(moves_played as usize).min(63)] >> 10))
+                    .max(0);
                 if !noisy {
                     // Late move pruning: deep in the ordered list at low depth,
                     // quiet moves almost never turn out to be best.
@@ -929,34 +1007,56 @@ impl Searcher {
                         continue;
                     }
                     // Futility: a quiet move cannot swing the score this far.
-                    let lmr_depth = (depth
-                        - (self.lmr[depth.min(63) as usize][(moves_played as usize).min(63)] >> 10))
-                        .max(0);
                     if lmr_depth < 8 && eval + margin(120) + margin(110) * lmr_depth <= alpha {
                         skip_quiets = true;
+                        continue;
+                    }
+                    // History pruning: a move the tables have watched fail this
+                    // often, this close to the horizon, is not worth a node.
+                    // Ahead of the swap evaluation because it is two array
+                    // lookups against a loop that walks every attacker -- the
+                    // two tests are independent, so the set of moves pruned is
+                    // the same either way and only the cost of deciding moves.
+                    if lmr_depth <= 5
+                        && (self.history_of(pos, m, ply, moved, to, false) as i32) < -3200 * lmr_depth.max(1)
+                    {
                         continue;
                     }
                     // Quiet moves that hang material are rarely the answer.
                     if lmr_depth < 7 && !see_ge(pos, m, -25 * lmr_depth * lmr_depth) {
                         continue;
                     }
-                    // History pruning: a move the tables have watched fail this
-                    // often, this close to the horizon, is not worth a node.
-                    if lmr_depth <= 3
-                        && (self.history_of(pos, m, ply, moved, to, false) as i32) < -3200 * lmr_depth.max(1)
-                    {
+                } else {
+                    // Capture futility: winning the piece standing on the
+                    // target square still would not lift the evaluation to
+                    // alpha, so the material this move wins cannot rescue it.
+                    // Only for captures that leave the king alone -- a check is
+                    // worth searching whatever it costs.
+                    if lmr_depth < 7 && !gives_check(pos, m) {
+                        let gain = if m.is_ep() {
+                            SEE_VAL[PAWN_P]
+                        } else {
+                            SEE_VAL[pos.piece_at(to) as usize]
+                        } + if m.is_promo() { SEE_VAL[m.promo()] - SEE_VAL[PAWN_P] } else { 0 };
+                        if eval + margin(200) + margin(240) * lmr_depth + gain <= alpha {
+                            continue;
+                        }
+                    }
+                    if depth < 8 && !see_ge(pos, m, -95 * depth) {
                         continue;
                     }
-                } else if depth < 8 && !see_ge(pos, m, -95 * depth) {
-                    continue;
                 }
             }
 
             // --- extensions
             let mut extension = 0i32;
-            if !root && ply < 2 * (self.limits.depth as usize).min(MAX_PLY / 2) {
+            // Against the iteration actually running, not against the depth
+            // the caller asked for -- which is MAX_DEPTH in every search that is
+            // not `go depth n`, making this cap dead exactly when a runaway
+            // extension chain is most likely.
+            if !root && ply < 2 * (self.root_depth.max(1) as usize).min(MAX_PLY / 2) {
                 if m == tt_move
-                    && depth >= 8
+                    && depth >= 6
                     && excluded.is_null()
                     && tt_depth >= depth - 3
                     && tt_bound & BOUND_LOWER != 0
@@ -973,11 +1073,24 @@ impl Searcher {
                         return 0;
                     }
                     if v < sbeta {
-                        extension = 1 + (!pv_node && v < sbeta - 30) as i32;
-                    } else if sbeta >= beta {
-                        // Multi-cut: several moves beat beta, so does this node.
-                        return sbeta;
-                    } else if tt_score >= beta {
+                        // How far below the window it fell says how alone the
+                        // move is. Thirty centipawns is a much smaller step than
+                        // the evaluation's own scale justifies, and there was no
+                        // third rung at all.
+                        extension = 1
+                            + (!pv_node && v < sbeta - margin(90)) as i32
+                            + (!pv_node && v < sbeta - margin(220)) as i32;
+                    } else if v >= beta && v.abs() < MATE_IN_MAX {
+                        // Multi-cut: the search just proved that some move other
+                        // than the table move already beats beta, so this node
+                        // does too. Returning `v` rather than `sbeta` reports
+                        // what was proved instead of the window it was asked
+                        // about, and the old `sbeta >= beta` gate missed every
+                        // case where the excluded search overshot a lower one.
+                        return v;
+                    } else if tt_score >= beta || cut_node {
+                        // A node expected to fail high, whose table move is not
+                        // singular, is a node to spend less on rather than more.
                         extension = -2;
                     }
                 } else if in_check {
@@ -987,7 +1100,7 @@ impl Searcher {
 
             // Only needed by the reduction formula, so only computed when a
             // reduction is actually on the table.
-            let will_reduce = depth >= 2 && moves_played >= 2 + root as i32;
+            let will_reduce = depth >= 2 && moves_played >= 1 + root as i32;
             let gives = will_reduce && gives_check(pos, m);
             // Read before the move is made, which is the only time it means
             // anything. `history_of` indexes the butterfly table by `pos.stm`
@@ -1011,7 +1124,18 @@ impl Searcher {
             if moves_played == 1 {
                 // The first move gets the full window; PVS assumes it is best
                 // and spends its budget proving the rest are not.
-                score = -self.negamax(pos, new_depth, -beta, -alpha, ply + 1, false, pv_node);
+                score = -self.negamax(
+                    pos,
+                    new_depth,
+                    -beta,
+                    -alpha,
+                    ply + 1,
+                    // A PV node's first move is genuinely expected to be best;
+                    // anywhere else the child inherits the flip of this node's
+                    // expectation rather than a flat "not a cut node".
+                    if pv_node { false } else { !cut_node },
+                    pv_node,
+                );
             } else {
                 // --- late move reduction
                 let mut r = 0i32;
@@ -1032,9 +1156,20 @@ impl Searcher {
                     if noisy {
                         r -= 1024;
                     }
+                    // In check every move is forced and the list is short; there
+                    // is no long tail of unlikely quiet moves to skim past.
+                    if in_check {
+                        r -= 1024;
+                    }
                     // No table move means the ordering here is guesswork, so
                     // the tail of the list is worth even less than usual.
-                    if tt_move.is_null() {
+                    if tt_move.is_null() && excluded.is_null() {
+                        r += 1024;
+                    }
+                    // The best move the table knows takes something. A quiet
+                    // move is unlikely to be the refutation of a position whose
+                    // point is material.
+                    if tt_capture && !noisy {
                         r += 1024;
                     }
                     // Moves with a good history are reduced less, and vice
@@ -1044,7 +1179,11 @@ impl Searcher {
                 }
                 let rd = new_depth - (r >> 10);
 
-                score = -self.negamax(pos, rd, -alpha - 1, -alpha, ply + 1, true, false);
+                // Only a search that was actually reduced is a search we
+                // expect to fail high cheaply; an unreduced scout is just this
+                // node's expectation, flipped.
+                let child_cut = if rd < new_depth { true } else { !cut_node };
+                score = -self.negamax(pos, rd, -alpha - 1, -alpha, ply + 1, child_cut, false);
                 if score > alpha && rd < new_depth {
                     // The reduction was wrong; verify at full depth.
                     score = -self.negamax(pos, new_depth, -alpha - 1, -alpha, ply + 1, !cut_node, false);
@@ -1065,6 +1204,17 @@ impl Searcher {
                     best_move = m;
                     alpha = score;
                     bound = BOUND_EXACT;
+                    if root {
+                        // Committed the moment it is proved. `go` only copies
+                        // the principal variation out after a *completed*
+                        // iteration, so a search abandoned on the clock or on
+                        // the node budget threw away a root move it had already
+                        // shown to be better than the one it then played.
+                        // Excluded moves never reach the root, so this cannot
+                        // commit a move the caller asked to skip.
+                        self.best = m;
+                        self.best_score = score;
+                    }
                     if pv_node {
                         self.update_pv(ply, m);
                     }
@@ -1258,6 +1408,7 @@ impl Searcher {
         let stm = pos.stm;
         let prev = if ply > 0 { self.stack[ply - 1].piece_to } else { NO_PIECE_TO };
         let prev2 = if ply > 1 { self.stack[ply - 2].piece_to } else { NO_PIECE_TO };
+        let prev4 = if ply > 3 { self.stack[ply - 4].piece_to } else { NO_PIECE_TO };
         let counter =
             if prev != NO_PIECE_TO { self.counter[(prev - 1) / 64][(prev - 1) % 64] } else { Move::NULL };
 
@@ -1297,6 +1448,9 @@ impl Searcher {
                 if prev2 != NO_PIECE_TO {
                     s += cont(self.id)[1][prev2][idx] as i32;
                 }
+                if prev4 != NO_PIECE_TO {
+                    s += cont(self.id)[2][prev4][idx] as i32;
+                }
                 s
             };
         }
@@ -1319,6 +1473,9 @@ impl Searcher {
         if ply > 1 && self.stack[ply - 2].piece_to != NO_PIECE_TO {
             s += cont(self.id)[1][self.stack[ply - 2].piece_to][idx] as i32;
         }
+        if ply > 3 && self.stack[ply - 4].piece_to != NO_PIECE_TO {
+            s += cont(self.id)[2][self.stack[ply - 4].piece_to][idx] as i32;
+        }
         s.clamp(-16_384, 16_384) as i16
     }
 
@@ -1327,7 +1484,11 @@ impl Searcher {
     #[inline(always)]
     fn gravity(v: &mut i16, bonus: i32) {
         const MAX_HIST: i32 = 16_384;
-        let b = bonus.clamp(-1200, 1200);
+        // Asymmetric, because the two directions carry different amounts of
+        // information: one move was proved good here, and every move ahead of
+        // it was merely not tried far enough to fail. The clamp has to be wide
+        // enough for the two formulas below to differ at all.
+        let b = bonus.clamp(-2400, 1500);
         let cur = *v as i32;
         *v = (cur + b - cur * b.abs() / MAX_HIST) as i16;
     }
@@ -1350,6 +1511,12 @@ impl Searcher {
                 Self::gravity(&mut cont(self.id)[1][p][idx], bonus);
             }
         }
+        if ply > 3 {
+            let p = self.stack[ply - 4].piece_to;
+            if p != NO_PIECE_TO {
+                Self::gravity(&mut cont(self.id)[2][p][idx], bonus);
+            }
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1363,8 +1530,8 @@ impl Searcher {
         noisy: &Tried,
         best_is_noisy: bool,
     ) {
-        let bonus = (155 * depth - 80).clamp(0, 1200);
-        let malus = -bonus;
+        let bonus = (155 * depth - 80).clamp(0, 1500);
+        let malus = -(430 * depth - 180).clamp(0, 2400);
 
         if best_is_noisy {
             let to = best.to();
@@ -1477,16 +1644,16 @@ pub fn go_threaded(pos: &mut Position, out: &mut Out, threads: usize) {
         p.store(0, Ordering::Relaxed);
     }
 
-    let main = searcher_at(0);
-    main.threads = n;
-    main.start_depth = 0;
+    let (limits, overhead) = {
+        let main = searcher_at(0);
+        main.threads = n;
+        main.start_depth = 0;
+        (main.limits, main.move_overhead)
+    };
     if n == 1 {
-        main.go(pos, out);
+        searcher_at(0).go(pos, out);
         return;
     }
-
-    let limits = main.limits;
-    let overhead = main.move_overhead;
     let mut handles: [Option<sys::Thread>; MAX_THREADS] = [None; MAX_THREADS];
     for (i, h) in handles.iter_mut().enumerate().take(n).skip(1) {
         let dst = helper_pos(i);

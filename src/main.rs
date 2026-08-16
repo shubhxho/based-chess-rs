@@ -50,5 +50,11 @@ pub fn init() {
     bb::init();
     pos::init_zobrist();
     net::init();
-    search::searcher().init_tables();
+    // Every search thread has its own reduction table and its own copy of the
+    // defaults the array initialiser had to leave zero.
+    for i in 0..search::MAX_THREADS {
+        let s = search::searcher_at(i);
+        s.init_defaults(i);
+        s.init_tables();
+    }
 }

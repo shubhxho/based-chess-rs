@@ -5,6 +5,10 @@
 /data_new
 /data_r2
 /data_relabel
+# Shards relabelled by an outside teacher, and the symlink farm that selects
+# which of them to relabel. Both are derived from /data.
+/data_sf
+/data_src_sf
 *.npz
 .DS_Store
 __pycache__/

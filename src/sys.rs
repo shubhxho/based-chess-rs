@@ -1,11 +1,28 @@
 //! Raw Darwin/arm64 kernel interface.
 //!
-//! Every kernel entry here is a hand-written `svc #0x80`. Nothing in this file
-//! calls libc; libSystem is linked only because Mach-O requires it for the
-//! process entry stub.
+//! Every kernel entry here is a hand-written `svc #0x80`, with one deliberate
+//! exception described below. libSystem is linked because Mach-O requires it
+//! for the process entry stub.
 //!
 //! arm64 Darwin convention: args in x0..x5, BSD syscall number in x16,
 //! carry flag set on error with the errno in x0.
+//!
+//! ## The exception: threads
+//!
+//! Creating a thread is the one thing that cannot honestly be done with a raw
+//! trap. `bsdthread_create` is not a self-contained syscall — the kernel hands
+//! the new thread to a *userspace* trampoline whose address has to be
+//! registered first with `bsdthread_register`, and that trampoline, the thread
+//! self pointer it installs, and the stack and guard-page layout it expects are
+//! all private contracts inside libsystem_pthread that Apple changes between
+//! releases. Reimplementing them here would be copying an ABI that is not
+//! promised to anyone rather than calling a kernel that is.
+//!
+//! So the four `pthread_*` symbols below are taken from the libSystem that is
+//! already on the link line. That is a real weakening of the constraint the
+//! rest of this file keeps, and it is written down rather than glossed: the
+//! engine is no longer free of libc calls, it is free of libc calls except for
+//! starting and joining threads.
 
 use core::arch::asm;
 
@@ -157,9 +174,66 @@ pub fn readable(fd: i32) -> bool {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Threads
+// ---------------------------------------------------------------------------
+
+extern "C" {
+    fn pthread_create(
+        thread: *mut *mut u8,
+        attr: *const u8,
+        start: extern "C" fn(*mut u8) -> *mut u8,
+        arg: *mut u8,
+    ) -> i32;
+    fn pthread_join(thread: *mut u8, value: *mut *mut u8) -> i32;
+    fn pthread_attr_init(attr: *mut u8) -> i32;
+    fn pthread_attr_setstacksize(attr: *mut u8, size: usize) -> i32;
+}
+
+/// `pthread_attr_t` on Darwin is a signature word plus 56 opaque bytes.
+#[repr(C, align(8))]
+struct Attr([u8; 64]);
+
+/// Search threads recurse to `MAX_PLY`. The per-ply move lists live in statics
+/// rather than on the stack, so the frames are small, but Darwin's 512 KB
+/// default for a non-main thread is close enough to the edge to be worth
+/// buying room away from.
+const STACK_BYTES: usize = 8 << 20;
+
+#[derive(Clone, Copy)]
+pub struct Thread(*mut u8);
+
+/// Start `f(arg)` on a new thread. `None` if the thread could not be created,
+/// which the caller should treat as "carry on with one fewer".
+pub fn spawn(f: extern "C" fn(*mut u8) -> *mut u8, arg: *mut u8) -> Option<Thread> {
+    let mut attr = Attr([0; 64]);
+    let mut t: *mut u8 = core::ptr::null_mut();
+    unsafe {
+        if pthread_attr_init(attr.0.as_mut_ptr()) != 0 {
+            return None;
+        }
+        pthread_attr_setstacksize(attr.0.as_mut_ptr(), STACK_BYTES);
+        if pthread_create(&mut t, attr.0.as_ptr(), f, arg) != 0 {
+            return None;
+        }
+    }
+    Some(Thread(t))
+}
+
+pub fn join(t: Thread) {
+    unsafe {
+        pthread_join(t.0, core::ptr::null_mut());
+    }
+}
+
 /// `static mut` with the unsafety made explicit and the aliasing rules left to
-/// the caller. The engine is single-threaded; every table below is written once
-/// during init and read-only thereafter.
+/// the caller.
+///
+/// Everything reached through this is either written once during init and
+/// read-only thereafter, or indexed by search-thread id so that no two threads
+/// ever touch the same bytes. The two things that genuinely are shared between
+/// threads — the transposition table and the evaluation cache — do not go
+/// through here; they are built out of atomics.
 #[repr(transparent)]
 pub struct SyncCell<T>(core::cell::UnsafeCell<T>);
 unsafe impl<T> Sync for SyncCell<T> {}
