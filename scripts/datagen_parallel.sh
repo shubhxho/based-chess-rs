@@ -24,14 +24,11 @@ if [[ "$START" == "auto" ]]; then
   for f in "$OUT"/aug_sp_*.txt; do
     [[ -f "$f" ]] || continue
     base=$(basename "$f" .txt)
-    if [[ "$base" =~ ^aug_sp_([0-9]+)$ ]]; then
-      idx=${BASH_REMATCH[1]}
-      idx=$((10#$idx))
-      if (( idx >= START )); then
-        # Next wave starts after the highest full or partial shard.
-        if (( idx + 1 > START )); then
-          START=$((idx + 1))
-        fi
+    # Only zero-padded 5-digit indices (aug_sp_00016). Ignore pilots like 10000.
+    if [[ "$base" =~ ^aug_sp_(0[0-9]{4})$ ]]; then
+      idx=$((10#${BASH_REMATCH[1]}))
+      if (( idx + 1 > START )); then
+        START=$((idx + 1))
       fi
     fi
   done

@@ -21,7 +21,7 @@ run_prepare() {
 }
 
 run_gate() {
-  bash scripts/ml_cycle.sh 30 400 25
+  bash scripts/ml_cycle.sh 25 400 25
 }
 
 if [[ "$MODE" == "bg" ]]; then
