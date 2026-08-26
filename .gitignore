@@ -15,3 +15,6 @@ __pycache__/
 *.pyc
 # Comparison binaries built by the arena workflow.
 sable-*
+data/
+net-lichess-pilot.bin
+*.bak*
