@@ -354,6 +354,24 @@ def main():
     # run select a named corpus without copying it into the self-play folder.
     data_glob = os.environ.get("DATA_GLOB", "aug*.txt")
     shards = sorted(glob.glob(os.path.join(data_dir, data_glob)))
+    min_shard = int(os.environ.get("MIN_SHARD", "0"))
+    if min_shard:
+        kept = []
+        for path in shards:
+            base = os.path.basename(path)
+            # aug_sp_00012.txt → 12; other names pass through unchanged.
+            if base.startswith("aug_sp_") and len(base) >= 13:
+                try:
+                    if int(base[7:12]) < min_shard:
+                        continue
+                except ValueError:
+                    pass
+            kept.append(path)
+        if not kept:
+            raise SystemExit(f"MIN_SHARD={min_shard} removed every shard under {data_dir}/{data_glob}")
+        if len(kept) < len(shards):
+            print(f"  MIN_SHARD={min_shard}: {len(shards)} → {len(kept)} shards", flush=True)
+        shards = kept
     if not shards:
         raise SystemExit(f"no training shards matching {data_dir}/{data_glob}")
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else None

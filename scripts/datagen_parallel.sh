@@ -6,17 +6,36 @@
 # whether a net trained on them is allowed to replace shipping weights.
 #
 # usage: scripts/datagen_parallel.sh [positions_per_shard] [nodes] [n_shards] [start_index]
-# defaults: 200000  6000  4  2
+#   start_index omitted → auto (max existing aug_sp index + 1)
+# defaults: 200000  6000  4  auto
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 POS=${1:-200000}
 NODES=${2:-6000}
 N=${3:-4}
-START=${4:-2}
+START=${4:-auto}
 OUT="$ROOT/data/selfplay"
 BIN="$ROOT/target/release/sable"
 LOG=/tmp/sable-datagen
+
+if [[ "$START" == "auto" ]]; then
+  START=0
+  for f in "$OUT"/aug_sp_*.txt; do
+    [[ -f "$f" ]] || continue
+    base=$(basename "$f" .txt)
+    if [[ "$base" =~ ^aug_sp_([0-9]+)$ ]]; then
+      idx=${BASH_REMATCH[1]}
+      idx=$((10#$idx))
+      if (( idx >= START )); then
+        # Next wave starts after the highest full or partial shard.
+        if (( idx + 1 > START )); then
+          START=$((idx + 1))
+        fi
+      fi
+    fi
+  done
+fi
 
 mkdir -p "$OUT"
 cargo build --release --manifest-path "$ROOT/Cargo.toml" -q
