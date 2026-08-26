@@ -47,15 +47,7 @@ impl Limits {
     /// and `u64::MAX` would otherwise be half a megabyte of the binary image.
     /// Every entry point sets real limits before searching.
     pub const fn zeroed() -> Limits {
-        Limits {
-            depth: 0,
-            nodes: 0,
-            movetime: 0,
-            time: [0, 0],
-            inc: [0, 0],
-            movestogo: 0,
-            infinite: false,
-        }
+        Limits { depth: 0, nodes: 0, movetime: 0, time: [0, 0], inc: [0, 0], movestogo: 0, infinite: false }
     }
 
     pub const fn new() -> Limits {
@@ -277,8 +269,7 @@ const CORR_MAX: i32 = CORR_GRAIN * 48;
 const CORR_CLAMP: i32 = 72;
 static CORR_PAWN: SyncCell<[[[i32; CORR_N]; 2]; MAX_THREADS]> =
     SyncCell::new([[[0; CORR_N]; 2]; MAX_THREADS]);
-static CORR_NP: SyncCell<[[[i32; CORR_N]; 2]; MAX_THREADS]> =
-    SyncCell::new([[[0; CORR_N]; 2]; MAX_THREADS]);
+static CORR_NP: SyncCell<[[[i32; CORR_N]; 2]; MAX_THREADS]> = SyncCell::new([[[0; CORR_N]; 2]; MAX_THREADS]);
 static CORR_CONT: SyncCell<[[[i32; CONT_N]; 2]; MAX_THREADS]> =
     SyncCell::new([[[0; CONT_N]; 2]; MAX_THREADS]);
 
@@ -589,7 +580,10 @@ impl Searcher {
         let first = if self.start_depth > 0 { self.start_depth.min(max_depth) } else { 1 };
         for depth in first..=max_depth {
             self.root_depth = depth;
-            let mut delta = 10 + (score * score) / 12_000;
+            // Keep the window width on the same scale as every other margin so
+            // a louder network (MARGIN > 100) does not get an aspiration that
+            // still assumes the quiet shipping eval.
+            let mut delta = margin(10) + (score * score) / 12_000;
             let (mut alpha, mut beta) =
                 if depth < 4 { (-INF, INF) } else { ((score - delta).max(-INF), (score + delta).min(INF)) };
             let mut cur = depth;
@@ -989,7 +983,9 @@ impl Searcher {
             let to = m.to();
             let moved = pc_index(pos.stm, pos.piece_at(from) as usize);
 
-            if skip_quiets && !noisy && !m.is_promo() {
+            // Promotions are noisy, so this already keeps them when skip_quiets
+            // trips; the old explicit promo carve-out was dead weight.
+            if skip_quiets && !noisy {
                 continue;
             }
 
@@ -1033,11 +1029,9 @@ impl Searcher {
                     // Only for captures that leave the king alone -- a check is
                     // worth searching whatever it costs.
                     if lmr_depth < 7 && !gives_check(pos, m) {
-                        let gain = if m.is_ep() {
-                            SEE_VAL[PAWN_P]
-                        } else {
-                            SEE_VAL[pos.piece_at(to) as usize]
-                        } + if m.is_promo() { SEE_VAL[m.promo()] - SEE_VAL[PAWN_P] } else { 0 };
+                        let gain =
+                            if m.is_ep() { SEE_VAL[PAWN_P] } else { SEE_VAL[pos.piece_at(to) as usize] }
+                                + if m.is_promo() { SEE_VAL[m.promo()] - SEE_VAL[PAWN_P] } else { 0 };
                         if eval + margin(200) + margin(240) * lmr_depth + gain <= alpha {
                             continue;
                         }
@@ -1320,6 +1314,55 @@ impl Searcher {
             }
         }
 
+        let mut best_move = Move::NULL;
+        let mut bound = BOUND_UPPER;
+
+        // A quiet table move is searched too. The threats that decide a horizon
+        // position are usually exactly such moves -- a threat that has already
+        // been proved elsewhere sits in the table, and a captures-only search
+        // never sees it coming. Collisions can hold anything, so the move is
+        // trusted only as far as it agrees with the board and then proved legal
+        // by being made; a castle needs whole-board context no cheap check
+        // covers, so it simply keeps out of the way.
+        if !in_check && !tt_move.is_null() && !pos_is_noisy(pos, tt_move) && !tt_move.is_castle() {
+            let us = pos.stm;
+            let from = tt_move.from();
+            let to = tt_move.to();
+            let plausible = pos.color[us] & bit(from) != 0
+                && pos.piece_at(from) != NONE
+                && pos.piece_at(to) == NONE
+                && (!tt_move.is_ep() || pos.ep == to as u8);
+            if plausible {
+                pos.make(tt_move);
+                let legal = !pos.attacked_by(pos.stm, pos.king_sq(us), pos.occ());
+                if legal {
+                    let score = -self.qsearch(pos, -beta, -alpha, ply + 1, pv_node);
+                    pos.unmake(tt_move);
+                    if self.stop {
+                        return 0;
+                    }
+                    // Fail-soft: raise `best` even when still below alpha so a
+                    // quiet threat that improves the stand-pat is not discarded
+                    // from the returned score. Alpha and the tt move only move
+                    // when the threat actually raises the bound.
+                    if score > best {
+                        best = score;
+                        if score > alpha {
+                            alpha = score;
+                            best_move = tt_move;
+                            bound = BOUND_EXACT;
+                            if score >= beta {
+                                tt().store(pos.key, best_move, best, raw_eval, 0, BOUND_LOWER, ply);
+                                return best;
+                            }
+                        }
+                    }
+                } else {
+                    pos.unmake(tt_move);
+                }
+            }
+        }
+
         let list = list_at(self.id, ply, false);
         generate(pos, list, if in_check { GenKind::All } else { GenKind::Noisy });
         if list.n == 0 {
@@ -1335,8 +1378,6 @@ impl Searcher {
             self.score_moves::<0>(pos, list, tt_move, ply);
         }
 
-        let mut best_move = Move::NULL;
-        let mut bound = BOUND_UPPER;
         for i in 0..list.n {
             let m = list.pick(i);
             if !in_check {
@@ -1355,7 +1396,7 @@ impl Searcher {
                 // alpha, so the whole branch is pointless.
                 let gain = if m.is_ep() { SEE_VAL[PAWN_P] } else { SEE_VAL[pos.piece_at(m.to()) as usize] }
                     + if m.is_promo() { SEE_VAL[m.promo()] - SEE_VAL[PAWN_P] } else { 0 };
-                if stand + gain + 150 < alpha {
+                if stand + gain + margin(150) < alpha {
                     continue;
                 }
                 // The tt move and queen promotions are scored by what they
@@ -1697,7 +1738,9 @@ pub fn pc_index(c: usize, pt: usize) -> usize {
 #[inline(always)]
 fn pos_is_noisy(pos: &Position, m: Move) -> bool {
     let _ = pos;
-    m.is_capture() || m.is_ep()
+    // A non-capturing promotion changes material by almost a queen. Treating
+    // it as quiet lets LMP/futility/history pruning discard it before search.
+    m.is_capture() || m.is_ep() || m.is_promo()
 }
 
 /// Static exchange evaluation, as a threshold test: "is the material outcome

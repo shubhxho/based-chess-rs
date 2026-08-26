@@ -39,9 +39,10 @@ that there is always more work than workers.
 
 import multiprocessing as mp
 import os
+import select
 import subprocess
 import sys
-import threading
+import time
 
 # `datagen` recorded nothing past 2000, treating anything beyond it as decided,
 # so labels stay inside the same box the rest of the corpus lives in.
@@ -57,6 +58,36 @@ SF = os.environ.get("SF", "stockfish")
 HASH = os.environ.get("SF_HASH", "64")
 GO = b"go nodes " + NODES.encode() if NODES else b"go depth " + DEPTH.encode()
 LABEL_LIMIT = f"nodes {NODES}" if NODES else f"depth {DEPTH}"
+UCI_TIMEOUT = float(os.environ.get("SF_TIMEOUT", "120"))
+
+
+def read_uci_line(proc, context):
+    """Read one engine line with a bounded wait and useful crash diagnostics."""
+    ready, _, _ = select.select([proc.stdout], [], [], UCI_TIMEOUT)
+    if not ready:
+        proc.kill()
+        raise SystemExit(f"Stockfish timeout while {context} ({UCI_TIMEOUT:g}s)")
+    raw = proc.stdout.readline()
+    if not raw:
+        raise SystemExit(f"Stockfish exited while {context} (status {proc.poll()})")
+    return raw
+
+
+def wait_for(proc, token, context):
+    deadline = time.monotonic() + UCI_TIMEOUT
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            proc.kill()
+            raise SystemExit(f"Stockfish timeout waiting for {token!r} while {context}")
+        ready, _, _ = select.select([proc.stdout], [], [], remaining)
+        if not ready:
+            continue
+        raw = proc.stdout.readline()
+        if not raw:
+            raise SystemExit(f"Stockfish exited while {context} (status {proc.poll()})")
+        if raw.startswith(token):
+            return raw
 
 
 def relabel_chunk(job):
@@ -94,43 +125,48 @@ def relabel_chunk(job):
     todo = [i for i, p in enumerate(parsed) if p is not None]
 
     p = subprocess.Popen(
-        [SF], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=1 << 20
+        [SF], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1 << 20
     )
-    p.stdin.write(
-        b"uci\n"
-        b"setoption name Threads value 1\n"
-        b"setoption name Hash value " + HASH.encode() + b"\n"
-        b"isready\n"
-    )
-    p.stdin.flush()
-    while not p.stdout.readline().startswith(b"readyok"):
-        pass
+    try:
+        # UCI `go` is not pipeline-safe: engines poll stdin while searching,
+        # so a later position or quit command may stop the active search.
+        # Send exactly one request and consume its bestmove before the next.
+        p.stdin.write(b"uci\n")
+        p.stdin.flush()
+        wait_for(p, b"uciok", "initialising UCI")
+        p.stdin.write(
+            b"setoption name Threads value 1\n"
+            b"setoption name Hash value " + HASH.encode() + b"\n"
+            b"setoption name MultiPV value 1\n"
+            b"isready\n"
+        )
+        p.stdin.flush()
+        wait_for(p, b"readyok", "configuring engine")
 
-    def feed():
-        """Queue every position up front. Stockfish executes UCI commands in
-        order, so the whole file can sit in the pipe and neither side blocks."""
-        w = p.stdin
+        # One exact score per valid input is a data-integrity requirement. A
+        # missing/aspiration-bound score must fail the slice, never preserve a
+        # stale weak label silently.
+        out = []
         for i in todo:
-            w.write(b"position fen " + parsed[i][0] + b"\n" + GO + b"\n")
-        w.write(b"quit\n")
-        w.flush()
-        w.close()
-
-    t = threading.Thread(target=feed, daemon=True)
-    t.start()
-
-    # One `bestmove` per position, and the last `info` line before it carries
-    # the deepest score. `lowerbound`/`upperbound` lines are aspiration-window
-    # failures whose score is a bound rather than a value, so they are skipped.
-    out = []
-    last = None
-    for raw in p.stdout:
-        if raw.startswith(b"info ") and b" score " in raw and b"bound" not in raw:
-            last = raw
-        elif raw.startswith(b"bestmove"):
-            out.append(last)
+            p.stdin.write(b"position fen " + parsed[i][0] + b"\n" + GO + b"\n")
+            p.stdin.flush()
             last = None
-    p.wait()
+            while True:
+                raw = read_uci_line(p, f"labelling position {i}")
+                if raw.startswith(b"info ") and b" score " in raw and b"bound" not in raw:
+                    last = raw
+                elif raw.startswith(b"bestmove"):
+                    if last is None:
+                        raise SystemExit(f"{src}[{lo}:{hi}]: no exact score for input line {lo + i}")
+                    out.append(last)
+                    break
+        p.stdin.write(b"quit\n")
+        p.stdin.flush()
+        p.wait(timeout=UCI_TIMEOUT)
+    finally:
+        if p.poll() is None:
+            p.kill()
+            p.wait()
 
     if len(out) != len(todo):
         raise SystemExit(f"{src}[{lo}:{hi}]: {len(out)} answers for {len(todo)} positions")

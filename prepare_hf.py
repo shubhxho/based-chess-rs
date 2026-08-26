@@ -49,7 +49,7 @@ def canonical_fen(fen):
 
 def sample_key(fen, seed):
     """Stable key for deterministic sampling independent of stream ordering."""
-    return int.from_bytes(hashlib.blake2b((seed + "\\0" + fen).encode(), digest_size=8).digest(), "big")
+    return int.from_bytes(hashlib.blake2b((seed + "\0" + fen).encode(), digest_size=8).digest(), "big")
 
 
 def main():
@@ -88,7 +88,7 @@ def main():
         "filters": "valid standard FEN, no mate, quiet non-promotion PV move, not in check",
         "dedupe_rule": "first retained canonical FEN wins in stream order",
     })
-    (out_dir / "hf_source.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\\n")
+    (out_dir / "hf_source.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
     stream = load_dataset(args.dataset, revision=args.revision, split=args.split, streaming=True)
     seen = set() if args.dedupe == "memory" else None
@@ -97,28 +97,30 @@ def main():
     out = None
 
     def open_shard():
-        nonlocal shard_no, rows_in_shard, out
-        final = out_dir / f"aug_hf_{shard_no:05d}.txt"
-        while final.exists():
+        nonlocal shard_no, rows_in_shard, out, final
+        candidate = out_dir / f"aug_hf_{shard_no:05d}.txt"
+        while candidate.exists() or Path(str(candidate) + ".tmp").exists():
             shard_no += 1
-            final = out_dir / f"aug_hf_{shard_no:05d}.txt"
-        out = open(str(final) + ".tmp", "wb")
+            candidate = out_dir / f"aug_hf_{shard_no:05d}.txt"
+        out = open(str(candidate) + ".tmp", "wb")
         rows_in_shard = 0
-        return final
+        final = candidate
+        return candidate
 
-    final = open_shard()
+    final = None
+    open_shard()
 
     def emit(fen, cp):
-        nonlocal final, shard_no, rows_in_shard, kept, out
+        nonlocal shard_no, rows_in_shard, kept, out
         # cp is White POV, precisely the convention read_labels expects on disk.
-        out.write(fen.encode() + b" | " + str(cp).encode() + b" | 1\\n")
+        out.write(fen.encode() + b" | " + str(cp).encode() + b" | 1\n")
         kept += 1
         rows_in_shard += 1
         if rows_in_shard >= args.shard_size:
             out.close()
             os.replace(str(final) + ".tmp", final)
             shard_no += 1
-            final = open_shard()
+            open_shard()
 
     try:
         for source_index, row in enumerate(stream):
@@ -158,15 +160,18 @@ def main():
             if kept and kept % 100_000 == 0:
                 print(f"rows {scanned:,}; kept {kept:,}; dropped {dropped}", flush=True)
     finally:
-        if out is not None:
+        if out is not None and not out.closed:
             out.close()
-            if rows_in_shard:
-                os.replace(str(final) + ".tmp", final)
-            else:
-                os.unlink(str(final) + ".tmp")
+        if final is not None:
+            tmp = Path(str(final) + ".tmp")
+            if tmp.exists():
+                if rows_in_shard:
+                    os.replace(tmp, final)
+                else:
+                    tmp.unlink()
 
     manifest.update({"scanned_rows": scanned, "emitted_positions": kept, "dropped": dropped})
-    (out_dir / "hf_source.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\\n")
+    (out_dir / "hf_source.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     print(f"wrote {kept:,} positions from {scanned:,} streamed rows; dropped {dropped}")
 
 

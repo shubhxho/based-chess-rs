@@ -212,13 +212,17 @@ pub fn generate(pos: &Position, list: &mut MoveList, kind: GenKind) {
         if pos.ep != 64 {
             let epsq = pos.ep as usize;
             let cap_sq = if us == WHITE { epsq - 8 } else { epsq + 8 };
-            let mut from_bb = pawn_attacks(them, epsq) & pawns;
-            while from_bb != 0 {
-                let from = pop_lsb(&mut from_bb);
-                let after = (occ ^ bit(from) ^ bit(cap_sq)) | bit(epsq);
-                let enemy_after = enemy ^ bit(cap_sq);
-                if !attacked_with(pos, them, ksq, after, enemy_after) {
-                    list.push(Move::new(from, epsq, F_EP));
+            // Defend against malformed FEN state as well as normal positions:
+            // an en-passant move may only remove an actual opposing pawn.
+            if pos.pieces(them, PAWN_P) & bit(cap_sq) != 0 {
+                let mut from_bb = pawn_attacks(them, epsq) & pawns;
+                while from_bb != 0 {
+                    let from = pop_lsb(&mut from_bb);
+                    let after = (occ ^ bit(from) ^ bit(cap_sq)) | bit(epsq);
+                    let enemy_after = enemy ^ bit(cap_sq);
+                    if !attacked_with(pos, them, ksq, after, enemy_after) {
+                        list.push(Move::new(from, epsq, F_EP));
+                    }
                 }
             }
         }
@@ -266,6 +270,8 @@ pub fn generate(pos: &Position, list: &mut MoveList, kind: GenKind) {
             (BK, BQ, 60usize, 61usize, 62usize, 59usize, 58usize, 57usize)
         };
         if pos.castle & kc != 0
+            && pos.pieces(us, KING_P) & bit(e) != 0
+            && pos.pieces(us, ROOK_P) & bit(if us == WHITE { 7 } else { 63 }) != 0
             && occ & (bit(f) | bit(g)) == 0
             && !pos.attacked_by(them, f, occ)
             && !pos.attacked_by(them, g, occ)
@@ -273,6 +279,8 @@ pub fn generate(pos: &Position, list: &mut MoveList, kind: GenKind) {
             list.push(Move::new(e, g, F_KCASTLE));
         }
         if pos.castle & qc != 0
+            && pos.pieces(us, KING_P) & bit(e) != 0
+            && pos.pieces(us, ROOK_P) & bit(if us == WHITE { 0 } else { 56 }) != 0
             && occ & (bit(d) | bit(c) | bit(b_sq)) == 0
             && !pos.attacked_by(them, d, occ)
             && !pos.attacked_by(them, c, occ)
@@ -323,7 +331,9 @@ pub fn gives_check(pos: &Position, m: Move) -> bool {
     let ksq = pos.king_sq(them);
     let from = m.from();
     let to = m.to();
-    let mut occ = pos.occ() ^ bit(from) ^ bit(to);
+    // After a capture `to` is still occupied by the mover. XORing it out
+    // makes a captured blocker vanish and can create a false discovered check.
+    let mut occ = (pos.occ() ^ bit(from)) | bit(to);
     let pt = if m.is_promo() { m.promo() } else { pos.piece_at(from) as usize };
 
     // Direct check.

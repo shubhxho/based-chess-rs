@@ -569,10 +569,13 @@ impl Position {
     // -----------------------------------------------------------------------
 
     pub fn set_startpos(&mut self) {
-        self.set_fen(b"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        let _ = self.set_fen(b"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     }
 
-    pub fn set_fen(&mut self, fen: &[u8]) {
+    /// Parse a standard FEN. Returns false before any king-dependent lookup
+    /// when the board is unusable; callers that accept untrusted UCI input can
+    /// then retain their previous legal position rather than crash on it.
+    pub fn set_fen(&mut self, fen: &[u8]) -> bool {
         self.piece = [0; 6];
         self.color = [0; 2];
         self.mailbox = [NONE; 64];
@@ -660,6 +663,42 @@ impl Position {
         }
         self.halfmove = hm;
 
+        // `king_sq()` is used by check detection and indexes attack tables;
+        // do not let an empty or multi-king side reach it from malformed UCI.
+        if popcount(self.pieces(WHITE, KING_P)) != 1 || popcount(self.pieces(BLACK, KING_P)) != 1 {
+            return false;
+        }
+
+        // FEN castling and en-passant fields are claims, not authority. Remove
+        // rights that cannot possibly be exercised so generated moves never
+        // manufacture a rook/pawn on malformed input.
+        if self.pieces(WHITE, KING_P) & bit(4) == 0 {
+            self.castle &= !(WK | WQ);
+        }
+        if self.pieces(BLACK, KING_P) & bit(60) == 0 {
+            self.castle &= !(BK | BQ);
+        }
+        if self.pieces(WHITE, ROOK_P) & bit(7) == 0 {
+            self.castle &= !WK;
+        }
+        if self.pieces(WHITE, ROOK_P) & bit(0) == 0 {
+            self.castle &= !WQ;
+        }
+        if self.pieces(BLACK, ROOK_P) & bit(63) == 0 {
+            self.castle &= !BK;
+        }
+        if self.pieces(BLACK, ROOK_P) & bit(56) == 0 {
+            self.castle &= !BQ;
+        }
+        if self.ep != 64 {
+            let ep = self.ep as usize;
+            let victim = if self.stm == WHITE { ep - 8 } else { ep + 8 };
+            let expected_rank = if self.stm == WHITE { 5 } else { 2 };
+            if rank_of(ep) != expected_rank || self.pieces(self.stm ^ 1, PAWN_P) & bit(victim) == 0 {
+                self.ep = 64;
+            }
+        }
+
         if self.stm == BLACK {
             self.key ^= zob().side;
         }
@@ -670,6 +709,7 @@ impl Position {
         self.compute_checkers();
         self.hist[0] = self.key;
         self.hist_len = 1;
+        true
     }
 }
 

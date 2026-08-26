@@ -70,19 +70,30 @@ pub fn interrupted() -> bool {
         return true;
     }
     i.fill(false);
-    // Only look at bytes that have arrived since the last scan, and only at the
-    // start of a line: a command is a line, and matching mid-line would let any
-    // input that happens to contain the word abort a search.
+    // Scan complete lines only.  Advancing through a partial `sto` would
+    // otherwise make the later `p\n` invisible: it is no longer at a line
+    // start when it arrives.  Holding the scan pointer at the partial line is
+    // cheap because this path runs only after poll says stdin is readable.
     while i.scanned < i.len {
-        let s = i.scanned;
-        if s == 0 || i.buf[s - 1] == b'\n' {
-            let rest = &i.buf[s..i.len];
-            if rest.starts_with(b"stop") || rest.starts_with(b"quit") {
-                i.stop = true;
-                return true;
-            }
+        let start = i.scanned;
+        if start != 0 && i.buf[start - 1] != b'\n' {
+            i.scanned += 1;
+            continue;
         }
-        i.scanned += 1;
+        let Some(end) = i.buf[start..i.len].iter().position(|&c| c == b'\n') else {
+            break;
+        };
+        // GUIs may send CRLF; strip the carriage return before the command
+        // compare so `stop\r` is not silently ignored mid-search.
+        let mut line = &i.buf[start..start + end];
+        if line.last() == Some(&b'\r') {
+            line = &line[..line.len().saturating_sub(1)];
+        }
+        if line == b"stop" || line == b"quit" {
+            i.stop = true;
+            return true;
+        }
+        i.scanned = start + end + 1;
     }
     false
 }
@@ -260,7 +271,7 @@ fn bench(depth: i32, out: &mut Out) {
         tt().clear();
         s.clear();
         let p = position();
-        p.set_fen(fen);
+        let _ = p.set_fen(fen); // fixed internal benchmark positions
         s.limits = Limits::new();
         s.limits.depth = depth;
         s.go(p, out);
@@ -370,7 +381,10 @@ pub fn run() -> ! {
                                 }
                             }
                         }
-                        p.set_fen(&fen[..n]);
+                        let mut candidate = p.clone();
+                        if candidate.set_fen(&fen[..n]) {
+                            *p = candidate;
+                        }
                         let save = t.i;
                         if t.next() != Some(b"moves") {
                             t.i = save;
@@ -460,7 +474,11 @@ pub fn run() -> ! {
                         return;
                     }
                     let p = position();
-                    p.set_fen(&body[..fen_end]);
+                    let mut candidate = p.clone();
+                    if !candidate.set_fen(&body[..fen_end]) {
+                        return;
+                    }
+                    *p = candidate;
                     let s = searcher();
                     s.limits = Limits::new();
                     s.limits.nodes = nodes;
@@ -513,7 +531,11 @@ pub fn run() -> ! {
                         return;
                     }
                     let p = position();
-                    p.set_fen(line);
+                    let mut candidate = p.clone();
+                    if !candidate.set_fen(line) {
+                        return;
+                    }
+                    *p = candidate;
                     // One pass for both perspectives: they describe the same
                     // board and only the index arithmetic differs.
                     let mut us = [0u16; MAX_F];

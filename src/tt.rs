@@ -217,7 +217,13 @@ impl Tt {
         // orders better than nothing.
         let keep = if mv.is_null() && same { d_mv(slot_data) } else { mv.0 };
         if !same || bound == BOUND_EXACT || depth + 4 > d_depth(slot_data) {
-            let data = pack(keep, to_tt(score, ply), eval.clamp(-32_000, 32_000), depth.clamp(-8, 127), (self.gen << 2) | bound);
+            let data = pack(
+                keep,
+                to_tt(score, ply),
+                eval.clamp(-32_000, 32_000),
+                depth.clamp(-8, 127),
+                (self.gen << 2) | bound,
+            );
             let e = unsafe { &*c.add(slot) };
             // Data first, then the key that authenticates it. A reader that
             // catches the pair mid-write sees a key that does not reconstruct
