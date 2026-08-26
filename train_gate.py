@@ -81,7 +81,15 @@ def main():
     else:
         if not SHIP_BAK.exists():
             raise SystemExit(f"--skip-train needs an existing {SHIP_BAK}")
-        shutil.copy2(NET, CAND_BAK)
+        # After a reject, net.bin is shipping again while net-candidate.bin still
+        # holds the trainee. Copying NET→CAND would wipe that trainee and arena
+        # shipping against itself.
+        if CAND_BAK.exists():
+            shutil.copy2(CAND_BAK, NET)
+            print(f"reloaded candidate from {CAND_BAK}", flush=True)
+        else:
+            shutil.copy2(NET, CAND_BAK)
+            print(f"no prior candidate; treating current net.bin as candidate", flush=True)
 
     # Candidate binary (current net.bin) vs shipping binary (restored weights).
     run(["cargo", "build", "--release"], cwd=ROOT)
