@@ -1,4 +1,4 @@
-# Sable
+# Neutron-o1
 
 A chess engine written in Rust. It plays UCI, evaluates positions with a 60 KB
 neural network, and that network was trained on games the engine played against
