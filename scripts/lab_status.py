@@ -41,6 +41,14 @@ def count_lines(path: Path) -> int:
         return 0
 
 
+def shard_effective_lines(path: Path) -> tuple[int, int, int]:
+    """Return (effective, on_disk, tmp_lines) for a shard file."""
+    on_disk = count_lines(path)
+    tmp = Path(str(path) + ".tmp")
+    tmp_lines = count_lines(tmp) if tmp.exists() else 0
+    return max(on_disk, tmp_lines), on_disk, tmp_lines
+
+
 def list_sp_shards() -> list[dict]:
     wave = datagen_wave()
     wave_target = int(wave.get("positions_per_shard", DEFAULT_TARGET)) if wave else DEFAULT_TARGET
@@ -52,7 +60,7 @@ def list_sp_shards() -> list[dict]:
         idx = shard_index(path.name)
         if idx is None:
             continue
-        lines = count_lines(path)
+        lines, on_disk, tmp_lines = shard_effective_lines(path)
         target = wave_target if idx in wave_indices or not wave_indices else DEFAULT_TARGET
         if wave and wave.get("active_shards"):
             for ws in wave["active_shards"]:
@@ -63,9 +71,12 @@ def list_sp_shards() -> list[dict]:
             "name": path.name,
             "index": idx,
             "lines": lines,
+            "on_disk": on_disk,
+            "tmp_lines": tmp_lines,
             "target": target,
             "pct": min(100, int(100 * lines / target)) if target else 0,
-            "done": lines >= target,
+            "done": on_disk >= target,
+            "running": tmp_lines > 0 and on_disk < target,
         })
     return shards
 
@@ -169,7 +180,9 @@ def collect() -> dict:
     if wave and wave.get("active_shards") and wave.get("phase") == "running":
         active = wave["active_shards"]
     else:
-        active = [s for s in shards if not s["done"]][-4:]
+        active = [s for s in shards if s.get("running") or (not s["done"] and s["lines"] > 0)][-6:]
+        if not active:
+            active = [s for s in shards if not s["done"]][-4:]
     done_n = sum(1 for s in shards if s["done"])
     partial_n = sum(1 for s in shards if 0 < s["lines"] < s["target"])
     return {

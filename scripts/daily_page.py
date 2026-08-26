@@ -326,8 +326,8 @@ def main() -> None:
     </section>
     <section class="panel cmds">
       <div class="label">Commands</div>
+      <code>scripts/run_all.sh</code>
       <code>scripts/lab.sh all</code>
-      <code>scripts/lab_supervisor.sh</code>
       <code>scripts/datagen_daemon.sh</code>
       <code>DATA_DIR=data/lichess-sf EVAL_W=1 python train.py …</code>
       <code>scripts/ml_cycle.sh 35 400 25</code>

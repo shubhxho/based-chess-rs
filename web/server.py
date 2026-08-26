@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -18,6 +19,24 @@ from lab_status import collect  # noqa: E402
 
 ENGINE = os.path.join(ROOT, "..", "target", "release", "sable")
 PORT = 8375
+DAILY_SCRIPT = os.path.join(ROOT, "..", "scripts", "daily_page.py")
+
+
+def refresh_daily_loop():
+    while True:
+        time.sleep(60)
+        try:
+            subprocess.run(
+                [sys.executable, DAILY_SCRIPT],
+                cwd=os.path.join(ROOT, ".."),
+                check=False,
+                timeout=45,
+            )
+        except Exception:
+            pass
+
+
+threading.Thread(target=refresh_daily_loop, daemon=True).start()
 
 lock = threading.Lock()
 proc = None
