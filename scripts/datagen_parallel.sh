@@ -30,8 +30,9 @@ for ((k=0; k<N; k++)); do
   err=$(printf '%s_%05d.err' "$LOG" "$i")
   printf 'datagen %s %s %s\nquit\n' "$POS" "$NODES" "$seed" \
     | "$BIN" >"$shard" 2>"$err" &
-  pids+=($!)
-  echo "  pid ${pids[-1]} -> $shard (seed $seed)"
+  pid=$!
+  pids+=("$pid")
+  echo "  pid $pid -> $shard (seed $seed)"
 done
 
 fail=0
