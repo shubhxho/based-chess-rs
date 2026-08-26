@@ -87,6 +87,15 @@ def main():
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    existing = sorted(out_dir.glob("aug_hf_*.txt"))
+    if existing and args.skip_rows <= 0:
+        print(
+            f"warning: {len(existing)} existing shards in {out_dir}; "
+            f"--skip-rows 0 will re-stream from the start and mostly emit duplicates. "
+            f"Continue from the prior absolute offset "
+            f"(last run's skip_rows + scanned_rows in hf_source.json).",
+            flush=True,
+        )
     # Concurrent prepares race on shard numbers and rewrite identical FENs into
     # parallel files. An exclusive lock makes the second process fail fast.
     lock_path = out_dir / ".prepare_hf.lock"
@@ -217,6 +226,12 @@ def main():
                     os.replace(tmp, final)
                 else:
                     tmp.unlink()
+        # Drop the FEN set and stream before process teardown. Keeping millions of
+        # strings alive into interpreter shutdown is what triggers the post-write
+        # "zsh: killed" OOM after an otherwise successful run.
+        if seen is not None:
+            seen.clear()
+        del stream
         release_lock()
 
     manifest.update({
@@ -226,7 +241,11 @@ def main():
         "absolute_skip_rows": args.skip_rows,
     })
     (out_dir / "hf_source.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
-    print(f"wrote {kept:,} positions from {scanned:,} streamed rows; dropped {dropped}")
+    print(f"wrote {kept:,} positions from {scanned:,} streamed rows; dropped {dropped}", flush=True)
+    # Hard-exit after a successful write: atexit GC of HF/dataset internals has
+    # been OOM-killing this process even though every shard is already on disk.
+    release_lock()
+    os._exit(0)
 
 
 if __name__ == "__main__":

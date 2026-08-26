@@ -53,7 +53,8 @@ def main():
     p.add_argument("--games", type=int, default=200)
     p.add_argument("--nodes", type=int, default=20_000)
     p.add_argument("--concurrency", type=int, default=4)
-    p.add_argument("--min-elo", type=float, default=10.0, help="ship only if arena Elo >= this")
+    p.add_argument("--min-elo", type=float, default=25.0,
+                   help="ship only if arena Elo >= this (default 25; short matches are noisy below ~20)")
     p.add_argument("--skip-train", action="store_true", help="arena an already-written net.bin")
     args = p.parse_args()
 
