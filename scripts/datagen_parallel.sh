@@ -7,12 +7,12 @@
 #
 # usage: scripts/datagen_parallel.sh [positions_per_shard] [nodes] [n_shards] [start_index]
 #   start_index omitted → auto (max existing aug_sp index + 1)
-# defaults: 200000  6000  4  auto
+# defaults: 200000  8000  4  auto  (higher nodes = stronger teacher labels)
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 POS=${1:-200000}
-NODES=${2:-6000}
+NODES=${2:-8000}
 N=${3:-4}
 START=${4:-auto}
 OUT="$ROOT/data/selfplay"

@@ -12,7 +12,7 @@ python3 scripts/daily_page.py
 echo "=== daily page refreshed ==="
 
 run_datagen() {
-  bash scripts/datagen_parallel.sh 150000 6000 4 auto
+  bash scripts/datagen_parallel.sh 200000 8000 4 auto
 }
 
 run_prepare() {
@@ -21,7 +21,7 @@ run_prepare() {
 }
 
 run_gate() {
-  bash scripts/ml_cycle.sh 25 400 25
+  bash scripts/ml_cycle.sh 30 400 25
 }
 
 if [[ "$MODE" == "bg" ]]; then
