@@ -1,0 +1,13 @@
+{
+  "when": "2026-08-26T21:16:23+00:00",
+  "elo": 3.5,
+  "min_elo": 25.0,
+  "games": 400,
+  "nodes": 20000,
+  "epochs": 20,
+  "data_dir": "data/selfplay",
+  "data_glob": "aug_sp_*.txt",
+  "eval_w": "0.9",
+  "out_scale": "0.70",
+  "shipped": false
+}

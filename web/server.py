@@ -89,6 +89,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(404, b"generate with scripts/daily_page.py")
             with open(path, "rb") as f:
                 self._send(200, f.read(), "text/html; charset=utf-8")
+        elif self.path == "/gate_last.json":
+            path = os.path.join(ROOT, "gate_last.json")
+            if not os.path.isfile(path):
+                return self._send(404, b"{}")
+            with open(path, "rb") as f:
+                self._send(200, f.read(), "application/json")
         elif self.path == "/api/meta":
             with lock:
                 engine()

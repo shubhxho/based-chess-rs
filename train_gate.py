@@ -18,6 +18,8 @@ Example:
 from __future__ import annotations
 
 import argparse
+import datetime as dt
+import json
 import os
 import shutil
 import subprocess
@@ -121,6 +123,23 @@ def main():
         sys.stderr.write(arena.stderr)
     elo = parse_arena_elo(arena.stdout)
     print(f"\ngate: Elo {elo:+.1f} vs shipping (threshold {args.min_elo:+.1f})", flush=True)
+
+    report = {
+        "when": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
+        "elo": elo,
+        "min_elo": args.min_elo,
+        "games": args.games,
+        "nodes": args.nodes,
+        "epochs": args.epochs,
+        "data_dir": os.environ.get("DATA_DIR", "data"),
+        "data_glob": os.environ.get("DATA_GLOB", "aug*.txt"),
+        "eval_w": os.environ.get("EVAL_W", "0.9"),
+        "out_scale": os.environ.get("OUT_SCALE", "0.70"),
+        "shipped": elo >= args.min_elo,
+    }
+    report_path = ROOT / "web" / "gate_last.json"
+    report_path.write_text(json.dumps(report, indent=2) + "\n")
+    print(f"wrote {report_path.relative_to(ROOT)}", flush=True)
 
     if elo >= args.min_elo:
         shutil.copy2(CAND_BAK, NET)
