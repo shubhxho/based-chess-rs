@@ -11,6 +11,8 @@ up front.
 A safe pilot:
     uv pip install -r requirements-training.txt
     python prepare_hf.py data/lichess-sf --max-positions 200000
+    # later runs:
+    python prepare_hf.py data/lichess-sf --max-positions 300000 --resume
     DATA_DIR=data/lichess-sf DATA_GLOB='aug_hf_*.txt' EVAL_W=1 python train.py 0 20
 
 For a full run omit --max-positions, but materialise a bounded, deduplicated
@@ -71,10 +73,20 @@ def main():
     p.add_argument("--max-cp", type=int, default=2000)
     p.add_argument("--max-positions", type=int, default=10_000_000, help="0 means no cap")
     p.add_argument("--skip-rows", type=int, default=0, help="restart offset in the streamed source")
+    p.add_argument(
+        "--resume",
+        action="store_true",
+        help="set --skip-rows from hf_source.json (absolute_skip_rows + scanned_rows)",
+    )
     p.add_argument("--shard-size", type=int, default=250_000)
     p.add_argument("--dedupe", choices=("none", "memory"), default="memory")
     p.add_argument("--sample-mod", type=int, default=1, help="keep rows whose stable hash mod N is zero")
     p.add_argument("--seed", default="sable-lichess-sf-v1")
+    p.add_argument(
+        "--allow-restart",
+        action="store_true",
+        help="permit --skip-rows 0 when aug_hf_*.txt already exist (usually a mistake)",
+    )
     args = p.parse_args()
     if args.min_depth < 1 or args.max_cp < 1 or args.shard_size < 1 or args.sample_mod < 1:
         p.error("limits must be positive")
@@ -88,13 +100,22 @@ def main():
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     existing = sorted(out_dir.glob("aug_hf_*.txt"))
-    if existing and args.skip_rows <= 0:
-        print(
-            f"warning: {len(existing)} existing shards in {out_dir}; "
-            f"--skip-rows 0 will re-stream from the start and mostly emit duplicates. "
-            f"Continue from the prior absolute offset "
-            f"(last run's skip_rows + scanned_rows in hf_source.json).",
-            flush=True,
+    manifest_path = out_dir / "hf_source.json"
+
+    if args.resume:
+        if not manifest_path.exists():
+            raise SystemExit(f"--resume needs {manifest_path}")
+        prev = json.loads(manifest_path.read_text())
+        base = int(prev.get("absolute_skip_rows", prev.get("skip_rows", 0)) or 0)
+        scanned = int(prev.get("scanned_rows", 0) or 0)
+        args.skip_rows = base + scanned
+        print(f"resume: skip-rows={args.skip_rows:,} (base {base:,} + scanned {scanned:,})", flush=True)
+
+    if existing and args.skip_rows <= 0 and not args.allow_restart:
+        raise SystemExit(
+            f"{len(existing)} shards already in {out_dir}; refusing --skip-rows 0 "
+            f"(re-streaming from the start mostly emits duplicates). "
+            f"Use --resume, or pass an explicit --skip-rows, or --allow-restart."
         )
     # Concurrent prepares race on shard numbers and rewrite identical FENs into
     # parallel files. An exclusive lock makes the second process fail fast.
