@@ -55,14 +55,14 @@
 
   <section class="panel">
     <div class="label">Snapshot</div>
-    <table><tr><th>Generated</th><td>2026-08-27 03:08 IST</td></tr>
+    <table><tr><th>Generated</th><td>2026-08-27 03:18 IST</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>14c5475 Harden SP training: decay, early stop, stale-lock recovery, ml_cycle gate.</td></tr>
+<tr><th>HEAD</th><td>27572b5 Surface the last train_gate Elo on the daily page.</td></tr>
 <tr><th>Tree</th><td>dirty</td></tr>
-<tr><th>Self-play shards</th><td>9 files · 1,340,153 positions</td></tr>
-<tr><th>Lichess shards</th><td>29 files · 6,600,000 positions</td></tr>
+<tr><th>Self-play shards</th><td>13 files · 1,603,777 positions</td></tr>
+<tr><th>Lichess shards</th><td>30 files · 6,850,000 positions</td></tr>
 <tr><th>Lichess --resume skip</th><td>15,705,844</td></tr>
-<tr><th>Last gate</th><td>REJECTED  Elo +3.5 (need +25) · 400g @ 20000n · 2026-08-26T21:16:23+00:00</td></tr>
+<tr><th>Last gate</th><td>REJECTED  Elo +19.1 (need +25) · 400g @ 20000n · 2026-08-27T03:15:07+05:30</td></tr>
 <tr><th>net.bin</th><td>present</td></tr>
 <tr><th>train_gate</th><td>yes</td></tr>
 <tr><th>presearch_ab</th><td>yes</td></tr></table>
@@ -70,12 +70,12 @@
 
   <section class="panel">
     <div class="label">Last gate</div>
-    <table><tr><th>Result</th><td>REJECTED</td></tr><tr><th>Elo</th><td>+3.5 ± arena</td></tr><tr><th>Threshold</th><td>+25.0</td></tr><tr><th>Games / nodes</th><td>400 / 20000</td></tr><tr><th>Data</th><td>data/selfplay/aug_sp_*.txt</td></tr><tr><th>EVAL_W / OUT_SCALE</th><td>0.9 / 0.70</td></tr><tr><th>When</th><td>2026-08-26T21:16:23+00:00</td></tr></table>
+    <table><tr><th>Result</th><td>REJECTED</td></tr><tr><th>Elo</th><td>+19.1 ± arena</td></tr><tr><th>Threshold</th><td>+25.0</td></tr><tr><th>Games / nodes</th><td>400 / 20000</td></tr><tr><th>Data</th><td>data/selfplay/aug_sp_*.txt</td></tr><tr><th>EVAL_W / OUT_SCALE</th><td>0.9 / 0.70</td></tr><tr><th>When</th><td>2026-08-27T03:15:07+05:30</td></tr></table>
   </section>
 
   <section class="panel">
     <div class="label">Live workers</div>
-    <ul><li><code>6612 bash scripts/datagen_parallel.sh 150000 6000 4 12</code></li></ul>
+    <ul><li><code>6612 bash scripts/datagen_parallel.sh 150000 6000 4 12</code></li><li><code>6787 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 500000 --resume</code></li><li><code>6867 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>6871 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>6875 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>6879 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li></ul>
   </section>
 
   <section class="panel cmds">
