@@ -42,7 +42,12 @@ def canonical_fen(fen):
     """Validate and canonicalise a standard chess FEN to six fields."""
     import chess
 
-    board = chess.Board(fen)
+    try:
+        board = chess.Board(fen)
+    except ValueError:
+        # Malformed or empty FENs show up in the stream; the caller already
+        # counts a None return as a fen drop rather than aborting the run.
+        return None, None
     if board.is_valid() and board.chess960 is False:
         return board, board.fen(en_passant="fen")
     return None, None
