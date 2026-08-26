@@ -28,10 +28,26 @@ import hashlib
 import json
 import os
 import signal
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 DEFAULT_DATASET = "Lichess/chess-position-evaluations"
 DEFAULT_REVISION = "abb8f0b1251f89295a35b5ac801cb08a873812de"
+SKIP_PROGRESS = 250_000  # print + status file every N source rows while skipping
+
+# Shard line format matches src/datagen.rs: `FEN | score | result`.
+# Result codes are from the side-to-move's perspective: 0=loss, 1=draw, 2=win.
+# Lichess rows have no game outcome — we emit RESULT_DRAW so train.py maps wdl
+# to 0.5.  With EVAL_W=1 the result is ignored; with EVAL_W<1 it stays neutral
+# instead of biasing toward win/loss.
+RESULT_DRAW = 1
+ROW_FORMAT = "FEN | cp_white | result"
+ROW_FORMAT_NOTE = (
+    "result=1 is a neutral draw placeholder (wdl=0.5); the Stockfish cp label "
+    "is the teacher. Train Lichess shards with EVAL_W=1."
+)
 
 
 def first_pv_move(line):
@@ -65,6 +81,35 @@ def sample_key(fen, seed):
 def fen_digest(fen):
     """Compact in-memory dedupe key. Full FEN strings OOMed long runs on exit."""
     return hashlib.blake2b(fen.encode(), digest_size=8).digest()
+
+
+def seed_seen_from_shards(out_dir: Path) -> set[bytes]:
+    """Reload FEN digests from on-disk shards so --resume cannot rewrite duplicates."""
+    seen: set[bytes] = set()
+    paths = sorted(out_dir.glob("aug_hf_*.txt"))
+    t0 = time.time()
+    for i, path in enumerate(paths, 1):
+        n_before = len(seen)
+        try:
+            with path.open("rb") as fh:
+                for raw in fh:
+                    fen = raw.split(b" | ", 1)[0]
+                    if fen:
+                        seen.add(fen_digest(fen.decode()))
+        except OSError as exc:
+            print(f"warn: could not seed dedupe from {path.name}: {exc}", flush=True)
+        added = len(seen) - n_before
+        if i == len(paths) or i % 5 == 0:
+            print(
+                f"dedupe seed {i}/{len(paths)} shards · {len(seen):,} keys (+{added:,} from {path.name}) · {int(time.time()-t0)}s",
+                flush=True,
+            )
+    return seen
+
+
+def format_row(fen: str, cp_white: int, result: int = RESULT_DRAW) -> bytes:
+    """One training line: canonical FEN, white POV centipawns, result code."""
+    return f"{fen} | {cp_white} | {result}\n".encode()
 
 
 def main():
@@ -121,9 +166,22 @@ def main():
             raise SystemExit(f"--resume needs {manifest_path}")
         prev = json.loads(manifest_path.read_text())
         base = int(prev.get("absolute_skip_rows", prev.get("skip_rows", 0)) or 0)
-        scanned = int(prev.get("scanned_rows", 0) or 0)
-        args.skip_rows = base + scanned
-        print(f"resume: skip-rows={args.skip_rows:,} (base {base:,} + scanned {scanned:,})", flush=True)
+        prev_scanned = int(prev.get("scanned_rows", 0) or 0)
+        args.skip_rows = base + prev_scanned
+        for key in ("stream_row",):
+            row = int(prev.get(key, 0) or 0)
+            if row > args.skip_rows:
+                args.skip_rows = row
+        status_path_early = out_dir / "prepare_status.json"
+        if status_path_early.exists():
+            try:
+                s = json.loads(status_path_early.read_text())
+                row = int(s.get("stream_row", 0) or 0)
+                if row > args.skip_rows:
+                    args.skip_rows = row
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
+        print(f"resume: skip-rows={args.skip_rows:,} (base {base:,} + scanned {prev_scanned:,})", flush=True)
 
     if existing and args.skip_rows <= 0 and not args.allow_restart:
         raise SystemExit(
@@ -205,26 +263,30 @@ def main():
     manifest.update({
         "license": "CC0-1.0 (verify the current dataset card before redistribution)",
         "score_pov": "white",
-        "result": "neutral dummy draw; train score-only data with EVAL_W=1",
+        "row_format": ROW_FORMAT,
+        "result_code": RESULT_DRAW,
+        "result_meaning": "draw placeholder (wdl=0.5); no game was played",
+        "train_hint": "EVAL_W=1 — score-only teacher; result column is inert",
+        "row_format_note": ROW_FORMAT_NOTE,
         "filters": "valid standard FEN, no mate, quiet non-promotion PV move, not in check",
         "dedupe_rule": "first retained blake2b-64 FEN digest wins in stream order",
         "dedupe_key": "blake2b-64",
     })
     (out_dir / "hf_source.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
-    stream = load_dataset(args.dataset, revision=args.revision, split=args.split, streaming=True)
-    # Skipping in the stream API avoids materialising millions of discarded
-    # rows in the Python loop (which is what made long --skip-rows runs look
-    # wedged and then get OOM-killed on the way out).
-    if args.skip_rows:
-        print(f"skipping {args.skip_rows:,} source rows via stream.skip …", flush=True)
-        stream = stream.skip(args.skip_rows)
-        print("skip complete; filtering positions", flush=True)
-    seen = set() if args.dedupe == "memory" else None
+    seen = seed_seen_from_shards(out_dir) if args.resume and args.dedupe == "memory" else (
+        set() if args.dedupe == "memory" else None
+    )
+    if seen:
+        print(f"resume: seeded {len(seen):,} FEN digests from existing shards", flush=True)
     shard_no, rows_in_shard, kept, scanned = 0, 0, 0, 0
     dropped = {"depth": 0, "score": 0, "fen": 0, "tactical": 0, "duplicate": 0, "sample": 0}
     out = None
     final = None
+    stream_row = 0
+    status_path = out_dir / "prepare_status.json"
+    skip_target = args.skip_rows
+    t0 = time.time()
 
     def open_shard():
         nonlocal shard_no, rows_in_shard, out, final
@@ -239,10 +301,45 @@ def main():
 
     open_shard()
 
+    def write_prepare_status(phase: str, row: int, kept_now: int = 0):
+        scanned_now = max(0, row - skip_target) if row > skip_target else 0
+        keep_rate = round(100 * kept_now / scanned_now, 2) if scanned_now else 0.0
+        status_path.write_text(
+            json.dumps(
+                {
+                    "phase": phase,
+                    "stream_row": row,
+                    "skip_target": skip_target,
+                    "kept": kept_now,
+                    "scanned": scanned_now,
+                    "keep_rate_pct": keep_rate,
+                    "dropped": dropped,
+                    "max_positions": args.max_positions,
+                    "row_format": ROW_FORMAT,
+                    "result_code": RESULT_DRAW,
+                    "when": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    "elapsed_s": int(time.time() - t0),
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+
+    def checkpoint_manifest(phase: str = "running"):
+        partial = manifest.copy()
+        partial.update({
+            "phase": phase,
+            "scanned_rows": scanned,
+            "emitted_positions": kept,
+            "dropped": dropped,
+            "absolute_skip_rows": args.skip_rows,
+            "stream_row": stream_row,
+        })
+        manifest_path.write_text(json.dumps(partial, indent=2, sort_keys=True) + "\n")
+
     def emit(fen, cp):
         nonlocal shard_no, rows_in_shard, kept, out
-        # cp is White POV, precisely the convention read_labels expects on disk.
-        out.write(fen.encode() + b" | " + str(cp).encode() + b" | 1\n")
+        out.write(format_row(fen, cp))
         kept += 1
         rows_in_shard += 1
         if rows_in_shard >= args.shard_size:
@@ -251,8 +348,36 @@ def main():
             shard_no += 1
             open_shard()
 
+    stream = load_dataset(args.dataset, revision=args.revision, split=args.split, streaming=True)
+    # Inline skip in the read loop (not stream.skip): HF's lazy skip gives zero
+    # progress for tens of millions of rows and looks wedged/OOM-prone on exit.
+    if args.skip_rows:
+        print(
+            f"skipping {args.skip_rows:,} source rows inline (progress every {SKIP_PROGRESS:,}) …",
+            flush=True,
+        )
+        write_prepare_status("skipping", 0)
+
     try:
         for row in stream:
+            stream_row += 1
+            if stream_row <= args.skip_rows:
+                if stream_row == 1 or stream_row % SKIP_PROGRESS == 0:
+                    pct = int(100 * stream_row / max(1, args.skip_rows))
+                    elapsed = int(time.time() - t0)
+                    print(
+                        f"skip {stream_row:,}/{args.skip_rows:,} ({pct}%) · {elapsed}s",
+                        flush=True,
+                    )
+                    write_prepare_status("skipping", stream_row)
+                    checkpoint_manifest("skipping")
+                continue
+            if stream_row == args.skip_rows + 1:
+                print(
+                    f"skip done ({args.skip_rows:,} rows in {int(time.time()-t0)}s); filtering",
+                    flush=True,
+                )
+                write_prepare_status("filtering", stream_row, kept)
             scanned += 1
             if args.max_positions and kept >= args.max_positions:
                 break
@@ -287,6 +412,8 @@ def main():
             emit(fen, int(cp))
             if kept and kept % 100_000 == 0:
                 print(f"rows {scanned:,}; kept {kept:,}; dropped {dropped}", flush=True)
+                write_prepare_status("filtering", stream_row, kept)
+                checkpoint_manifest("filtering")
     finally:
         if out is not None and not out.closed:
             out.close()
@@ -306,14 +433,26 @@ def main():
         release_lock()
 
     manifest.update({
+        "phase": "done",
         "scanned_rows": scanned,
         "emitted_positions": kept,
         "dropped": dropped,
         "absolute_skip_rows": args.skip_rows,
+        "stream_row": stream_row,
     })
     (out_dir / "hf_source.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    write_prepare_status("done", stream_row, kept)
     print(f"wrote {kept:,} positions from {scanned:,} streamed rows; dropped {dropped}", flush=True)
     print("exit ok (hard exit — shards already on disk; ignore any prior zsh:killed noise)", flush=True)
+    try:
+        subprocess.run(
+            [sys.executable, str(Path(__file__).resolve().parent / "scripts" / "daily_page.py")],
+            cwd=Path(__file__).resolve().parent,
+            check=False,
+            timeout=30,
+        )
+    except Exception:
+        pass
     # Hard-exit after a successful write: atexit GC of HF/dataset internals has
     # been OOM-killing this process even though every shard is already on disk.
     release_lock()

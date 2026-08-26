@@ -99,7 +99,7 @@ def read_labels(paths, limit):
                     continue
                 try:
                     score = int(parts[1])
-                    result = int(parts[2])
+                    result = int(parts[2])  # 0/1/2 from mover POV; HF uses 1=draw placeholder
                 except ValueError:
                     continue          # shard truncated mid-line
                 fen = parts[0].strip()

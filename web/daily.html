@@ -3,91 +3,222 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sable — daily</title>
+<title>Sable — lab daily</title>
 <style>
   :root {
-    --bg: #131110; --panel: #1c1917; --line: #2c2724;
-    --ink: #e8e0d2; --amber: #e0a458; --dim: #9b8f83;
-    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+    --bg: #0f0e0c; --panel: #1a1816; --panel2: #141210;
+    --line: #2e2a26; --ink: #ece4d6; --amber: #e4a855;
+    --green: #7cb87c; --red: #d47272; --dim: #9a8f82;
+    --mono: "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
+    --sans: "IBM Plex Sans", system-ui, sans-serif;
   }
   @media (prefers-color-scheme: light) {
-    :root { --bg: #f4f1ea; --panel: #fffdf8; --line: #ddd5c7;
-      --ink: #2a2420; --dim: #6f6459; --amber: #a86a1c; }
+    :root { --bg: #f6f2ea; --panel: #fffdf9; --panel2: #f0ebe3;
+      --line: #ddd4c8; --ink: #2a2420; --dim: #6f6459; --amber: #a86a1c; }
   }
   * { box-sizing: border-box; margin: 0; }
-  body { background: var(--bg); color: var(--ink); font-family: var(--mono);
-    font-size: 14px; min-height: 100vh; padding: 32px 20px; }
-  main { max-width: 720px; margin: 0 auto; }
-  h1 { font-size: 15px; letter-spacing: .16em; font-weight: 600; }
+  body { background: var(--bg); color: var(--ink);
+    font-family: var(--mono); font-size: 13px; min-height: 100vh; }
+  .top { border-bottom: 1px solid var(--line); padding: 20px 24px;
+    display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  h1 { font-size: 13px; letter-spacing: .2em; font-weight: 600; }
   h1 span { color: var(--amber); }
-  .sub { color: var(--dim); font-size: 12px; margin: 8px 0 28px; line-height: 1.5; }
-  .panel { background: var(--panel); border: 1px solid var(--line);
-    padding: 16px 18px; margin-bottom: 16px; }
+  .live { font-size: 11px; color: var(--dim); }
+  .live b { color: var(--green); font-weight: 500; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 20px 48px; }
+  .grid { display: grid; gap: 16px; }
+  @media (min-width: 720px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .tile { background: var(--panel2); border: 1px solid var(--line); padding: 14px 16px; }
+  .tile .n { font-size: 22px; font-weight: 600; color: var(--amber); line-height: 1.1; }
+  .tile .l { font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--dim); margin-top: 6px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); padding: 18px 20px; }
   .label { color: var(--dim); font-size: 10px; letter-spacing: .22em;
-    text-transform: uppercase; margin-bottom: 12px; }
+    text-transform: uppercase; margin-bottom: 14px; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 8px 0; border-bottom: 1px solid var(--line); }
-  th { color: var(--dim); font-weight: 500; width: 38%; }
+  th, td { text-align: left; padding: 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 500; width: 36%; font-size: 12px; }
+  table.mini th { width: 28%; font-size: 11px; }
+  table.mini caption { text-align: left; margin-bottom: 8px; font-size: 11px; }
   code, .dim { color: var(--dim); font-size: 12px; }
-  ul { padding-left: 18px; } li { margin: 6px 0; }
-  a { color: var(--amber); }
-  .cmds code { display: block; padding: 10px 12px; margin: 8px 0;
-    border: 1px solid var(--line); white-space: pre-wrap; }
-  .bar-row { display: grid; grid-template-columns: 88px 1fr 100px; gap: 10px;
-    align-items: center; margin: 8px 0; font-size: 11px; }
-  .bar { height: 8px; background: var(--line); overflow: hidden; }
-  .bar i { display: block; height: 100%; background: var(--amber); }
-  .gate-bar { height: 10px; background: var(--line); margin: 12px 0 6px; }
-  .gate-fill { height: 100%; background: var(--amber); max-width: 100%; }
+  code { font-family: var(--mono); }
+  ul { padding-left: 18px; } li { margin: 5px 0; word-break: break-all; }
+  a { color: var(--amber); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .cmds code { display: block; padding: 10px 12px; margin: 6px 0;
+    border: 1px solid var(--line); background: var(--panel2); white-space: pre-wrap; }
+  .bar-row { display: grid; grid-template-columns: 72px 1fr 110px; gap: 10px;
+    align-items: center; margin: 10px 0; font-size: 11px; }
+  .bar-label { color: var(--dim); }
+  .bar { height: 9px; background: var(--line); overflow: hidden; border-radius: 1px; }
+  .bar i { display: block; height: 100%; background: var(--amber); transition: width .4s ease; }
+  .bar-skip i { background: #6a8fad; }
+  .bar-keep i { background: var(--amber); }
+  .bar-num { color: var(--dim); text-align: right; font-size: 10px; }
+  .gate-bar { height: 11px; background: var(--line); margin: 12px 0 8px; border-radius: 1px; }
+  .gate-fill { height: 100%; background: linear-gradient(90deg, var(--amber), var(--green));
+    max-width: 100%; transition: width .4s ease; }
+  .callout { margin-top: 14px; padding: 12px 14px; background: var(--panel2);
+    border-left: 3px solid var(--amber); }
+  .callout-title { font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--dim); margin-bottom: 8px; }
+  .callout code { display: block; margin: 6px 0; color: var(--ink); }
+  .foot { margin-top: 28px; font-size: 12px; color: var(--dim); }
 </style>
 </head>
 <body>
-<main>
+<header class="top">
   <h1>SABLE <span>LAB</span></h1>
-  <p class="sub">Auto-refreshes every 30s. <code>scripts/lab.sh all</code> = UI + datagen + Lichess.</p>
+  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T04:00:44</span></p>
+</header>
+<main>
+  <div class="tiles">
+    <div class="tile"><div class="n" id="t-sp">1,490,665</div><div class="l">Self-play lines</div></div>
+    <div class="tile"><div class="n" id="t-hf">7,750,531</div><div class="l">Lichess positions</div></div>
+    <div class="tile"><div class="n" id="t-gate">+18.3</div><div class="l">Last gate Elo</div></div>
+    <div class="tile"><div class="n">+25</div><div class="l">Ship threshold</div></div>
+  </div>
 
-  <section class="panel">
-    <div class="label">Snapshot</div>
-    <table><tr><th>Generated</th><td>2026-08-27 03:44 IST</td></tr>
+  <div class="grid grid-2">
+    <section class="panel">
+      <div class="label">Gate</div>
+      <div class='gate-bar'><div id='gate-fill' class='gate-fill' style='width:73%'></div></div><p class='dim'>Arena must clear +25 Elo before <code>net.bin</code> ships.</p>
+      <div id="gate-panel"><table><tr><th>Result</th><td><span id='gate-result'>REJECTED</span></td></tr><tr><th>Elo</th><td><span id='gate-elo'>+18.3</span> ± arena</td></tr><tr><th>Threshold</th><td>+25</td></tr><tr><th>Best so far</th><td>+19.1 (1.34M SP, EVAL_W=0.9)</td></tr><tr><th>Games / nodes</th><td>400 / 20000</td></tr><tr><th>Epochs</th><td>35</td></tr><tr><th>When</th><td>2026-08-27T03:43:06+05:30</td></tr></table></div>
+    </section>
+    <section class="panel">
+      <div class="label">Snapshot</div>
+      <table><tr><th>Generated</th><td>2026-08-27 04:00 IST</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>4960e3a Upgrade the lab: datagen progress, daemon mode, and live daily board.</td></tr>
-<tr><th>Tree</th><td>clean / synced</td></tr>
-<tr><th>Self-play</th><td>16 shards · 2,340,436 lines</td></tr>
-<tr><th>Lichess</th><td>33 shards · 7,600,000 lines</td></tr>
-<tr><th>Lichess skip</th><td>21,357,076</td></tr>
+<tr><th>HEAD</th><td>0c04f57 Refresh daily lab board with live datagen shard progress.</td></tr>
+<tr><th>Tree</th><td>dirty</td></tr>
+<tr><th>Self-play</th><td>20 shards · 1,490,665 lines</td></tr>
+<tr><th>Lichess HF</th><td>34 shards · 7,750,531 lines</td></tr>
+<tr><th>Lichess cursor</th><td>12,669,721</td></tr>
 <tr><th>Last gate</th><td>REJECTED  Elo +18.3 (need +25) · 2026-08-27T03:43:06+05:30</td></tr></table>
+    </section>
+  </div>
+
+  <section class="panel" style="margin-top:16px">
+    <div class="label">Lichess HF prepare</div>
+    <div id="lichess"><table class='meta'><tr><th>Phase</th><td><b id='lf-phase'>idle</b></td></tr><tr><th>Corpus</th><td><span id='lf-corpus'>34 shards · 7,750,531 positions</span></td></tr><tr><th>Stream cursor</th><td><span id='lf-cursor'>12,669,721</span></td></tr></table><div class='callout' id='lf-format'><div class='callout-title'>Row format</div><code>FEN | cp_white | result</code><p class='dim'>result=<b>1</b> draw placeholder (wdl=0.5) — no game was played. Train with <code>EVAL_W=1 — score-only teacher; result column is inert</code> so the Stockfish cp label is the only teacher.</p></div></div>
   </section>
 
-  <section class="panel">
-    <div class="label">Gate (+25 to ship)</div>
-    <div class='gate-bar'><div class='gate-fill' style='width:73%'></div></div><p class='dim'>Gate progress toward +25 Elo (not shipped until bar clears threshold)</p>
-    <table><tr><th>Result</th><td>REJECTED</td></tr><tr><th>Elo</th><td>+18.3 ± arena</td></tr><tr><th>Threshold</th><td>+25.0</td></tr><tr><th>Best so far</th><td>+19.1 (1.34M SP)</td></tr><tr><th>Games / nodes</th><td>400 / 20000</td></tr><tr><th>Epochs</th><td>35</td></tr><tr><th>When</th><td>2026-08-27T03:43:06+05:30</td></tr></table>
+  <section class="panel" style="margin-top:16px">
+    <div class="label">Self-play datagen</div>
+    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [0,8,9,10] · 200000@8000n · 4 done · 16 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:2%'></i></div><span class='bar-num' id='dg-wave-num'>22,470/800,000</span></div><div class='bar-row' data-shard='aug_sp_00000.txt'><span class='bar-label'>aug_sp_00000.txt</span><div class='bar'><i style='width:2%'></i></div><span class='bar-num'>5,542/200,000</span></div>
+<div class='bar-row' data-shard='aug_sp_00008.txt'><span class='bar-label'>aug_sp_00008.txt</span><div class='bar'><i style='width:2%'></i></div><span class='bar-num'>5,725/200,000</span></div>
+<div class='bar-row' data-shard='aug_sp_00009.txt'><span class='bar-label'>aug_sp_00009.txt</span><div class='bar'><i style='width:2%'></i></div><span class='bar-num'>5,667/200,000</span></div>
+<div class='bar-row' data-shard='aug_sp_00010.txt'><span class='bar-label'>aug_sp_00010.txt</span><div class='bar'><i style='width:2%'></i></div><span class='bar-num'>5,536/200,000</span></div></div>
   </section>
 
-  <section class="panel">
-    <div class="label">Datagen progress</div>
-    <div class='bar-row'><span>aug_sp_00016.txt</span><div class='bar'><i style='width:50%'></i></div><span class='dim'>101,497/200,000</span></div>
-<div class='bar-row'><span>aug_sp_00017.txt</span><div class='bar'><i style='width:51%'></i></div><span class='dim'>102,809/200,000</span></div>
-<div class='bar-row'><span>aug_sp_00018.txt</span><div class='bar'><i style='width:51%'></i></div><span class='dim'>103,505/200,000</span></div>
-<div class='bar-row'><span>aug_sp_00019.txt</span><div class='bar'><i style='width:51%'></i></div><span class='dim'>102,232/200,000</span></div>
-  </section>
+  <div class="grid grid-2" style="margin-top:16px">
+    <section class="panel">
+      <div class="label">Workers</div>
+      <p class='dim' id='workers'>No workers.</p>
+    </section>
+    <section class="panel cmds">
+      <div class="label">Commands</div>
+      <code>scripts/lab.sh all</code>
+      <code>scripts/lab_supervisor.sh</code>
+      <code>scripts/datagen_daemon.sh</code>
+      <code>DATA_DIR=data/lichess-sf EVAL_W=1 python train.py …</code>
+      <code>scripts/ml_cycle.sh 35 400 25</code>
+    </section>
+  </div>
 
-  <section class="panel">
-    <div class="label">Workers</div>
-    <ul><li><code>19556 bash scripts/datagen_parallel.sh 200000 8000 4 auto</code></li><li><code>19653 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>19657 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>19661 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>19665 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>27688 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 500000 --resume</code></li></ul>
-  </section>
-
-  <section class="panel cmds">
-    <div class="label">Commands</div>
-    <code>scripts/lab.sh all</code>
-    <code>scripts/datagen_daemon.sh</code>
-    <code>scripts/ml_cycle.sh 35 400 25</code>
-  </section>
-
-  <p class="sub"><a href="/">← play chess</a></p>
+  <p class="foot"><a href="/">← play chess</a></p>
 </main>
 <script>
-setInterval(() => location.reload(), 30000);
+function fmt(n) { return n == null ? '—' : Number(n).toLocaleString(); }
+
+function barRow(label, pct, left, right, cls='') {
+  return `<div class="bar-row"><span class="bar-label">${label}</span>`
+    + `<div class="bar ${cls}"><i style="width:${pct}%"></i></div>`
+    + `<span class="bar-num">${left}/${right}</span></div>`;
+}
+
+function datagenHtml(active, wave) {
+  let h = '';
+  if (wave) {
+    const idx = (wave.active_indices || []).join(',') || wave.start_index;
+    h += `<p class="dim" id="dg-wave">phase <b>${wave.phase}</b> · shards [${idx}] · ${wave.positions_per_shard}@${wave.nodes}n</p>`;
+    if (wave.wave_target) {
+      h += barRow('wave', wave.wave_pct || 0, fmt(wave.wave_lines), fmt(wave.wave_target), 'bar-keep');
+    }
+  }
+  if (!active?.length) return h + `<p class="dim">No active datagen shards.</p>`;
+  for (const s of active) {
+    const name = s.name || `aug_sp_${String(s.index).padStart(5,'0')}.txt`;
+    h += `<div class="bar-row" data-shard="${name}">`
+      + `<span class="bar-label">${name}</span>`
+      + `<div class="bar"><i style="width:${s.pct}%"></i></div>`
+      + `<span class="bar-num">${fmt(s.lines)}/${fmt(s.target)}</span></div>`;
+  }
+  return h;
+}
+
+function workersHtml(list) {
+  if (!list?.length) return `<p class="dim" id="workers">No workers.</p>`;
+  return `<ul id="workers">${list.map(p => `<li><code>${p}</code></li>`).join('')}</ul>`;
+}
+
+async function refresh() {
+  try {
+    const r = await fetch('/api/status');
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('api-ts').textContent = d.generated_at || '—';
+    document.getElementById('t-sp').textContent = fmt(d.selfplay_lines);
+    document.getElementById('t-hf').textContent = fmt(d.lichess?.lines);
+    if (d.gate_elo != null) {
+      document.getElementById('t-gate').textContent = `${d.gate_elo >= 0 ? '+' : ''}${d.gate_elo.toFixed(1)}`;
+      const need = d.gate_need || 25;
+      const pct = Math.min(100, Math.max(0, Math.round(100 * d.gate_elo / need)));
+      const fill = document.getElementById('gate-fill');
+      if (fill) fill.style.width = pct + '%';
+      const ge = document.getElementById('gate-elo');
+      if (ge) ge.textContent = `${d.gate_elo >= 0 ? '+' : ''}${d.gate_elo.toFixed(1)}`;
+      const gr = document.getElementById('gate-result');
+      if (gr && d.gate) gr.textContent = d.gate.shipped ? 'SHIPPED' : 'REJECTED';
+    }
+    const lf = d.lichess;
+    if (lf) {
+      const phase = document.getElementById('lf-phase');
+      if (phase) phase.textContent = lf.phase;
+      const corp = document.getElementById('lf-corpus');
+      if (corp) corp.textContent = `${lf.shards} shards · ${fmt(lf.lines)} positions`;
+      const cur = document.getElementById('lf-cursor');
+      if (cur) cur.textContent = fmt(lf.stream_cursor || lf.absolute_skip);
+      const kr = document.getElementById('lf-keep-rate');
+      if (kr && lf.keep_rate_pct != null) kr.textContent = lf.keep_rate_pct + '%';
+      const el = document.getElementById('lf-elapsed');
+      if (el && lf.elapsed_s) el.textContent = lf.elapsed_s + 's';
+      let bars = '';
+      if (lf.phase === 'skipping' && lf.skip_target) {
+        bars = barRow('skip', lf.skip_pct, fmt(lf.stream_row), fmt(lf.skip_target), 'bar-skip');
+      } else if (lf.max_positions && lf.phase !== 'done' && lf.phase !== 'idle') {
+        bars = barRow('batch', lf.keep_pct, fmt(lf.kept), fmt(lf.max_positions), 'bar-keep');
+      }
+      const box = document.getElementById('lichess');
+      if (box && bars) {
+        const callout = box.querySelector('.callout');
+        const table = box.querySelector('table.meta');
+        const dropped = box.querySelector('table.mini');
+        box.innerHTML = (table?.outerHTML || '') + bars + (callout?.outerHTML || '') + (dropped?.outerHTML || '');
+      }
+    }
+    const dg = document.getElementById('datagen');
+    if (dg) dg.innerHTML = datagenHtml(d.active_shards, d.datagen);
+    const wk = document.getElementById('workers');
+    if (wk) {
+      const parent = wk.parentElement;
+      if (parent) parent.innerHTML = '<div class="label">Workers</div>' + workersHtml(d.workers);
+    }
+  } catch (_) {}
+}
+setInterval(refresh, 12000);
+refresh();
 </script>
 </body>
 </html>

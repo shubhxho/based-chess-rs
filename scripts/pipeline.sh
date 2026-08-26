@@ -16,8 +16,7 @@ run_datagen() {
 }
 
 run_prepare() {
-  rm -f data/lichess-sf/.prepare_hf.lock
-  .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 500000 --resume
+  bash scripts/prepare_lichess.sh
 }
 
 run_gate() {
@@ -25,12 +24,9 @@ run_gate() {
 }
 
 if [[ "$MODE" == "bg" || "$MODE" == "all" ]]; then
-  echo "background: datagen daemon + lichess prepare"
-  nohup bash scripts/datagen_daemon.sh >> /tmp/datagen_daemon.log 2>&1 &
-  echo "  datagen: /tmp/datagen_daemon.log (pid $!)"
-  ( run_prepare >> /tmp/prepare_resume.log 2>&1 ) &
-  echo "  prepare: /tmp/prepare_resume.log (pid $!)"
-  echo "  gate when ready: bash scripts/ml_cycle.sh 35 400 25"
+  echo "background: lab supervisor (datagen daemon + lichess + auto-restart)"
+  nohup bash scripts/lab_supervisor.sh bg >> /tmp/lab_supervisor.log 2>&1 &
+  echo "  supervisor: /tmp/lab_supervisor.log (pid $!)"
   echo "  UI: bash scripts/lab.sh"
   exit 0
 fi
