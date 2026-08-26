@@ -62,8 +62,15 @@ def main():
         run(["cargo", "build", "--release"], cwd=ROOT)
 
     if not args.skip_train:
-        shutil.copy2(NET, SHIP_BAK)
-        print(f"backed up shipping net -> {SHIP_BAK}", flush=True)
+        # A crashed prior gate can leave net.bin as a rejected candidate while
+        # net.bin.ship still holds the real shipping weights. Never overwrite
+        # that backup with whatever happens to sit in net.bin now.
+        if SHIP_BAK.exists():
+            shutil.copy2(SHIP_BAK, NET)
+            print(f"restored shipping net from {SHIP_BAK}", flush=True)
+        else:
+            shutil.copy2(NET, SHIP_BAK)
+            print(f"backed up shipping net -> {SHIP_BAK}", flush=True)
         env = os.environ.copy()
         env.setdefault("OUT_SCALE", "0.70")
         env.setdefault("ENGINE", str(ENGINE))
@@ -108,6 +115,7 @@ def main():
 
     if elo >= args.min_elo:
         shutil.copy2(CAND_BAK, NET)
+        shutil.copy2(CAND_BAK, SHIP_BAK)
         run(["cargo", "build", "--release"], cwd=ROOT)
         print("SHIPPED candidate net.bin — rebuild done. Commit only after a second opening set.", flush=True)
         return 0
