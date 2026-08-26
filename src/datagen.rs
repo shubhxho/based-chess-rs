@@ -279,7 +279,7 @@ pub fn run(target: u64, nodes: u64, seed: u64, out: &mut Out) {
         out.flush();
         // Shard bytes go to stdout; progress must not. Ten thousand is coarse
         // enough not to dominate a silent search and fine enough to see a stall.
-        if emitted > 0 && emitted % 10_000 == 0 {
+        if emitted > 0 && emitted.is_multiple_of(10_000) {
             let mut msg = [0u8; 48];
             let mut n = 0;
             for &b in b"datagen " {
