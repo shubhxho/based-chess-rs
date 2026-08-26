@@ -160,6 +160,10 @@ fn random_move(pos: &Position, rng: &mut Rng) -> Move {
 pub fn run(target: u64, nodes: u64, seed: u64, out: &mut Out) {
     let mut rng = Rng(seed | 1);
     let s = searcher();
+    // `go` is called directly, not through `go_threaded`. A leftover Threads>1
+    // from UCI would make the node budget follow the multi-thread stop path and
+    // under-search every datagen position. Force the exact single-thread limit.
+    s.threads = 1;
     s.silent = true;
     let mut pos = Position::empty();
     let mut emitted = 0u64;
