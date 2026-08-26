@@ -277,7 +277,43 @@ pub fn run(target: u64, nodes: u64, seed: u64, out: &mut Out) {
             emitted += 1;
         }
         out.flush();
+        // Shard bytes go to stdout; progress must not. Ten thousand is coarse
+        // enough not to dominate a silent search and fine enough to see a stall.
+        if emitted > 0 && emitted % 10_000 == 0 {
+            let mut msg = [0u8; 48];
+            let mut n = 0;
+            for &b in b"datagen " {
+                msg[n] = b;
+                n += 1;
+            }
+            n += write_u64(&mut msg[n..], emitted);
+            for &b in b" / " {
+                msg[n] = b;
+                n += 1;
+            }
+            n += write_u64(&mut msg[n..], target);
+            msg[n] = b'\n';
+            n += 1;
+            crate::sys::write(2, &msg[..n]);
+        }
         let _ = games;
     }
     s.silent = false;
+}
+
+fn write_u64(buf: &mut [u8], mut v: u64) -> usize {
+    let mut tmp = [0u8; 20];
+    let mut i = tmp.len();
+    if v == 0 {
+        buf[0] = b'0';
+        return 1;
+    }
+    while v > 0 {
+        i -= 1;
+        tmp[i] = b'0' + (v % 10) as u8;
+        v /= 10;
+    }
+    let n = tmp.len() - i;
+    buf[..n].copy_from_slice(&tmp[i..]);
+    n
 }
