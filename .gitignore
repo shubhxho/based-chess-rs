@@ -17,4 +17,7 @@ __pycache__/
 sable-*
 data/
 net-lichess-pilot.bin
+net-*-candidate.bin
+net-candidate.bin
+net.bin.ship
 *.bak*
