@@ -164,6 +164,23 @@ pub fn run(target: u64, nodes: u64, seed: u64, out: &mut Out) {
     let mut pos = Position::empty();
     let mut emitted = 0u64;
     let mut games = 0u64;
+    let mut last_report = 0u64;
+    let t0 = crate::sys::now_ms();
+
+    // Banner on stderr so a redirected stdout shard still says what this run is.
+    {
+        let mut msg = [0u8; 96];
+        let mut n = 0;
+        n += copy(&mut msg[n..], b"datagen start target=");
+        n += write_u64(&mut msg[n..], target);
+        n += copy(&mut msg[n..], b" nodes=");
+        n += write_u64(&mut msg[n..], nodes);
+        n += copy(&mut msg[n..], b" seed=");
+        n += write_u64(&mut msg[n..], seed);
+        msg[n] = b'\n';
+        n += 1;
+        crate::sys::write(2, &msg[..n]);
+    }
 
     while emitted < target {
         games += 1;
@@ -270,6 +287,9 @@ pub fn run(target: u64, nodes: u64, seed: u64, out: &mut Out) {
 
         let recs = unsafe { GAME.as_ref() };
         for r in recs.iter().take(n_rec) {
+            if emitted >= target {
+                break;
+            }
             out.s(&r.fen[..r.len]);
             out.s(b" | ").i(r.score as i64);
             out.s(b" | ").u(result as u64);
@@ -277,28 +297,51 @@ pub fn run(target: u64, nodes: u64, seed: u64, out: &mut Out) {
             emitted += 1;
         }
         out.flush();
-        // Shard bytes go to stdout; progress must not. Ten thousand is coarse
-        // enough not to dominate a silent search and fine enough to see a stall.
-        if emitted > 0 && emitted.is_multiple_of(10_000) {
-            let mut msg = [0u8; 48];
-            let mut n = 0;
-            for &b in b"datagen " {
-                msg[n] = b;
-                n += 1;
-            }
-            n += write_u64(&mut msg[n..], emitted);
-            for &b in b" / " {
-                msg[n] = b;
-                n += 1;
-            }
-            n += write_u64(&mut msg[n..], target);
-            msg[n] = b'\n';
-            n += 1;
-            crate::sys::write(2, &msg[..n]);
+        // Report on *crossed* milestones, not exact multiples: a game that jumps
+        // from 9_995 to 10_040 would otherwise skip the 10k line forever.
+        while last_report + 10_000 <= emitted {
+            last_report += 10_000;
+            report_progress(last_report, target, games, t0);
         }
-        let _ = games;
+    }
+    report_progress(emitted, target, games, t0);
+    {
+        let mut msg = [0u8; 32];
+        let n = copy(&mut msg, b"datagen done\n");
+        crate::sys::write(2, &msg[..n]);
     }
     s.silent = false;
+}
+
+fn copy(dst: &mut [u8], src: &[u8]) -> usize {
+    dst[..src.len()].copy_from_slice(src);
+    src.len()
+}
+
+fn report_progress(emitted: u64, target: u64, games: u64, t0: u64) {
+    let elapsed_ms = crate::sys::now_ms().saturating_sub(t0).max(1);
+    let rate = emitted.saturating_mul(1000) / elapsed_ms;
+    // Yield is positions kept per finished game attempt; low yield means the
+    // filters (quiet / unique / opening) are eating most of the search budget.
+    let yield_x10 = emitted.saturating_mul(10).checked_div(games).unwrap_or(0);
+    let mut msg = [0u8; 128];
+    let mut n = 0;
+    n += copy(&mut msg[n..], b"datagen ");
+    n += write_u64(&mut msg[n..], emitted);
+    n += copy(&mut msg[n..], b"/");
+    n += write_u64(&mut msg[n..], target);
+    n += copy(&mut msg[n..], b" games=");
+    n += write_u64(&mut msg[n..], games);
+    n += copy(&mut msg[n..], b" yield=");
+    n += write_u64(&mut msg[n..], yield_x10 / 10);
+    msg[n] = b'.';
+    n += 1;
+    msg[n] = b'0' + (yield_x10 % 10) as u8;
+    n += 1;
+    n += copy(&mut msg[n..], b"/game ");
+    n += write_u64(&mut msg[n..], rate);
+    n += copy(&mut msg[n..], b"/s\n");
+    crate::sys::write(2, &msg[..n]);
 }
 
 fn write_u64(buf: &mut [u8], mut v: u64) -> usize {
