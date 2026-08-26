@@ -1,26 +1,19 @@
 #!/usr/bin/env python3
-"""Build web/daily.html — a lab status page for corpus, git, and pipeline health.
-
-    .venv/bin/python scripts/daily_page.py
-    # then: python web/server.py  →  http://127.0.0.1:8375/daily
-"""
+"""Build web/daily.html — lab board with live datagen progress."""
 
 from __future__ import annotations
 
 import datetime as dt
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from lab_status import collect, sh  # noqa: E402
+
 OUT = ROOT / "web" / "daily.html"
-
-
-def sh(*args: str) -> str:
-    try:
-        return subprocess.check_output(args, cwd=ROOT, text=True, stderr=subprocess.DEVNULL).strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return ""
 
 
 def count_lines(pattern: str) -> tuple[int, int]:
@@ -34,12 +27,25 @@ def count_lines(pattern: str) -> tuple[int, int]:
     return len(files), total
 
 
+def progress_bars(active: list[dict]) -> str:
+    if not active:
+        return "<p class='dim'>No active datagen shards.</p>"
+    rows = []
+    for s in active:
+        rows.append(
+            f"<div class='bar-row'><span>{s['name']}</span>"
+            f"<div class='bar'><i style='width:{s['pct']}%'></i></div>"
+            f"<span class='dim'>{s['lines']:,}/{s['target']:,}</span></div>"
+        )
+    return "\n".join(rows)
+
+
 def main() -> None:
     now = dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
+    snap = collect()
     branch = sh("git", "rev-parse", "--abbrev-ref", "HEAD") or "?"
     commit = sh("git", "log", "-1", "--oneline") or "?"
     status = sh("git", "status", "-sb") or "?"
-    ahead = "origin" in status and "ahead" in status
     dirty = any(line[:1] in " MADRCU?" for line in status.splitlines()[1:])
 
     sp_n, sp_lines = count_lines("data/selfplay/aug_sp_*.txt")
@@ -54,72 +60,65 @@ def main() -> None:
             scanned = int(m.get("scanned_rows", 0) or 0)
             resume = base + scanned
         except (json.JSONDecodeError, TypeError, ValueError):
-            resume = None
+            pass
 
-    procs = sh("pgrep", "-lf", "prepare_hf|train_gate|datagen_parallel|target/release/sable")
-    alive = []
-    for line in procs.splitlines():
-        if "Helper" in line or "pgrep" in line:
-            continue
-        if any(k in line for k in ("prepare_hf", "train_gate", "datagen", "release/sable")):
-            alive.append(line[:120])
-
-    net_ok = (ROOT / "net.bin").exists()
-    gate = ROOT / "train_gate.py"
-    presearch = ROOT / "tests" / "presearch_ab.sh"
-
+    g = snap.get("gate")
     gate_row = "none yet"
-    gate_panel = "<p class='dim'>No gate run recorded. <code>scripts/ml_cycle.sh</code> writes web/gate_last.json.</p>"
-    gate_path = ROOT / "web" / "gate_last.json"
-    if gate_path.exists():
-        try:
-            g = json.loads(gate_path.read_text())
-            shipped = "SHIPPED" if g.get("shipped") else "REJECTED"
-            gate_row = (
-                f"{shipped}  Elo {g.get('elo', 0):+.1f} "
-                f"(need {g.get('min_elo', 25):+.0f}) · {g.get('games')}g @ {g.get('nodes')}n · {g.get('when', '')}"
+    gate_panel = "<p class='dim'>No gate yet. <code>scripts/ml_cycle.sh</code></p>"
+    gate_bar = ""
+    if g:
+        shipped = "SHIPPED" if g.get("shipped") else "REJECTED"
+        elo = float(g.get("elo", 0))
+        need = float(g.get("min_elo", 25))
+        pct = min(100, max(0, int(100 * elo / need))) if need > 0 and elo > 0 else 0
+        gate_row = f"{shipped}  Elo {elo:+.1f} (need {need:+.0f}) · {g.get('when', '')}"
+        gate_panel = (
+            "<table>"
+            + "".join(
+                f"<tr><th>{k}</th><td>{v}</td></tr>"
+                for k, v in [
+                    ("Result", shipped),
+                    ("Elo", f"{elo:+.1f} ± arena"),
+                    ("Threshold", f"{need:+.1f}"),
+                    ("Best so far", "+19.1 (1.34M SP)"),
+                    ("Games / nodes", f"{g.get('games')} / {g.get('nodes')}"),
+                    ("Epochs", g.get("epochs")),
+                    ("When", g.get("when", "")),
+                ]
             )
-            gate_panel = (
-                "<table>"
-                + "".join(
-                    f"<tr><th>{k}</th><td>{v}</td></tr>"
-                    for k, v in [
-                        ("Result", shipped),
-                        ("Elo", f"{g.get('elo', 0):+.1f} ± arena"),
-                        ("Threshold", f"{g.get('min_elo', 25):+.1f}"),
-                        ("Games / nodes", f"{g.get('games')} / {g.get('nodes')}"),
-                        ("Data", f"{g.get('data_dir')}/{g.get('data_glob')}"),
-                        ("EVAL_W / OUT_SCALE", f"{g.get('eval_w')} / {g.get('out_scale')}"),
-                        ("When", g.get("when", "")),
-                    ]
-                )
-                + "</table>"
-            )
-        except (json.JSONDecodeError, TypeError, ValueError):
-            gate_row = "unreadable gate_last.json"
+            + "</table>"
+        )
+        gate_bar = (
+            f"<div class='gate-bar'><div class='gate-fill' style='width:{pct}%'></div></div>"
+            f"<p class='dim'>Gate progress toward +{need:.0f} Elo (not shipped until bar clears threshold)</p>"
+        )
 
     rows = [
         ("Generated", now),
         ("Branch", branch),
         ("HEAD", commit),
-        ("Tree", "dirty" if dirty else ("ahead of origin" if ahead else "clean / synced")),
-        ("Self-play shards", f"{sp_n} files · {sp_lines:,} positions"),
-        ("Lichess shards", f"{hf_n} files · {hf_lines:,} positions"),
-        ("Lichess --resume skip", f"{resume:,}" if resume is not None else "unknown"),
+        ("Tree", "dirty" if dirty else "clean / synced"),
+        ("Self-play", f"{sp_n} shards · {sp_lines:,} lines"),
+        ("Lichess", f"{hf_n} shards · {hf_lines:,} lines"),
+        ("Lichess skip", f"{resume:,}" if resume is not None else "?"),
         ("Last gate", gate_row),
-        ("net.bin", "present" if net_ok else "missing"),
-        ("train_gate", "yes" if gate.exists() else "no"),
-        ("presearch_ab", "yes" if presearch.exists() else "no"),
     ]
 
     proc_html = (
-        "<ul>" + "".join(f"<li><code>{p}</code></li>" for p in alive) + "</ul>"
-        if alive
-        else "<p class='dim'>No prepare / datagen / train_gate workers visible.</p>"
+        "<ul>" + "".join(f"<li><code>{p}</code></li>" for p in snap["workers"]) + "</ul>"
+        if snap["workers"]
+        else "<p class='dim'>No workers.</p>"
     )
-    table = "\n".join(
-        f"<tr><th>{k}</th><td>{v}</td></tr>" for k, v in rows
-    )
+    datagen_html = progress_bars(snap.get("active_shards") or [])
+    wave = snap.get("datagen")
+    if wave:
+        datagen_html = (
+            f"<p class='dim'>wave {wave.get('phase')} · start {wave.get('start_index')} "
+            f"· {wave.get('positions_per_shard')}@{wave.get('nodes')}n</p>"
+            + datagen_html
+        )
+
+    table = "\n".join(f"<tr><th>{k}</th><td>{v}</td></tr>" for k, v in rows)
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -134,47 +133,40 @@ def main() -> None:
     --mono: "SF Mono", ui-monospace, Menlo, monospace;
   }}
   @media (prefers-color-scheme: light) {{
-    :root {{
-      --bg: #f4f1ea; --panel: #fffdf8; --line: #ddd5c7;
-      --ink: #2a2420; --dim: #6f6459; --amber: #a86a1c;
-    }}
+    :root {{ --bg: #f4f1ea; --panel: #fffdf8; --line: #ddd5c7;
+      --ink: #2a2420; --dim: #6f6459; --amber: #a86a1c; }}
   }}
   * {{ box-sizing: border-box; margin: 0; }}
-  body {{
-    background: var(--bg); color: var(--ink);
-    font-family: var(--mono); font-size: 14px;
-    min-height: 100vh; padding: 32px 20px;
-  }}
+  body {{ background: var(--bg); color: var(--ink); font-family: var(--mono);
+    font-size: 14px; min-height: 100vh; padding: 32px 20px; }}
   main {{ max-width: 720px; margin: 0 auto; }}
   h1 {{ font-size: 15px; letter-spacing: .16em; font-weight: 600; }}
   h1 span {{ color: var(--amber); }}
   .sub {{ color: var(--dim); font-size: 12px; margin: 8px 0 28px; line-height: 1.5; }}
-  .panel {{
-    background: var(--panel); border: 1px solid var(--line);
-    padding: 16px 18px; margin-bottom: 16px;
-  }}
-  .label {{
-    color: var(--dim); font-size: 10px; letter-spacing: .22em;
-    text-transform: uppercase; margin-bottom: 12px;
-  }}
+  .panel {{ background: var(--panel); border: 1px solid var(--line);
+    padding: 16px 18px; margin-bottom: 16px; }}
+  .label {{ color: var(--dim); font-size: 10px; letter-spacing: .22em;
+    text-transform: uppercase; margin-bottom: 12px; }}
   table {{ width: 100%; border-collapse: collapse; }}
-  th, td {{ text-align: left; padding: 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }}
+  th, td {{ text-align: left; padding: 8px 0; border-bottom: 1px solid var(--line); }}
   th {{ color: var(--dim); font-weight: 500; width: 38%; }}
   code, .dim {{ color: var(--dim); font-size: 12px; }}
-  ul {{ padding-left: 18px; }}
-  li {{ margin: 6px 0; }}
+  ul {{ padding-left: 18px; }} li {{ margin: 6px 0; }}
   a {{ color: var(--amber); }}
-  .cmds code {{
-    display: block; padding: 10px 12px; margin: 8px 0;
-    border: 1px solid var(--line); color: var(--ink); white-space: pre-wrap;
-  }}
+  .cmds code {{ display: block; padding: 10px 12px; margin: 8px 0;
+    border: 1px solid var(--line); white-space: pre-wrap; }}
+  .bar-row {{ display: grid; grid-template-columns: 88px 1fr 100px; gap: 10px;
+    align-items: center; margin: 8px 0; font-size: 11px; }}
+  .bar {{ height: 8px; background: var(--line); overflow: hidden; }}
+  .bar i {{ display: block; height: 100%; background: var(--amber); }}
+  .gate-bar {{ height: 10px; background: var(--line); margin: 12px 0 6px; }}
+  .gate-fill {{ height: 100%; background: var(--amber); max-width: 100%; }}
 </style>
 </head>
 <body>
 <main>
-  <h1>SABLE <span>DAILY</span></h1>
-  <p class="sub">Lab board for corpus size, git HEAD, last train_gate, and live workers.
-  Regenerated by <code>scripts/daily_page.py</code>. Not a rating claim.</p>
+  <h1>SABLE <span>LAB</span></h1>
+  <p class="sub">Auto-refreshes every 30s. <code>scripts/lab.sh all</code> = UI + datagen + Lichess.</p>
 
   <section class="panel">
     <div class="label">Snapshot</div>
@@ -182,26 +174,33 @@ def main() -> None:
   </section>
 
   <section class="panel">
-    <div class="label">Last gate</div>
+    <div class="label">Gate (+25 to ship)</div>
+    {gate_bar}
     {gate_panel}
   </section>
 
   <section class="panel">
-    <div class="label">Live workers</div>
+    <div class="label">Datagen progress</div>
+    {datagen_html}
+  </section>
+
+  <section class="panel">
+    <div class="label">Workers</div>
     {proc_html}
   </section>
 
   <section class="panel cmds">
-    <div class="label">Next commands</div>
-    <code>scripts/pipeline.sh bg</code>
-    <code>scripts/datagen_parallel.sh 200000 8000 4 auto</code>
-    <code>.venv/bin/python prepare_hf.py data/lichess-sf --max-positions 500000 --resume</code>
+    <div class="label">Commands</div>
+    <code>scripts/lab.sh all</code>
+    <code>scripts/datagen_daemon.sh</code>
     <code>scripts/ml_cycle.sh 35 400 25</code>
-    <code>tests/presearch_ab.sh 60ab7d3 200 25000 4</code>
   </section>
 
   <p class="sub"><a href="/">← play chess</a></p>
 </main>
+<script>
+setInterval(() => location.reload(), 30000);
+</script>
 </body>
 </html>
 """

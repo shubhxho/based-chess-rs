@@ -8,10 +8,14 @@ the search info lines.
 import json
 import os
 import subprocess
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(ROOT, "..", "scripts"))
+from lab_status import collect  # noqa: E402
+
 ENGINE = os.path.join(ROOT, "..", "target", "release", "sable")
 PORT = 8375
 
@@ -100,25 +104,13 @@ class Handler(BaseHTTPRequestHandler):
                 engine()
             self._send(200, json.dumps({"engine": ident}).encode())
         elif self.path == "/api/status":
-            body = {"engine": ident, "gate": None, "selfplay_lines": 0}
-            gate_path = os.path.join(ROOT, "gate_last.json")
-            if os.path.isfile(gate_path):
+            body = collect()
+            with lock:
                 try:
-                    with open(gate_path, encoding="utf-8") as f:
-                        body["gate"] = json.load(f)
-                except (json.JSONDecodeError, OSError):
-                    pass
-            sp_dir = os.path.join(ROOT, "..", "data", "selfplay")
-            if os.path.isdir(sp_dir):
-                total = 0
-                for name in os.listdir(sp_dir):
-                    if name.startswith("aug_sp_") and name.endswith(".txt"):
-                        try:
-                            with open(os.path.join(sp_dir, name), "rb") as fh:
-                                total += sum(1 for _ in fh)
-                        except OSError:
-                            pass
-                body["selfplay_lines"] = total
+                    engine()
+                    body["engine"] = ident
+                except Exception:
+                    body["engine"] = []
             self._send(200, json.dumps(body).encode())
         else:
             self._send(404, b"{}")

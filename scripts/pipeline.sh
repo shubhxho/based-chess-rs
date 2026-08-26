@@ -21,16 +21,17 @@ run_prepare() {
 }
 
 run_gate() {
-  bash scripts/ml_cycle.sh 25 400 25
+  bash scripts/ml_cycle.sh 35 400 25
 }
 
-if [[ "$MODE" == "bg" ]]; then
-  echo "background: datagen + lichess prepare (gate when you run ml_cycle.sh)"
-  ( run_datagen >> /tmp/datagen_parallel.log 2>&1 ) &
+if [[ "$MODE" == "bg" || "$MODE" == "all" ]]; then
+  echo "background: datagen daemon + lichess prepare"
+  nohup bash scripts/datagen_daemon.sh >> /tmp/datagen_daemon.log 2>&1 &
+  echo "  datagen: /tmp/datagen_daemon.log (pid $!)"
   ( run_prepare >> /tmp/prepare_resume.log 2>&1 ) &
-  echo "  datagen log: /tmp/datagen_parallel.log"
-  echo "  prepare log: /tmp/prepare_resume.log"
-  echo "  then: bash scripts/ml_cycle.sh"
+  echo "  prepare: /tmp/prepare_resume.log (pid $!)"
+  echo "  gate when ready: bash scripts/ml_cycle.sh 35 400 25"
+  echo "  UI: bash scripts/lab.sh"
   exit 0
 fi
 
