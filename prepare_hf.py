@@ -20,10 +20,12 @@ candidate until it passes opening-balanced arena matches and calibration.
 """
 
 import argparse
+import atexit
 import fcntl
 import hashlib
 import json
 import os
+import signal
 from pathlib import Path
 
 DEFAULT_DATASET = "Lichess/chess-position-evaluations"
@@ -98,6 +100,30 @@ def main():
     lock_fh.write(f"pid {os.getpid()}\n")
     lock_fh.flush()
 
+    def release_lock():
+        try:
+            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+        except Exception:
+            pass
+        try:
+            lock_fh.close()
+        except Exception:
+            pass
+        try:
+            lock_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    atexit.register(release_lock)
+    # SIGKILL cannot be caught (the "zsh: killed" case); TERM/INT still clear
+    # the lock so the next prepare is not blocked by a dead pid.
+    def _die(signum, _frame):
+        release_lock()
+        raise SystemExit(128 + signum)
+
+    signal.signal(signal.SIGTERM, _die)
+    signal.signal(signal.SIGINT, _die)
+
     # The manifest makes the otherwise enormous dataset selection reproducible.
     manifest = vars(args).copy()
     manifest.update({
@@ -110,6 +136,11 @@ def main():
     (out_dir / "hf_source.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
     stream = load_dataset(args.dataset, revision=args.revision, split=args.split, streaming=True)
+    # Skipping in the stream API avoids materialising millions of discarded
+    # rows in the Python loop (which is what made long --skip-rows runs look
+    # wedged and then get OOM-killed on the way out).
+    if args.skip_rows:
+        stream = stream.skip(args.skip_rows)
     seen = set() if args.dedupe == "memory" else None
     shard_no, rows_in_shard, kept, scanned = 0, 0, 0, 0
     dropped = {"depth": 0, "score": 0, "fen": 0, "tactical": 0, "duplicate": 0, "sample": 0}
@@ -142,9 +173,7 @@ def main():
             open_shard()
 
     try:
-        for source_index, row in enumerate(stream):
-            if source_index < args.skip_rows:
-                continue
+        for row in stream:
             scanned += 1
             if args.max_positions and kept >= args.max_positions:
                 break
@@ -188,12 +217,14 @@ def main():
                     os.replace(tmp, final)
                 else:
                     tmp.unlink()
-        try:
-            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
-        finally:
-            lock_fh.close()
+        release_lock()
 
-    manifest.update({"scanned_rows": scanned, "emitted_positions": kept, "dropped": dropped})
+    manifest.update({
+        "scanned_rows": scanned,
+        "emitted_positions": kept,
+        "dropped": dropped,
+        "absolute_skip_rows": args.skip_rows,
+    })
     (out_dir / "hf_source.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     print(f"wrote {kept:,} positions from {scanned:,} streamed rows; dropped {dropped}")
 
