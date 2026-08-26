@@ -70,7 +70,7 @@
 <body>
 <header class="top">
   <h1>SABLE <span>LAB</span></h1>
-  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T04:16:09</span></p>
+  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T04:16:31</span></p>
 </header>
 <main>
   <div class="tiles">
@@ -90,8 +90,8 @@
       <div class="label">Snapshot</div>
       <table><tr><th>Generated</th><td>2026-08-27 04:16 IST</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>212221c Refresh daily lab snapshot with current datagen wave progress.</td></tr>
-<tr><th>Tree</th><td>dirty</td></tr>
+<tr><th>HEAD</th><td>fbc39e3 Make datagen_parallel crash-safe and prioritize nearly-finished shards.</td></tr>
+<tr><th>Tree</th><td>clean / synced</td></tr>
 <tr><th>Self-play</th><td>20 shards · 1,466,024 lines</td></tr>
 <tr><th>Lichess HF</th><td>34 shards · 7,750,531 lines</td></tr>
 <tr><th>Lichess cursor</th><td>12,669,721</td></tr>
@@ -106,10 +106,10 @@
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Self-play datagen</div>
-    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [0,8,9,10] · 200000@8000n · 4 done · 16 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:0%'></i></div><span class='bar-num' id='dg-wave-num'>0/800,000</span></div><div class='bar-row' data-shard='aug_sp_00000.txt'><span class='bar-label'>aug_sp_00000.txt</span><div class='bar'><i style='width:0%'></i></div><span class='bar-num'>0/200,000</span></div>
-<div class='bar-row' data-shard='aug_sp_00008.txt'><span class='bar-label'>aug_sp_00008.txt</span><div class='bar'><i style='width:0%'></i></div><span class='bar-num'>0/200,000</span></div>
-<div class='bar-row' data-shard='aug_sp_00009.txt'><span class='bar-label'>aug_sp_00009.txt</span><div class='bar'><i style='width:0%'></i></div><span class='bar-num'>0/200,000</span></div>
-<div class='bar-row' data-shard='aug_sp_00010.txt'><span class='bar-label'>aug_sp_00010.txt</span><div class='bar'><i style='width:0%'></i></div><span class='bar-num'>0/200,000</span></div></div>
+    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [11,12,13,14] · 200000@8000n · 4 done · 16 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:75%'></i></div><span class='bar-num' id='dg-wave-num'>600,000/800,000</span></div><div class='bar-row' data-shard='aug_sp_00011.txt'><span class='bar-label'>aug_sp_00011.txt</span><div class='bar'><i style='width:75%'></i></div><span class='bar-num'>150,000/200,000</span></div>
+<div class='bar-row' data-shard='aug_sp_00012.txt'><span class='bar-label'>aug_sp_00012.txt</span><div class='bar'><i style='width:75%'></i></div><span class='bar-num'>150,000/200,000</span></div>
+<div class='bar-row' data-shard='aug_sp_00013.txt'><span class='bar-label'>aug_sp_00013.txt</span><div class='bar'><i style='width:75%'></i></div><span class='bar-num'>150,000/200,000</span></div>
+<div class='bar-row' data-shard='aug_sp_00014.txt'><span class='bar-label'>aug_sp_00014.txt</span><div class='bar'><i style='width:75%'></i></div><span class='bar-num'>150,000/200,000</span></div></div>
   </section>
 
   <div class="grid grid-2" style="margin-top:16px">
