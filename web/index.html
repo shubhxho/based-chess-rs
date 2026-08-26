@@ -129,8 +129,10 @@
       </select>
     </div>
     <div class="sub" style="margin-top:2px">
+      <a href="/daily">lab daily</a> &middot;
       <a href="https://github.com/shubhxho/sable">source</a> &middot;
       <a href="https://huggingface.co/shubhxho/sable-chess-net">network on the Hub</a>
+      <span id="gate-hint"></span>
     </div>
   </div>
 </div>
@@ -303,4 +305,10 @@ $id('pgn').onclick = async () => {
   await navigator.clipboard.writeText(game.pgn());
   const b = $id('pgn'); b.textContent = 'Copied'; setTimeout(() => b.textContent = 'PGN', 900);
 };
+
+fetch('/gate_last.json').then(r => r.ok ? r.json() : null).then(g => {
+  if (!g || g.elo == null) return;
+  const tag = g.shipped ? 'shipped' : 'gate';
+  $id('gate-hint').textContent = ` · ${tag} ${g.elo >= 0 ? '+' : ''}${g.elo.toFixed(1)} Elo`;
+}).catch(() => {});
 </script>

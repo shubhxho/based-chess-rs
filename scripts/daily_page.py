@@ -196,11 +196,11 @@ def main() -> None:
     <code>scripts/pipeline.sh bg</code>
     <code>scripts/datagen_parallel.sh 200000 8000 4 auto</code>
     <code>.venv/bin/python prepare_hf.py data/lichess-sf --max-positions 500000 --resume</code>
-    <code>scripts/ml_cycle.sh 25 400 25</code>
+    <code>scripts/ml_cycle.sh 35 400 25</code>
     <code>tests/presearch_ab.sh 60ab7d3 200 25000 4</code>
   </section>
 
-  <p class="sub"><a href="/">← play</a></p>
+  <p class="sub"><a href="/">← play chess</a></p>
 </main>
 </body>
 </html>

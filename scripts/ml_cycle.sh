@@ -10,7 +10,7 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
-EPOCHS=${1:-25}
+EPOCHS=${1:-35}
 GAMES=${2:-400}
 MIN_ELO=${3:-25}
 
@@ -20,7 +20,7 @@ export DATA_GLOB='aug_sp_0*.txt'
 export EVAL_W=0.9
 export OUT_SCALE=0.70
 export WEIGHT_DECAY=${WEIGHT_DECAY:-1e-4}
-export PATIENCE=${PATIENCE:-5}
+export PATIENCE=${PATIENCE:-7}
 export SP_BOOST=${SP_BOOST:-1.0}
 export MIN_SHARD=${MIN_SHARD:-0}
 export SHARD_DECAY=${SHARD_DECAY:-1.0}
@@ -59,6 +59,8 @@ for f in "${ready[@]}"; do
 done
 export DATA_DIR="$tmp"
 export DATA_GLOB='aug_sp_0*.txt'
+export REPORT_DATA_DIR="$ROOT/data/selfplay"
+export REPORT_DATA_GLOB='aug_sp_0*.txt'
 
 .venv/bin/python train_gate.py --epochs "$EPOCHS" --games "$GAMES" --min-elo "$MIN_ELO"
 # Restore daily page with repo paths (not the temp DATA_DIR).

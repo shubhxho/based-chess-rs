@@ -99,6 +99,27 @@ class Handler(BaseHTTPRequestHandler):
             with lock:
                 engine()
             self._send(200, json.dumps({"engine": ident}).encode())
+        elif self.path == "/api/status":
+            body = {"engine": ident, "gate": None, "selfplay_lines": 0}
+            gate_path = os.path.join(ROOT, "gate_last.json")
+            if os.path.isfile(gate_path):
+                try:
+                    with open(gate_path, encoding="utf-8") as f:
+                        body["gate"] = json.load(f)
+                except (json.JSONDecodeError, OSError):
+                    pass
+            sp_dir = os.path.join(ROOT, "..", "data", "selfplay")
+            if os.path.isdir(sp_dir):
+                total = 0
+                for name in os.listdir(sp_dir):
+                    if name.startswith("aug_sp_") and name.endswith(".txt"):
+                        try:
+                            with open(os.path.join(sp_dir, name), "rb") as fh:
+                                total += sum(1 for _ in fh)
+                        except OSError:
+                            pass
+                body["selfplay_lines"] = total
+            self._send(200, json.dumps(body).encode())
         else:
             self._send(404, b"{}")
 

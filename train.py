@@ -483,13 +483,13 @@ def main():
         return total / m
 
     best = (float("inf"), None)
-    warmup = 1
+    warmup = int(os.environ.get("WARMUP", "2"))
     stale = 0
     for ep in range(epochs):
-        # One linear warmup epoch, then cosine to ~0: early steps explore,
-        # late steps settle into the quantisation grid.
+        # Linear warmup, then cosine to ~0: early steps explore, late steps
+        # settle into the quantisation grid.
         if ep < warmup:
-            opt.learning_rate = base_lr * (ep + 1) / warmup
+            opt.learning_rate = base_lr * (ep + 1) / max(1, warmup)
         else:
             import math
             t = (ep - warmup) / max(1, epochs - warmup - 1)

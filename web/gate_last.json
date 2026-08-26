@@ -1,12 +1,12 @@
 {
-  "when": "2026-08-27T03:28:38+05:30",
-  "elo": 5.2,
+  "when": "2026-08-27T03:35:08+05:30",
+  "elo": -9.6,
   "min_elo": 25.0,
   "games": 400,
   "nodes": 20000,
-  "epochs": 30,
-  "data_dir": "data/selfplay",
-  "data_glob": "aug_sp_[0-9][0-9][0-9][0-9][0-9].txt",
+  "epochs": 25,
+  "data_dir": "/var/folders/ss/26l4n3y93ps20qrcs1z_dm6r0000gn/T/tmp.iykiXLckEF",
+  "data_glob": "aug_sp_0*.txt",
   "eval_w": "0.9",
   "out_scale": "0.70",
   "shipped": false
