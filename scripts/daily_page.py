@@ -34,12 +34,15 @@ def progress_bars(active: list[dict], el_id: str = "") -> str:
         return "<p class='dim'>No active datagen shards.</p>"
     rows = []
     for s in active:
-        sid = esc(s["name"])
+        sid = esc(s.get("name") or f"aug_sp_{s.get('index', 0):05d}.txt")
+        tmp_note = ""
+        if s.get("tmp_lines"):
+            tmp_note = f" (+{s['tmp_lines']:,} tmp)"
         rows.append(
             f"<div class='bar-row' data-shard='{sid}'>"
             f"<span class='bar-label'>{sid}</span>"
             f"<div class='bar'><i style='width:{s['pct']}%'></i></div>"
-            f"<span class='bar-num'>{s['lines']:,}/{s['target']:,}</span></div>"
+            f"<span class='bar-num'>{s['lines']:,}/{s['target']:,}{tmp_note}</span></div>"
         )
     return "\n".join(rows)
 
@@ -354,10 +357,11 @@ function datagenHtml(active, wave) {{
   if (!active?.length) return h + `<p class="dim">No active datagen shards.</p>`;
   for (const s of active) {{
     const name = s.name || `aug_sp_${{String(s.index).padStart(5,'0')}}.txt`;
+    const tmp = s.tmp_lines ? ` (+${{Number(s.tmp_lines).toLocaleString()}} tmp)` : '';
     h += `<div class="bar-row" data-shard="${{name}}">`
       + `<span class="bar-label">${{name}}</span>`
       + `<div class="bar"><i style="width:${{s.pct}}%"></i></div>`
-      + `<span class="bar-num">${{fmt(s.lines)}}/${{fmt(s.target)}}</span></div>`;
+      + `<span class="bar-num">${{fmt(s.lines)}}/${{fmt(s.target)}}${{tmp}}</span></div>`;
   }}
   return h;
 }}

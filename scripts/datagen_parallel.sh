@@ -2,8 +2,11 @@
 # Parallel self-play shard generation for distillation.
 #
 # usage: scripts/datagen_parallel.sh [positions] [nodes] [n_shards] [start]
-#   start=auto → fill lowest incomplete shards, then append new indices
+#   start=auto → fill highest-progress partial shards first, then new indices
 # defaults: 200000  8000  4  auto
+#
+# Workers write to *.txt.tmp and atomically replace the shard only on success,
+# so a killed run never truncates an on-disk partial shard.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -20,6 +23,15 @@ shard_lines() {
   local f=$1
   [[ -f "$f" ]] || { echo 0; return; }
   wc -l <"$f" | tr -d ' '
+}
+
+shard_effective_lines() {
+  local shard=$1
+  local tmp="${shard}.tmp"
+  local n=$(shard_lines "$shard")
+  local t=0
+  [[ -f "$tmp" ]] && t=$(shard_lines "$tmp")
+  (( t > n )) && echo "$t" || echo "$n"
 }
 
 write_status() {
@@ -44,19 +56,28 @@ indices = [int(x) for x in raw_idx.split(",") if x.strip()]
 shard_progress = []
 pos = $POS
 out = Path("$OUT")
+wave_lines = 0
+wave_target = 0
 for i in indices:
     f = out / f"aug_sp_{i:05d}.txt"
+    tmp = Path(str(f) + ".tmp")
     lines = sum(1 for _ in f.open("rb")) if f.exists() else 0
+    tmp_lines = sum(1 for _ in tmp.open("rb")) if tmp.exists() else 0
+    effective = max(lines, tmp_lines)
+    remaining = max(0, pos - effective)
+    wave_lines += effective
+    wave_target += pos
     shard_progress.append({
         "index": i,
         "name": f.name,
-        "lines": lines,
+        "lines": effective,
+        "on_disk": lines,
+        "tmp_lines": tmp_lines,
         "target": pos,
-        "pct": min(100, int(100 * lines / pos)) if pos else 0,
-        "done": lines >= pos,
+        "remaining": remaining,
+        "pct": min(100, int(100 * effective / pos)) if pos else 0,
+        "done": effective >= pos,
     })
-total = sum(s["lines"] for s in shard_progress)
-want = pos * len(indices)
 p.write_text(json.dumps({
     "phase": "$phase",
     "when": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -66,9 +87,9 @@ p.write_text(json.dumps({
     "start_index": $START,
     "active_indices": indices,
     "active_shards": shard_progress,
-    "wave_lines": total,
-    "wave_target": want,
-    "wave_pct": min(100, int(100 * total / want)) if want else 100,
+    "wave_lines": wave_lines,
+    "wave_target": wave_target,
+    "wave_pct": min(100, int(100 * wave_lines / wave_target)) if wave_target else 100,
     "pids": pids,
 }, indent=2) + "\\n")
 PY
@@ -89,14 +110,18 @@ for f in sorted(out.glob("aug_sp_0*.txt")):
         continue
     idx = int(m.group(1))
     lines = sum(1 for _ in f.open("rb"))
+    tmp = Path(str(f) + ".tmp")
+    if tmp.exists():
+        lines = max(lines, sum(1 for _ in tmp.open("rb")))
     states[idx] = lines
 
-todo = []
-for idx in sorted(states):
-    if 0 < states[idx] < pos:
-        todo.append(idx)
-        if len(todo) >= n:
-            break
+# Finish shards closest to target first (e.g. legacy 150k before empty).
+partial = sorted(
+    (idx for idx, lines in states.items() if lines < pos),
+    key=lambda i: states[i],
+    reverse=True,
+)
+todo = partial[:n]
 
 max_idx = max(states) if states else -1
 next_idx = max_idx + 1
@@ -109,7 +134,46 @@ print(json.dumps(todo[:n]))
 PY
 }
 
+finalize_shard() {
+  local shard=$1
+  local tmp="${shard}.tmp"
+  local err=$(printf '%s_%05d.err' "$LOG" "$(basename "$shard" .txt | sed 's/aug_sp_//')")
+  if [[ ! -f "$tmp" ]]; then
+    return 0
+  fi
+  local n=$(shard_lines "$tmp")
+  if (( n >= POS )); then
+    mv -f "$tmp" "$shard"
+    echo "  committed $shard ($n lines)" >&2
+  elif (( n > $(shard_lines "$shard") )); then
+    echo "  warn: $tmp only $n/$POS lines — keeping best on disk" >&2
+    if (( n > $(shard_lines "$shard") )); then
+      mv -f "$tmp" "$shard"
+    else
+      rm -f "$tmp"
+    fi
+  else
+    rm -f "$tmp"
+    if [[ -f "$err" ]] && [[ -s "$err" ]]; then
+      echo "  worker failed $(basename "$shard"); see $err" >&2
+      tail -3 "$err" >&2
+    fi
+    return 1
+  fi
+  return 0
+}
+
 mkdir -p "$OUT"
+# Drop orphan tmps from dead workers when the shard is already complete.
+for f in "$OUT"/aug_sp_*.txt.tmp; do
+  [[ -f "$f" ]] || continue
+  base="${f%.tmp}"
+  if [[ -f "$base" ]] && (( $(shard_lines "$base") >= POS )); then
+    echo "removing orphan ${f##*/}" >&2
+    rm -f "$f"
+  fi
+done
+
 active_indices=()
 
 if [[ "$START" == "auto" ]]; then
@@ -135,24 +199,29 @@ cargo build --release --manifest-path "$ROOT/Cargo.toml" -q
 
 echo "datagen_parallel: ${#active_indices[@]} shards x $POS positions @ $NODES nodes (from index $START)"
 pids=()
+pid_shard=()
 for i in "${active_indices[@]}"; do
   seed=$((i * 7919))
   shard=$(printf '%s/aug_sp_%05d.txt' "$OUT" "$i")
-  lines=$(shard_lines "$shard")
+  tmp="${shard}.tmp"
+  lines=$(shard_effective_lines "$shard")
   if (( lines >= POS )); then
     echo "  skip $shard ($lines/$POS lines already complete)"
+    rm -f "$tmp"
     continue
   fi
   if pgrep -f "aug_sp_$(printf '%05d' "$i")" >/dev/null 2>&1; then
     echo "  skip $shard (already running)" >&2
     continue
   fi
+  rm -f "$tmp"
   err=$(printf '%s_%05d.err' "$LOG" "$i")
   printf 'datagen %s %s %s\nquit\n' "$POS" "$NODES" "$seed" \
-    | "$BIN" >"$shard" 2>"$err" &
+    | "$BIN" >"$tmp" 2>"$err" &
   pid=$!
   pids+=("$pid")
-  echo "  pid $pid -> $shard ($lines/$POS lines, seed $seed)"
+  pid_shard+=("$shard")
+  echo "  pid $pid -> $shard via .tmp ($lines/$POS on disk, seed $seed)"
 done
 
 if ((${#pids[@]} == 0)); then
@@ -165,22 +234,33 @@ write_status running
 
 fail=0
 while (( ${#pids[@]} )); do
-  still=()
-  for pid in "${pids[@]}"; do
+  still_pids=()
+  still_shards=()
+  for j in "${!pids[@]}"; do
+    pid=${pids[$j]}
+    shard=${pid_shard[$j]}
     if kill -0 "$pid" 2>/dev/null; then
-      still+=("$pid")
+      still_pids+=("$pid")
+      still_shards+=("$shard")
     else
-      wait "$pid" || fail=1
+      if wait "$pid"; then
+        finalize_shard "$shard" || fail=1
+      else
+        fail=1
+        rm -f "${shard}.tmp"
+        echo "  worker pid $pid failed for $shard" >&2
+      fi
     fi
   done
-  pids=("${still[@]}")
+  pids=("${still_pids[@]}")
+  pid_shard=("${still_shards[@]}")
   if (( ${#pids[@]} )); then
     write_status running
     total=0
     want=0
     for i in "${active_indices[@]}"; do
       shard=$(printf '%s/aug_sp_%05d.txt' "$OUT" "$i")
-      lines=$(shard_lines "$shard")
+      lines=$(shard_effective_lines "$shard")
       total=$((total + lines))
       want=$((want + POS))
     done

@@ -70,11 +70,11 @@
 <body>
 <header class="top">
   <h1>SABLE <span>LAB</span></h1>
-  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T04:01:09</span></p>
+  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T04:16:09</span></p>
 </header>
 <main>
   <div class="tiles">
-    <div class="tile"><div class="n" id="t-sp">1,466,265</div><div class="l">Self-play lines</div></div>
+    <div class="tile"><div class="n" id="t-sp">1,466,024</div><div class="l">Self-play lines</div></div>
     <div class="tile"><div class="n" id="t-hf">7,750,531</div><div class="l">Lichess positions</div></div>
     <div class="tile"><div class="n" id="t-gate">+18.3</div><div class="l">Last gate Elo</div></div>
     <div class="tile"><div class="n">+25</div><div class="l">Ship threshold</div></div>
@@ -88,11 +88,11 @@
     </section>
     <section class="panel">
       <div class="label">Snapshot</div>
-      <table><tr><th>Generated</th><td>2026-08-27 04:01 IST</td></tr>
+      <table><tr><th>Generated</th><td>2026-08-27 04:16 IST</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>b087e32 Harden Lichess prepare, datagen waves, and the live lab board.</td></tr>
-<tr><th>Tree</th><td>clean / synced</td></tr>
-<tr><th>Self-play</th><td>20 shards · 1,466,265 lines</td></tr>
+<tr><th>HEAD</th><td>212221c Refresh daily lab snapshot with current datagen wave progress.</td></tr>
+<tr><th>Tree</th><td>dirty</td></tr>
+<tr><th>Self-play</th><td>20 shards · 1,466,024 lines</td></tr>
 <tr><th>Lichess HF</th><td>34 shards · 7,750,531 lines</td></tr>
 <tr><th>Lichess cursor</th><td>12,669,721</td></tr>
 <tr><th>Last gate</th><td>REJECTED  Elo +18.3 (need +25) · 2026-08-27T03:43:06+05:30</td></tr></table>
@@ -150,10 +150,11 @@ function datagenHtml(active, wave) {
   if (!active?.length) return h + `<p class="dim">No active datagen shards.</p>`;
   for (const s of active) {
     const name = s.name || `aug_sp_${String(s.index).padStart(5,'0')}.txt`;
+    const tmp = s.tmp_lines ? ` (+${Number(s.tmp_lines).toLocaleString()} tmp)` : '';
     h += `<div class="bar-row" data-shard="${name}">`
       + `<span class="bar-label">${name}</span>`
       + `<div class="bar"><i style="width:${s.pct}%"></i></div>`
-      + `<span class="bar-num">${fmt(s.lines)}/${fmt(s.target)}</span></div>`;
+      + `<span class="bar-num">${fmt(s.lines)}/${fmt(s.target)}${tmp}</span></div>`;
   }
   return h;
 }
