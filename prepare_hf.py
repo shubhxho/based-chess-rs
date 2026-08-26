@@ -62,6 +62,11 @@ def sample_key(fen, seed):
     return int.from_bytes(hashlib.blake2b((seed + "\0" + fen).encode(), digest_size=8).digest(), "big")
 
 
+def fen_digest(fen):
+    """Compact in-memory dedupe key. Full FEN strings OOMed long runs on exit."""
+    return hashlib.blake2b(fen.encode(), digest_size=8).digest()
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("out_dir", help="directory for aug_hf_*.txt shards")
@@ -79,7 +84,12 @@ def main():
         help="set --skip-rows from hf_source.json (absolute_skip_rows + scanned_rows)",
     )
     p.add_argument("--shard-size", type=int, default=250_000)
-    p.add_argument("--dedupe", choices=("none", "memory"), default="memory")
+    p.add_argument(
+        "--dedupe",
+        choices=("none", "memory"),
+        default="memory",
+        help="memory stores 8-byte FEN digests (not full strings) to avoid post-write OOM",
+    )
     p.add_argument("--sample-mod", type=int, default=1, help="keep rows whose stable hash mod N is zero")
     p.add_argument("--seed", default="sable-lichess-sf-v1")
     p.add_argument(
@@ -99,6 +109,10 @@ def main():
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    # Crash / SIGKILL leaves *.tmp behind; they would block open_shard forever.
+    for orphan in sorted(out_dir.glob("aug_hf_*.txt.tmp")):
+        print(f"removing orphan {orphan.name}", flush=True)
+        orphan.unlink(missing_ok=True)
     existing = sorted(out_dir.glob("aug_hf_*.txt"))
     manifest_path = out_dir / "hf_source.json"
 
@@ -114,7 +128,8 @@ def main():
     if existing and args.skip_rows <= 0 and not args.allow_restart:
         raise SystemExit(
             f"{len(existing)} shards already in {out_dir}; refusing --skip-rows 0 "
-            f"(re-streaming from the start mostly emits duplicates). "
+            f"(re-streaming from the start mostly emits duplicates — that is what "
+            f"created the byte-identical aug_hf_00009..00011 copies). "
             f"Use --resume, or pass an explicit --skip-rows, or --allow-restart."
         )
     # Concurrent prepares race on shard numbers and rewrite identical FENs into
@@ -161,7 +176,8 @@ def main():
         "score_pov": "white",
         "result": "neutral dummy draw; train score-only data with EVAL_W=1",
         "filters": "valid standard FEN, no mate, quiet non-promotion PV move, not in check",
-        "dedupe_rule": "first retained canonical FEN wins in stream order",
+        "dedupe_rule": "first retained blake2b-64 FEN digest wins in stream order",
+        "dedupe_key": "blake2b-64",
     })
     (out_dir / "hf_source.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
@@ -232,10 +248,11 @@ def main():
                 dropped["sample"] += 1
                 continue
             if seen is not None:
-                if fen in seen:
+                key = fen_digest(fen)
+                if key in seen:
                     dropped["duplicate"] += 1
                     continue
-                seen.add(fen)
+                seen.add(key)
             emit(fen, int(cp))
             if kept and kept % 100_000 == 0:
                 print(f"rows {scanned:,}; kept {kept:,}; dropped {dropped}", flush=True)
@@ -249,9 +266,9 @@ def main():
                     os.replace(tmp, final)
                 else:
                     tmp.unlink()
-        # Drop the FEN set and stream before process teardown. Keeping millions of
-        # strings alive into interpreter shutdown is what triggers the post-write
-        # "zsh: killed" OOM after an otherwise successful run.
+        # Drop the digest set and stream before process teardown. Keeping millions
+        # of keys alive into interpreter / HF atexit is what triggers the
+        # post-write "zsh: killed" OOM after an otherwise successful run.
         if seen is not None:
             seen.clear()
         del stream
@@ -265,6 +282,7 @@ def main():
     })
     (out_dir / "hf_source.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     print(f"wrote {kept:,} positions from {scanned:,} streamed rows; dropped {dropped}", flush=True)
+    print("exit ok (hard exit — shards already on disk; ignore any prior zsh:killed noise)", flush=True)
     # Hard-exit after a successful write: atexit GC of HF/dataset internals has
     # been OOM-killing this process even though every shard is already on disk.
     release_lock()
