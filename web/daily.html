@@ -55,11 +55,11 @@
 
   <section class="panel">
     <div class="label">Snapshot</div>
-    <table><tr><th>Generated</th><td>2026-08-27 02:36 IST</td></tr>
+    <table><tr><th>Generated</th><td>2026-08-27 02:39 IST</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>ab0e184 Refresh daily status snapshot after restarting datagen workers.</td></tr>
+<tr><th>HEAD</th><td>32dcd58 Shrink Lichess prepare memory and purge the duplicate shards from no-skip runs.</td></tr>
 <tr><th>Tree</th><td>dirty</td></tr>
-<tr><th>Self-play shards</th><td>9 files · 748,130 positions</td></tr>
+<tr><th>Self-play shards</th><td>9 files · 747,090 positions</td></tr>
 <tr><th>Lichess shards</th><td>27 files · 6,100,000 positions</td></tr>
 <tr><th>Lichess --resume skip</th><td>12,669,721</td></tr>
 <tr><th>net.bin</th><td>present</td></tr>
@@ -74,10 +74,9 @@
 
   <section class="panel cmds">
     <div class="label">Next commands</div>
-    <code>.venv/bin/python prepare_hf.py data/lichess-sf --max-positions 300000 --resume</code>
-    <code>scripts/datagen_parallel.sh 150000 6000 2 6</code>
-    <code>DATA_DIR=data/selfplay DATA_GLOB='aug_sp_*.txt' EVAL_W=0.9 OUT_SCALE=0.70 \
-  .venv/bin/python train_gate.py --epochs 15 --games 400 --min-elo 25</code>
+    <code>scripts/datagen_parallel.sh 150000 6000 4 8</code>
+    <code>.venv/bin/python prepare_hf.py data/lichess-sf --max-positions 500000 --resume</code>
+    <code>scripts/ml_cycle.sh 20 400 25</code>
     <code>tests/presearch_ab.sh 60ab7d3 200 25000 4</code>
   </section>
 

@@ -138,8 +138,39 @@ def main():
     lock_fh = open(lock_path, "a+", encoding="utf-8")
     try:
         fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError as exc:
-        raise SystemExit(f"another prepare_hf is already writing {out_dir}") from exc
+    except BlockingIOError:
+        # Stale lock from a SIGKILL'd prior run: if the recorded pid is gone,
+        # take over instead of forcing the operator to rm by hand.
+        stale_pid = None
+        try:
+            lock_fh.seek(0)
+            text = lock_fh.read().strip()
+            if text.startswith("pid "):
+                stale_pid = int(text.split()[1])
+        except (ValueError, OSError):
+            stale_pid = None
+        if stale_pid is not None and stale_pid > 1:
+            try:
+                os.kill(stale_pid, 0)
+                alive = True
+            except OSError:
+                alive = False
+            if alive:
+                raise SystemExit(f"another prepare_hf is already writing {out_dir} (pid {stale_pid})")
+            print(f"clearing stale prepare lock from dead pid {stale_pid}", flush=True)
+            try:
+                fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+            except Exception:
+                pass
+            lock_fh.close()
+            lock_path.unlink(missing_ok=True)
+            lock_fh = open(lock_path, "a+", encoding="utf-8")
+            try:
+                fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise SystemExit(f"another prepare_hf is already writing {out_dir}") from exc
+        else:
+            raise SystemExit(f"another prepare_hf is already writing {out_dir}")
     lock_fh.seek(0)
     lock_fh.truncate()
     lock_fh.write(f"pid {os.getpid()}\n")

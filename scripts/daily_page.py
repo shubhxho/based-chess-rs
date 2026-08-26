@@ -157,10 +157,9 @@ def main() -> None:
 
   <section class="panel cmds">
     <div class="label">Next commands</div>
-    <code>.venv/bin/python prepare_hf.py data/lichess-sf --max-positions 300000 --resume</code>
-    <code>scripts/datagen_parallel.sh 150000 6000 2 6</code>
-    <code>DATA_DIR=data/selfplay DATA_GLOB='aug_sp_*.txt' EVAL_W=0.9 OUT_SCALE=0.70 \\
-  .venv/bin/python train_gate.py --epochs 15 --games 400 --min-elo 25</code>
+    <code>scripts/datagen_parallel.sh 150000 6000 4 8</code>
+    <code>.venv/bin/python prepare_hf.py data/lichess-sf --max-positions 500000 --resume</code>
+    <code>scripts/ml_cycle.sh 20 400 25</code>
     <code>tests/presearch_ab.sh 60ab7d3 200 25000 4</code>
   </section>
 

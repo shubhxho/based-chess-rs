@@ -47,6 +47,11 @@ EVAL_WEIGHT = float(os.environ.get("EVAL_W", "0.9"))
 WEIGHTED = os.environ.get("WEIGHTED", "1") != "0"
 WEIGHT_CLAMP = float(os.environ.get("WEIGHT_CLAMP", "3"))
 SHARD_DECAY = float(os.environ.get("SHARD_DECAY", "1.0"))
+# Multiply provenance weight for self-play shards when mixed with HF dumps.
+SP_BOOST = float(os.environ.get("SP_BOOST", "1.0"))
+WEIGHT_DECAY = float(os.environ.get("WEIGHT_DECAY", "1e-4"))
+PATIENCE = int(os.environ.get("PATIENCE", "5"))  # 0 = disable early stop
+BATCH = int(os.environ.get("BATCH", "16384"))
 SIGMOID_K = float(os.environ.get("SIG_K", "400"))
 # Export-time gain. `None` means "derive it from how loud this network actually
 # came out" -- see export(). Setting it pins the old constant behaviour.
@@ -77,11 +82,16 @@ def read_labels(paths, limit):
 
     Each shard also carries a provenance weight: with SHARD_DECAY below 1, older
     shards count for less, so a mixed set can lean on the newer teacher without
-    throwing the older positions away.
+    throwing the older positions away. SP_BOOST further amplifies paths that
+    look like self-play (`aug_sp` / `selfplay`) when mixed with HF dumps.
     """
     seen = {}
     fens, sc, wdl, src = [], [], [], []
+    shard_boost = []
     for si, path in enumerate(paths):
+        name = path.replace("\\", "/").lower()
+        boost = SP_BOOST if ("aug_sp" in name or "/selfplay/" in name) else 1.0
+        shard_boost.append(boost)
         with open(path, "rb") as fh:
             for line in fh:
                 parts = line.split(b"|")
@@ -114,11 +124,14 @@ def read_labels(paths, limit):
                     src[prev] = si
                 if limit and len(fens) >= limit:
                     break
-        print(f"  {path}: {len(fens)} unique positions", flush=True)
+        print(f"  {path}: {len(fens)} unique positions (boost {boost:g})", flush=True)
         if limit and len(fens) >= limit:
             break
     n_shards = max(src) + 1 if src else 1
-    age = np.array([SHARD_DECAY ** (n_shards - 1 - i) for i in src], np.float32)
+    age = np.array(
+        [SHARD_DECAY ** (n_shards - 1 - i) * shard_boost[i] for i in src],
+        np.float32,
+    )
     return fens, np.array(sc, np.float32), np.array(wdl, np.float32), age
 
 
@@ -413,14 +426,19 @@ def main():
 
     model = Net()
     mx.eval(model.parameters())
-    batch = 16384
+    batch = BATCH
     steps = len(train_idx) // batch
     # 1e-2 with AdamW drives a quarter of the hidden layer into the dead side
     # of the clipped ReLU and never brings it back: measured 24 of 64 neurons
     # never leaving zero, so the shipped width was effectively 33 rather than
     # 64. Lower is both a better fit and a wider network for the same bytes.
     base_lr = float(os.environ.get("LR", "3e-3"))
-    opt = optim.AdamW(learning_rate=base_lr, weight_decay=0.0)
+    opt = optim.AdamW(learning_rate=base_lr, weight_decay=WEIGHT_DECAY)
+    print(
+        f"  batch {batch}, lr {base_lr:g}, weight_decay {WEIGHT_DECAY:g}, "
+        f"patience {PATIENCE}, eval_w {EVAL_WEIGHT:g}, sp_boost {SP_BOOST:g}",
+        flush=True,
+    )
 
     def loss_fn(model, u, t, bk, y, w):
         # SCALE / SIGMOID_K converts network units into the sigmoid's argument.
@@ -448,6 +466,7 @@ def main():
 
     best = (float("inf"), None)
     warmup = 1
+    stale = 0
     for ep in range(epochs):
         # One linear warmup epoch, then cosine to ~0: early steps explore,
         # late steps settle into the quantisation grid.
@@ -478,15 +497,38 @@ def main():
         if vl < best[0]:
             best = (vl, [mx.array(p) for p in (model.ft, model.ft_b, model.out, model.out_b)])
             star = " *"
+            stale = 0
+        else:
+            stale += 1
         print(
             f"epoch {ep+1:2d}/{epochs}  loss {total/steps:.5f}  val {vl:.5f}{star}  "
             f"lr {opt.learning_rate.item():.5f}  {time.time()-t0:.0f}s",
             flush=True,
         )
+        if PATIENCE and stale >= PATIENCE:
+            print(f"early stop: val flat for {PATIENCE} epochs", flush=True)
+            break
 
     if best[1] is not None:
         model.ft, model.ft_b, model.out, model.out_b = best[1]
         print(f"exporting best-val checkpoint (val {best[0]:.5f})")
+
+    # Dead clipped-ReLU units waste the H budget. Report before export so a
+    # bad LR / weight_decay shows up without an arena.
+    probe = val_idx[: min(8_000, val_n)]
+    if len(probe):
+        wpad = np.concatenate([np.array(model.ft), np.zeros((1, H), np.float32)], axis=0)
+        ft_b = np.array(model.ft_b)
+        act = np.zeros(H, np.float64)
+        for i in range(0, len(probe), batch):
+            idx = probe[i : i + batch]
+            for j in idx:
+                u = us[j]
+                t = them[j]
+                act += np.clip(wpad[u[u < IN]].sum(0) + ft_b, 0, 1)
+                act += np.clip(wpad[t[t < IN]].sum(0) + ft_b, 0, 1)
+        dead = int(np.sum(act < 1e-3))
+        print(f"  dead hidden units on val probe: {dead}/{H}", flush=True)
 
     # How loud did this network come out? The gain that follows puts it on the
     # scale the search's margins were tuned for, whatever teacher produced the
