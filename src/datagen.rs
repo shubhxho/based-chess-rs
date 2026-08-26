@@ -308,7 +308,9 @@ pub fn run(target: u64, nodes: u64, seed: u64, out: &mut Out) {
             report_progress(last_report, target, games, t0);
         }
     }
-    report_progress(emitted, target, games, t0);
+    if last_report != emitted {
+        report_progress(emitted, target, games, t0);
+    }
     {
         let mut msg = [0u8; 32];
         let n = copy(&mut msg, b"datagen done\n");
