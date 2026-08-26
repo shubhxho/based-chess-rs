@@ -982,15 +982,20 @@ impl Searcher {
             let from = m.from();
             let to = m.to();
             let moved = pc_index(pos.stm, pos.piece_at(from) as usize);
+            // One legality-side check test feeds pruning, skip_quiets, and LMR.
+            let checking = gives_check(pos, m);
 
             // Promotions are noisy, so this already keeps them when skip_quiets
-            // trips; the old explicit promo carve-out was dead weight.
-            if skip_quiets && !noisy {
+            // trips; checking quiets must survive too -- a late check is often
+            // the entire point of the position.
+            if skip_quiets && !noisy && !checking {
                 continue;
             }
 
             // --- move-level pruning, only once a fallback score exists
-            if !root && best > -MATE_IN_MAX && !in_check {
+            // Checking moves are never pruned: the material/history heuristics
+            // below know nothing about king safety and would discard them.
+            if !root && best > -MATE_IN_MAX && !in_check && !checking {
                 // Both branches want it now, so it is computed once above them.
                 let lmr_depth = (depth
                     - (self.lmr[depth.min(63) as usize][(moves_played as usize).min(63)] >> 10))
@@ -1026,9 +1031,7 @@ impl Searcher {
                     // Capture futility: winning the piece standing on the
                     // target square still would not lift the evaluation to
                     // alpha, so the material this move wins cannot rescue it.
-                    // Only for captures that leave the king alone -- a check is
-                    // worth searching whatever it costs.
-                    if lmr_depth < 7 && !gives_check(pos, m) {
+                    if lmr_depth < 7 {
                         let gain =
                             if m.is_ep() { SEE_VAL[PAWN_P] } else { SEE_VAL[pos.piece_at(to) as usize] }
                                 + if m.is_promo() { SEE_VAL[m.promo()] - SEE_VAL[PAWN_P] } else { 0 };
@@ -1082,9 +1085,11 @@ impl Searcher {
                         // about, and the old `sbeta >= beta` gate missed every
                         // case where the excluded search overshot a lower one.
                         return v;
-                    } else if tt_score >= beta || cut_node {
+                    } else if !in_check && (tt_score >= beta || cut_node) {
                         // A node expected to fail high, whose table move is not
                         // singular, is a node to spend less on rather than more.
+                        // Never reduce while already in check: that path skipped
+                        // the plain check extension below.
                         extension = -2;
                     }
                 } else if in_check {
@@ -1095,7 +1100,7 @@ impl Searcher {
             // Only needed by the reduction formula, so only computed when a
             // reduction is actually on the table.
             let will_reduce = depth >= 2 && moves_played > root as i32;
-            let gives = will_reduce && gives_check(pos, m);
+            let gives = will_reduce && checking;
             // Read before the move is made, which is the only time it means
             // anything. `history_of` indexes the butterfly table by `pos.stm`
             // and reads the victim off `pos.piece_at(to)`; after `make` the
