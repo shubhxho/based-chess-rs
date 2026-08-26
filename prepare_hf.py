@@ -170,7 +170,9 @@ def main():
     # rows in the Python loop (which is what made long --skip-rows runs look
     # wedged and then get OOM-killed on the way out).
     if args.skip_rows:
+        print(f"skipping {args.skip_rows:,} source rows via stream.skip …", flush=True)
         stream = stream.skip(args.skip_rows)
+        print("skip complete; filtering positions", flush=True)
     seen = set() if args.dedupe == "memory" else None
     shard_no, rows_in_shard, kept, scanned = 0, 0, 0, 0
     dropped = {"depth": 0, "score": 0, "fen": 0, "tactical": 0, "duplicate": 0, "sample": 0}
