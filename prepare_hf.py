@@ -20,6 +20,7 @@ candidate until it passes opening-balanced arena matches and calibration.
 """
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -79,6 +80,19 @@ def main():
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    # Concurrent prepares race on shard numbers and rewrite identical FENs into
+    # parallel files. An exclusive lock makes the second process fail fast.
+    lock_path = out_dir / ".prepare_hf.lock"
+    lock_fh = open(lock_path, "a+", encoding="utf-8")
+    try:
+        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        raise SystemExit(f"another prepare_hf is already writing {out_dir}") from exc
+    lock_fh.seek(0)
+    lock_fh.truncate()
+    lock_fh.write(f"pid {os.getpid()}\n")
+    lock_fh.flush()
+
     # The manifest makes the otherwise enormous dataset selection reproducible.
     manifest = vars(args).copy()
     manifest.update({
@@ -95,6 +109,7 @@ def main():
     shard_no, rows_in_shard, kept, scanned = 0, 0, 0, 0
     dropped = {"depth": 0, "score": 0, "fen": 0, "tactical": 0, "duplicate": 0, "sample": 0}
     out = None
+    final = None
 
     def open_shard():
         nonlocal shard_no, rows_in_shard, out, final
@@ -107,7 +122,6 @@ def main():
         final = candidate
         return candidate
 
-    final = None
     open_shard()
 
     def emit(fen, cp):
@@ -169,6 +183,10 @@ def main():
                     os.replace(tmp, final)
                 else:
                     tmp.unlink()
+        try:
+            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+        finally:
+            lock_fh.close()
 
     manifest.update({"scanned_rows": scanned, "emitted_positions": kept, "dropped": dropped})
     (out_dir / "hf_source.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
