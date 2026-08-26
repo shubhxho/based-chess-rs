@@ -802,6 +802,39 @@ pay for the probe.
 
 ---
 
+## Stronger supervised data on Apple Silicon
+
+The MLX trainer is already the Apple-Silicon training path; Rust remains the
+low-latency inference and search path.  `prepare_hf.py` now streams
+[`Lichess/chess-position-evaluations`](https://huggingface.co/datasets/Lichess/chess-position-evaluations),
+a CC0 corpus with Stockfish scores, depth, node count and PVs.  It keeps only
+valid, non-mate, quiet, non-check positions and writes the existing augmented
+shard format.  It records the dataset revision and every filter in
+`hf_source.json`.
+
+```bash
+uv venv .venv
+uv pip install --python .venv/bin/python -r requirements-training.txt
+
+# First run a small, inspectable pilot. The default source revision is pinned.
+.venv/bin/python prepare_hf.py data/lichess-sf --max-positions 200000
+ENGINE="$PWD/target/release/sable" DATA_DIR=data/lichess-sf \
+  DATA_GLOB='aug_hf_*.txt' EVAL_W=1 .venv/bin/python train.py 0 20
+.venv/bin/python tests/verify_net.py
+```
+
+The source scores are white-relative and the trainer converts them to the
+mover's perspective. `EVAL_W=1` is required because these score-only rows use a
+neutral dummy game result. Start with a deterministic 2–10M-position cap: the
+trainer intentionally materialises its corpus and feature cache. The cache is
+now keyed by the ordered FEN corpus, so labels can be relabelled without a
+feature dump but an equal-sized different corpus cannot silently reuse features.
+
+This makes a credible route to a 3000-Elo *candidate*, not a rating promise.
+Use a stronger teacher/data mix only when `tests/verify_net.py` passes, then
+accept the network only after long paired arena runs across separate opening
+sets and a fresh Stockfish calibration. Fit loss alone is not an Elo result.
+
 ## Layout
 
 ```
@@ -816,6 +849,8 @@ src/tt.rs        mmap-backed transposition table
 src/datagen.rs   self-play data generation
 src/uci.rs       protocol, perft, bench, featdump
 train.py         MLX trainer and quantised exporter
+prepare_hf.py    streams, filters, and records labelled Lichess training shards
+relabel_sf.py    optional stronger Stockfish relabeller (SF_NODES is reproducible)
 arena.py         match runner with Elo confidence intervals
 publish_hf.py    uploads the network to the Hugging Face Hub
 src/tests.rs     unit tests (cargo test)

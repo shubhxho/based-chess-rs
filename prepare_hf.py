@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""Stream high-quality labelled chess positions from Hugging Face into Sable shards.
+
+Default source: Lichess/chess-position-evaluations (CC0-1.0).  It contains
+Stockfish evaluations, depth, node count, FENs, and a PV.  Unlike raw human PGN
+corpora, every retained position already has a position-level teacher label.
+The PV lets this converter discard tactical best moves, matching the static-net
+filter in src/datagen.rs.  Rows are streamed; the 42 GB source is not downloaded
+up front.
+
+A safe pilot:
+    uv pip install -r requirements-training.txt
+    python prepare_hf.py data/lichess-sf --max-positions 200000
+    DATA_DIR=data/lichess-sf DATA_GLOB='aug_hf_*.txt' EVAL_W=1 python train.py 0 20
+
+For a full run omit --max-positions, but materialise a bounded, deduplicated
+corpus first: train.py holds all FENs and feature arrays in memory.  Pin the
+source revision in --revision and retain hf_source.json.  A model is only a
+candidate until it passes opening-balanced arena matches and calibration.
+"""
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+
+DEFAULT_DATASET = "Lichess/chess-position-evaluations"
+DEFAULT_REVISION = "abb8f0b1251f89295a35b5ac801cb08a873812de"
+
+
+def first_pv_move(line):
+    """Return the first UCI move in a Lichess analysis PV, if any."""
+    if not isinstance(line, str):
+        return None
+    move = line.split(maxsplit=1)[0]
+    return move if 4 <= len(move) <= 5 else None
+
+
+def canonical_fen(fen):
+    """Validate and canonicalise a standard chess FEN to six fields."""
+    import chess
+
+    board = chess.Board(fen)
+    if board.is_valid() and board.chess960 is False:
+        return board, board.fen(en_passant="fen")
+    return None, None
+
+
+def sample_key(fen, seed):
+    """Stable key for deterministic sampling independent of stream ordering."""
+    return int.from_bytes(hashlib.blake2b((seed + "\\0" + fen).encode(), digest_size=8).digest(), "big")
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("out_dir", help="directory for aug_hf_*.txt shards")
+    p.add_argument("--dataset", default=DEFAULT_DATASET)
+    p.add_argument("--revision", default=DEFAULT_REVISION, help="HF commit SHA; use main only deliberately")
+    p.add_argument("--split", default="train")
+    p.add_argument("--min-depth", type=int, default=18)
+    p.add_argument("--min-knodes", type=int, default=0)
+    p.add_argument("--max-cp", type=int, default=2000)
+    p.add_argument("--max-positions", type=int, default=10_000_000, help="0 means no cap")
+    p.add_argument("--skip-rows", type=int, default=0, help="restart offset in the streamed source")
+    p.add_argument("--shard-size", type=int, default=250_000)
+    p.add_argument("--dedupe", choices=("none", "memory"), default="memory")
+    p.add_argument("--sample-mod", type=int, default=1, help="keep rows whose stable hash mod N is zero")
+    p.add_argument("--seed", default="sable-lichess-sf-v1")
+    args = p.parse_args()
+    if args.min_depth < 1 or args.max_cp < 1 or args.shard_size < 1 or args.sample_mod < 1:
+        p.error("limits must be positive")
+
+    try:
+        from datasets import load_dataset
+        import chess  # noqa: F401 -- import now gives a useful dependency error
+    except ImportError as exc:
+        raise SystemExit("install requirements-training.txt before preparing data") from exc
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    # The manifest makes the otherwise enormous dataset selection reproducible.
+    manifest = vars(args).copy()
+    manifest.update({
+        "license": "CC0-1.0 (verify the current dataset card before redistribution)",
+        "score_pov": "white",
+        "result": "neutral dummy draw; train score-only data with EVAL_W=1",
+        "filters": "valid standard FEN, no mate, quiet non-promotion PV move, not in check",
+        "dedupe_rule": "first retained canonical FEN wins in stream order",
+    })
+    (out_dir / "hf_source.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\\n")
+
+    stream = load_dataset(args.dataset, revision=args.revision, split=args.split, streaming=True)
+    seen = set() if args.dedupe == "memory" else None
+    shard_no, rows_in_shard, kept, scanned = 0, 0, 0, 0
+    dropped = {"depth": 0, "score": 0, "fen": 0, "tactical": 0, "duplicate": 0, "sample": 0}
+    out = None
+
+    def open_shard():
+        nonlocal shard_no, rows_in_shard, out
+        final = out_dir / f"aug_hf_{shard_no:05d}.txt"
+        while final.exists():
+            shard_no += 1
+            final = out_dir / f"aug_hf_{shard_no:05d}.txt"
+        out = open(str(final) + ".tmp", "wb")
+        rows_in_shard = 0
+        return final
+
+    final = open_shard()
+
+    def emit(fen, cp):
+        nonlocal final, shard_no, rows_in_shard, kept, out
+        # cp is White POV, precisely the convention read_labels expects on disk.
+        out.write(fen.encode() + b" | " + str(cp).encode() + b" | 1\\n")
+        kept += 1
+        rows_in_shard += 1
+        if rows_in_shard >= args.shard_size:
+            out.close()
+            os.replace(str(final) + ".tmp", final)
+            shard_no += 1
+            final = open_shard()
+
+    try:
+        for source_index, row in enumerate(stream):
+            if source_index < args.skip_rows:
+                continue
+            scanned += 1
+            if args.max_positions and kept >= args.max_positions:
+                break
+            depth, knodes, cp, mate = row.get("depth"), row.get("knodes"), row.get("cp"), row.get("mate")
+            if depth is None or int(depth) < args.min_depth or (args.min_knodes and int(knodes or 0) < args.min_knodes):
+                dropped["depth"] += 1
+                continue
+            if cp is None or mate is not None or abs(int(cp)) >= args.max_cp:
+                dropped["score"] += 1
+                continue
+            board, fen = canonical_fen(row.get("fen", ""))
+            if board is None or board.is_check():
+                dropped["fen"] += 1
+                continue
+            pv = first_pv_move(row.get("line"))
+            try:
+                move = board.parse_uci(pv) if pv else None
+            except ValueError:
+                move = None
+            if move is None or board.is_capture(move) or move.promotion:
+                dropped["tactical"] += 1
+                continue
+            if sample_key(fen, args.seed) % args.sample_mod:
+                dropped["sample"] += 1
+                continue
+            if seen is not None:
+                if fen in seen:
+                    dropped["duplicate"] += 1
+                    continue
+                seen.add(fen)
+            emit(fen, int(cp))
+            if kept and kept % 100_000 == 0:
+                print(f"rows {scanned:,}; kept {kept:,}; dropped {dropped}", flush=True)
+    finally:
+        if out is not None:
+            out.close()
+            if rows_in_shard:
+                os.replace(str(final) + ".tmp", final)
+            else:
+                os.unlink(str(final) + ".tmp")
+
+    manifest.update({"scanned_rows": scanned, "emitted_positions": kept, "dropped": dropped})
+    (out_dir / "hf_source.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\\n")
+    print(f"wrote {kept:,} positions from {scanned:,} streamed rows; dropped {dropped}")
+
+
+if __name__ == "__main__":
+    main()

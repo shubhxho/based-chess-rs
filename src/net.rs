@@ -32,6 +32,8 @@
 //! bug that yields a plausible-looking network which quietly plays badly, and
 //! it is miserable to find after the fact.
 
+use core::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+
 use crate::bb::*;
 use crate::pos::*;
 use crate::sys::SyncCell;
@@ -108,8 +110,12 @@ fn net() -> &'static Net {
 /// Bumping a counter invalidates every entry at once, so the size question is
 /// now about cache footprint alone.
 const CACHE_BITS: usize = 16;
-static CACHE: SyncCell<[u64; 1 << CACHE_BITS]> = SyncCell::new([0; 1 << CACHE_BITS]);
-static GEN: SyncCell<u8> = SyncCell::new(0);
+// This cache is shared by Lazy-SMP workers.  A mutable SyncCell here would be
+// a Rust data race even if the machine happened to perform aligned u64 stores
+// atomically.  Each packed entry is independent, so relaxed atomics give the
+// lock-free, race-free behaviour we need without serialising evaluation.
+static CACHE: [AtomicU64; 1 << CACHE_BITS] = [const { AtomicU64::new(0) }; 1 << CACHE_BITS];
+static GEN: AtomicU8 = AtomicU8::new(0);
 
 #[inline(always)]
 fn pack(key: u64, gen: u8, score: i32) -> u64 {
@@ -120,14 +126,15 @@ fn pack(key: u64, gen: u8, score: i32) -> u64 {
 /// stored — but `bench` and datagen want each position measured from a cold
 /// start, and the search's own `clear` is where that is expressed.
 pub fn clear_cache() {
-    let g = unsafe { GEN.as_mut() };
-    *g = g.wrapping_add(1);
+    let g = GEN.load(Ordering::Relaxed).wrapping_add(1);
+    GEN.store(g, Ordering::Relaxed);
     // Eight bits of generation wrap after 256 clears, and an entry that old
     // would start answering again. That only happens once every 256 clears, so
-    // pay for the real erase then.
-    if *g == 0 {
-        for e in unsafe { CACHE.as_mut() }.iter_mut() {
-            *e = 0;
+    // pay for the real erase then.  Clearing happens between searches, but the
+    // stores remain atomic so an accidental concurrent probe is still defined.
+    if g == 0 {
+        for e in CACHE.iter() {
+            e.store(0, Ordering::Relaxed);
         }
     }
 }
@@ -456,10 +463,9 @@ pub fn evaluate(pos: &Position) -> i32 {
     // a trillion whose key has forty zero bits on top and whose score is zero.
     // That costs a zero instead of a zero; no validity bit is worth the space.
     let slot = (pos.key as usize) & ((1 << CACHE_BITS) - 1);
-    let gen = unsafe { *GEN.as_ref() };
+    let gen = GEN.load(Ordering::Relaxed);
     let want = pack(pos.key, gen, 0);
-    let c = unsafe { CACHE.as_mut() };
-    let hit = c[slot];
+    let hit = CACHE[slot].load(Ordering::Relaxed);
     if hit & !0xFFFF == want {
         return hit as u16 as i16 as i32;
     }
@@ -475,6 +481,6 @@ pub fn evaluate(pos: &Position) -> i32 {
     let w = &n.out_w[b * 2 * H..(b + 1) * 2 * H];
     let out = propagate(&us, &w[..H]) + propagate(&them, &w[H..]) + n.out_b[b];
     let score = (out * SCALE / (QA * QB)).clamp(-20_000, 20_000);
-    c[slot] = pack(pos.key, gen, score);
+    CACHE[slot].store(pack(pos.key, gen, score), Ordering::Relaxed);
     score
 }

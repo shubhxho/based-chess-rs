@@ -1,0 +1,6 @@
+# Apple-Silicon training and Hugging Face preparation
+mlx>=0.22
+numpy>=1.26
+python-chess>=1.999
+datasets>=3.0
+huggingface_hub>=0.24

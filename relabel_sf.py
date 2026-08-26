@@ -48,9 +48,15 @@ import threading
 CP_CLAMP = 2000
 MATE_CP = 2000
 
+# Fixed nodes make labels reproducible across machines and let a full corpus
+# use a teacher materially stronger than the old depth-8 default.  Leave this
+# unset to preserve the historical depth mode.
 DEPTH = os.environ.get("SF_DEPTH", "8")
+NODES = os.environ.get("SF_NODES")
 SF = os.environ.get("SF", "stockfish")
 HASH = os.environ.get("SF_HASH", "64")
+GO = b"go nodes " + NODES.encode() if NODES else b"go depth " + DEPTH.encode()
+LABEL_LIMIT = f"nodes {NODES}" if NODES else f"depth {DEPTH}"
 
 
 def relabel_chunk(job):
@@ -105,7 +111,7 @@ def relabel_chunk(job):
         order, so the whole file can sit in the pipe and neither side blocks."""
         w = p.stdin
         for i in todo:
-            w.write(b"position fen " + parsed[i][0] + b"\ngo depth " + DEPTH.encode() + b"\n")
+            w.write(b"position fen " + parsed[i][0] + b"\n" + GO + b"\n")
         w.write(b"quit\n")
         w.flush()
         w.close()
@@ -187,7 +193,7 @@ def main():
     todo = sum(1 for j in jobs if not os.path.exists(j[1]))
     print(
         f"{len(names)} shards, {len(jobs)} slices ({todo} outstanding), "
-        f"{total_lines} positions, depth {DEPTH}, {procs} processes",
+        f"{total_lines} positions, {LABEL_LIMIT}, {procs} processes",
         flush=True,
     )
 

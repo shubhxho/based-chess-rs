@@ -22,6 +22,8 @@ Weights are projected back into the int8 box after every optimiser step, so the
 exported network computes the function the trainer actually converged to.
 """
 
+import glob
+import hashlib
 import os
 import struct
 import subprocess
@@ -184,6 +186,22 @@ def parse_features(path, n_expected):
     return us, them, buckets, width
 
 
+def feature_cache_path(data_dir, fens):
+    """Return a cache name tied to the exact ordered position corpus.
+
+    A position count is not a cache key: two Hugging Face exports can contain
+    the same number of positions while assigning every feature row to a
+    different FEN.  Hashing the ordered FEN bytes makes a stale cache
+    impossible to silently reuse, while keeping the expensive feature dump
+    reusable when only labels are relabelled.
+    """
+    h = hashlib.blake2b(digest_size=12)
+    for fen in fens:
+        h.update(fen)
+        h.update(b"\0")
+    return os.path.join(data_dir, f"feat_{len(fens)}_{IN}_{h.hexdigest()}.bin")
+
+
 def dump_features(fens, cache):
     """Ask the engine for the feature indices of every position."""
     if os.path.exists(cache):
@@ -319,11 +337,12 @@ def main():
     # does as long as the relabelled shards keep their names and line order --
     # relabelling rewrites scores in place and touches neither.
     data_dir = os.environ.get("DATA_DIR", "data")
-    shards = sorted(
-        os.path.join(data_dir, f)
-        for f in os.listdir(data_dir)
-        if f.startswith("aug") and f.endswith(".txt")
-    )
+    # Keep the historical aug*.txt default, but let a Hugging Face preparation
+    # run select a named corpus without copying it into the self-play folder.
+    data_glob = os.environ.get("DATA_GLOB", "aug*.txt")
+    shards = sorted(glob.glob(os.path.join(data_dir, data_glob)))
+    if not shards:
+        raise SystemExit(f"no training shards matching {data_dir}/{data_glob}")
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else None
     epochs = int(sys.argv[2]) if len(sys.argv) > 2 else 15
 
@@ -335,7 +354,7 @@ def main():
     # The feature map is part of the cache key. Changing IN changes what every
     # index means, and a cache named only for the position count would be read
     # back as indices into a table that no longer exists.
-    us, them, buckets, width = dump_features(fens, f"data/feat_{limit or 'all'}_{IN}.bin")
+    us, them, buckets, width = dump_features(fens, feature_cache_path(data_dir, fens))
     n = len(sc)
     print(
         f"{n} positions, {epochs} epochs, {(us.nbytes + them.nbytes)/1e6:.0f} MB of "

@@ -1100,7 +1100,7 @@ impl Searcher {
 
             // Only needed by the reduction formula, so only computed when a
             // reduction is actually on the table.
-            let will_reduce = depth >= 2 && moves_played >= 1 + root as i32;
+            let will_reduce = depth >= 2 && moves_played > root as i32;
             let gives = will_reduce && gives_check(pos, m);
             // Read before the move is made, which is the only time it means
             // anything. `history_of` indexes the butterfly table by `pos.stm`
