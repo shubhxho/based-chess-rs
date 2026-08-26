@@ -1281,9 +1281,13 @@ impl Searcher {
         let hit = tt().probe(pos.key, ply);
         let mut tt_move = Move::NULL;
         let mut tt_eval = i32::MIN;
+        let mut tt_bound = BOUND_NONE;
+        let mut tt_score = 0i32;
         if let Some(h) = &hit {
             tt_move = h.mv;
             tt_eval = h.eval;
+            tt_bound = h.bound;
+            tt_score = h.score;
             if !pv_node
                 && (h.bound == BOUND_EXACT
                     || (h.bound == BOUND_LOWER && h.score >= beta)
@@ -1303,7 +1307,19 @@ impl Searcher {
             stand = -INF;
         } else {
             raw_eval = if tt_eval != i32::MIN { tt_eval } else { evaluate(pos) };
-            stand = self.corrected_eval(pos, ply, raw_eval);
+            let corrected = self.corrected_eval(pos, ply, raw_eval);
+            // Same blend as the main search: a table score on the agreeing side
+            // of the static eval is a sharper stand-pat than the eval alone.
+            stand = if tt_bound != BOUND_NONE
+                && tt_score.abs() < MATE_IN_MAX
+                && ((tt_bound == BOUND_LOWER && tt_score > corrected)
+                    || (tt_bound == BOUND_UPPER && tt_score < corrected)
+                    || tt_bound == BOUND_EXACT)
+            {
+                tt_score
+            } else {
+                corrected
+            };
             best = stand;
             if best >= beta {
                 tt().store(pos.key, Move::NULL, best, raw_eval, 0, BOUND_LOWER, ply);
@@ -1333,9 +1349,15 @@ impl Searcher {
                 && pos.piece_at(to) == NONE
                 && (!tt_move.is_ep() || pos.ep == to as u8);
             if plausible {
+                let moved = pc_index(us, pos.piece_at(from) as usize);
                 pos.make(tt_move);
                 let legal = !pos.attacked_by(pos.stm, pos.king_sq(us), pos.occ());
                 if legal {
+                    // Continuation correction indexes the prior move. Without
+                    // this, every quiescence child still sees the last main-
+                    // search move and applies the wrong residual.
+                    self.stack[ply].mv = tt_move;
+                    self.stack[ply].piece_to = moved * 64 + to + 1;
                     let score = -self.qsearch(pos, -beta, -alpha, ply + 1, pv_node);
                     pos.unmake(tt_move);
                     if self.stop {
@@ -1407,7 +1429,12 @@ impl Searcher {
                     continue;
                 }
             }
+            let from = m.from();
+            let to = m.to();
+            let moved = pc_index(pos.stm, pos.piece_at(from) as usize);
             pos.make(m);
+            self.stack[ply].mv = m;
+            self.stack[ply].piece_to = moved * 64 + to + 1;
             let score = -self.qsearch(pos, -beta, -alpha, ply + 1, pv_node);
             pos.unmake(m);
             if self.stop {
