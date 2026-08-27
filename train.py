@@ -126,6 +126,20 @@ def read_labels(paths, limit):
                     break
         print(f"  {path}: {len(fens)} unique positions (boost {boost:g})", flush=True)
         if limit and len(fens) >= limit:
+            remaining = paths[si + 1 :]
+            if remaining:
+                kinds = sorted({
+                    ("sp" if ("aug_sp" in p.replace("\\", "/").lower() or "/selfplay/" in p.replace("\\", "/").lower())
+                     else "hf" if "aug_hf" in p.replace("\\", "/").lower()
+                     else "other")
+                    for p in remaining
+                })
+                print(
+                    f"  LIMIT={limit} reached before {len(remaining)} shard(s) "
+                    f"({', '.join(kinds)}); raise LIMIT or shrink the earlier corpus "
+                    f"so every provenance is represented.",
+                    flush=True,
+                )
             break
     n_shards = max(src) + 1 if src else 1
     age = np.array(

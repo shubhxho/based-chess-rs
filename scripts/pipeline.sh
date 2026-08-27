@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Run the full lab loop: daily snapshot, datagen wave, Lichess resume, gated train.
 #
-#   scripts/pipeline.sh           # one wave + gate (foreground)
-#   scripts/pipeline.sh bg        # datagen + prepare in background, gate when SP ready
+#   scripts/pipeline.sh           # one wave + SP gate (foreground)
+#   scripts/pipeline.sh bg        # datagen + prepare in background
+#   scripts/pipeline.sh 3000      # Lichess+SP mix candidate path (push_3000)
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -23,6 +24,10 @@ run_gate() {
   bash scripts/ml_cycle.sh 35 400 25
 }
 
+if [[ "$MODE" == "3000" || "$MODE" == "push3000" ]]; then
+  exec bash scripts/push_3000.sh all
+fi
+
 if [[ "$MODE" == "bg" || "$MODE" == "all" ]]; then
   echo "background: lab supervisor (datagen daemon + lichess + auto-restart)"
   nohup bash scripts/lab_supervisor.sh bg >> /tmp/lab_supervisor.log 2>&1 &
@@ -33,7 +38,7 @@ fi
 
 echo "=== datagen wave ==="
 run_datagen
-echo "=== lichess resume (500k) ==="
+echo "=== lichess resume (2M batch) ==="
 run_prepare
 echo "=== gated SP train ==="
 run_gate

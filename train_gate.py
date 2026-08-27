@@ -149,7 +149,13 @@ def parse_progress_line(line: str) -> dict | None:
 
 def base_report(args, *, status: str) -> dict:
     data_dir = os.environ.get("REPORT_DATA_DIR", os.environ.get("DATA_DIR", "data"))
-    path_tag = "lichess" if "lichess" in str(data_dir).lower() else "selfplay"
+    data_l = str(data_dir).lower()
+    if "lichess" in data_l:
+        path_tag = "lichess"
+    elif "mix" in data_l:
+        path_tag = "mix"
+    else:
+        path_tag = "selfplay"
     pilot = load_pilot_meta()
     report = {
         "when": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -169,11 +175,12 @@ def base_report(args, *, status: str) -> dict:
         "data_glob": os.environ.get("REPORT_DATA_GLOB", os.environ.get("DATA_GLOB", "aug*.txt")),
         "eval_w": os.environ.get("EVAL_W", "0.9"),
         "out_scale": os.environ.get("OUT_SCALE", "0.70"),
+        "sp_boost": os.environ.get("SP_BOOST"),
         "shipped": False,
         "skip_train": bool(args.skip_train),
         "candidate": net_info(CAND_BAK),
         "shipping": net_info(SHIP_BAK),
-        "pilot": net_info(PILOT_BAK) if path_tag == "lichess" else None,
+        "pilot": net_info(PILOT_BAK) if path_tag in ("lichess", "mix") else None,
         "val": pilot.get("val"),
         "val_r": pilot.get("r"),
         "val_mae_cp": pilot.get("mae_cp"),

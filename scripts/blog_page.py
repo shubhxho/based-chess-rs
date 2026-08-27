@@ -137,25 +137,27 @@ def main() -> None:
   </div>
 
   <h3>How to run it</h3>
-  <pre>scripts/prepare_lichess.sh 500000
-scripts/train_lichess.sh 20
-scripts/ml_cycle.sh 35 400 25   # self-play gate — shipping criterion</pre>
+  <pre>scripts/prepare_lichess.sh 2000000   # grow Stockfish-labelled corpus
+scripts/push_3000.sh                 # mix Lichess+SP → train → arena
+scripts/ml_cycle.sh 35 400 25        # self-play +25 ship gate
+scripts/push_3000.sh calibrate       # Stockfish UCI_Elo anchor</pre>
   <p>
     Prepare always <code>--resume</code>s. Never restart from row 0 with existing
     shards — that is how duplicate <code>aug_hf_*</code> files appeared.
-    Workers write progress to <code>prepare_status.json</code>; the daily board
-    reads it live.
+    Never delete <code>.prepare_hf.lock</code> while a run is alive (that raced
+    two prepares and killed a shard mid-write).
   </p>
 
   <h3>What “measure” means here</h3>
   <p>
     Last gate: <b>{esc(elo_txt)}</b> Elo vs shipping (need +25), status
     <b>{esc(shipped)}</b>. Best so far in this lab loop: <b>+19.1</b> on ~1.34M
-    self-play with <code>EVAL_W=0.9</code>. More Lichess volume does not replace
-    fresh 8k-node self-play for the shipping decision.
+    self-play with <code>EVAL_W=0.9</code>. Pure Lichess score-only pilots have
+    been dead even with shipping (~−1.7). The mix path is the credible route
+    toward a ~3000-Elo <i>candidate</i> — then calibrate; fit loss is not Elo.
   </p>
   <p>
-    Lichess pilots write candidates; they do not replace <code>net.bin</code>
+    Mix / Lichess pilots write candidates; they do not replace <code>net.bin</code>
     unless a gated arena says so.
   </p>
 

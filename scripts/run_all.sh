@@ -1,9 +1,9 @@
-#!/usr/bin/env bash
 # One command: build, refresh daily, start full lab stack.
 #
 #   scripts/run_all.sh           # supervisor + play UI (default)
 #   scripts/run_all.sh bg        # background supervisor only
 #   scripts/run_all.sh refresh   # python3 daily snapshot only
+#   scripts/run_all.sh 3000      # Lichess+SP mix candidate path
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -16,6 +16,7 @@ banner() {
   echo "  daily  http://127.0.0.1:8375/daily"
   echo "  blog   http://127.0.0.1:8375/blog"
   echo "  status http://127.0.0.1:8375/api/status"
+  echo "  3000   scripts/push_3000.sh"
   echo ""
 }
 
@@ -31,6 +32,11 @@ case "$MODE" in
     banner
     echo "  refreshed web/daily.html"
     exit 0
+    ;;
+  3000|push3000)
+    refresh
+    banner
+    exec bash scripts/push_3000.sh all
     ;;
   bg)
     refresh

@@ -111,8 +111,9 @@ def lichess_panel(lf: dict) -> str:
         f"<p>result=<b>{result_code}</b> is a neutral draw placeholder — with "
         f"<code>{esc(train_hint)}</code> only the Stockfish cp label trains the net. "
         f"The dummy result cannot pull the target toward win/loss.</p>"
-        f"<p class='dim trust'>Arena gate (+25 Elo) applies to <b>self-play</b> only. "
-        f"Lichess pilots measure fit, not shipping trust.</p>"
+        f"<p class='dim trust'>Ship bar is still <b>self-play +25 Elo</b>. "
+        f"Toward ~3000: grow Lichess → <code>scripts/push_3000.sh</code> "
+        f"(SF+SP mix) → arena → SP gate → Stockfish calibrate.</p>"
         f"</div>"
     )
 
@@ -136,7 +137,15 @@ def gate_section(g: dict | None, need: float) -> tuple[str, str, str]:
     elo = g.get("elo")
     elo_f = float(elo) if elo is not None else None
     err = g.get("elo_err")
-    path = g.get("path") or ("lichess" if "lichess" in str(g.get("data_dir", "")).lower() else "selfplay")
+    data_l = str(g.get("data_dir", "")).lower()
+    if g.get("path"):
+        path = g["path"]
+    elif "lichess" in data_l:
+        path = "lichess"
+    elif "mix" in data_l:
+        path = "mix"
+    else:
+        path = "selfplay"
     ship_need = 25.0
     pct = min(100, max(0, int(100 * elo_f / ship_need))) if ship_need > 0 and elo_f and elo_f > 0 else 0
     err_txt = f" ± {float(err):.0f}" if err is not None else ""
@@ -462,6 +471,7 @@ def main() -> None:
   .tag.clean {{ color: var(--green); border-color: var(--green); }}
   .tag.dirty {{ color: var(--amber); border-color: var(--amber); }}
   .tag.lichess {{ color: var(--gold); border-color: var(--gold-deep); }}
+  .tag.mix {{ color: #7db7ff; border-color: #4a7ab0; }}
   .tag.selfplay {{ color: var(--green); border-color: var(--green); }}
   td.ok {{ color: var(--green); }}
   td.warn {{ color: var(--amber); }}

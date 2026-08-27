@@ -344,7 +344,14 @@ def main():
         rows_in_shard += 1
         if rows_in_shard >= args.shard_size:
             out.close()
-            os.replace(str(final) + ".tmp", final)
+            tmp = Path(str(final) + ".tmp")
+            if not tmp.exists():
+                raise SystemExit(
+                    f"shard rotate lost {tmp.name} — another prepare likely deleted "
+                    f"it after the lock path was removed. Never `rm` "
+                    f".prepare_hf.lock while a run is alive."
+                )
+            os.replace(tmp, final)
             shard_no += 1
             open_shard()
 
