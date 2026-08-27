@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -55,11 +56,15 @@ def list_sp_shards() -> list[dict]:
     wave_indices: set[int] = set()
     if wave and wave.get("active_indices"):
         wave_indices = set(int(x) for x in wave["active_indices"])
+    names: set[str] = {p.name for p in SP.glob("aug_sp_*.txt")}
+    for tmp in SP.glob("aug_sp_*.txt.tmp"):
+        names.add(tmp.name[: -len(".tmp")])
     shards = []
-    for path in sorted(SP.glob("aug_sp_*.txt")):
-        idx = shard_index(path.name)
+    for name in sorted(names):
+        idx = shard_index(name)
         if idx is None:
             continue
+        path = SP / name
         lines, on_disk, tmp_lines = shard_effective_lines(path)
         target = wave_target if idx in wave_indices or not wave_indices else DEFAULT_TARGET
         if wave and wave.get("active_shards"):
@@ -68,7 +73,7 @@ def list_sp_shards() -> list[dict]:
                     target = int(ws.get("target", target))
                     break
         shards.append({
-            "name": path.name,
+            "name": name,
             "index": idx,
             "lines": lines,
             "on_disk": on_disk,
@@ -79,23 +84,6 @@ def list_sp_shards() -> list[dict]:
             "running": tmp_lines > 0 and on_disk < target,
         })
     return shards
-
-
-def workers() -> list[str]:
-    out = sh(
-        "pgrep", "-lf",
-        "prepare_hf|train_gate|datagen_parallel|datagen_daemon|ml_cycle|based-chess-rs/target/release/sable",
-    )
-    alive = []
-    for line in out.splitlines():
-        if "Helper" in line or "pgrep" in line:
-            continue
-        if any(
-            k in line
-            for k in ("prepare_hf", "train_gate", "datagen", "ml_cycle", "target/release/sable")
-        ):
-            alive.append(line[:140])
-    return alive
 
 
 def probe_engine() -> dict:
@@ -182,14 +170,203 @@ def gate() -> dict | None:
         return None
 
 
-def datagen_wave() -> dict | None:
-    path = SP / "datagen_status.json"
+def load_json(path: Path):
     if not path.exists():
         return None
     try:
         return json.loads(path.read_text())
     except (json.JSONDecodeError, OSError):
         return None
+
+
+def file_age_s(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    try:
+        return max(0, int(time.time() - path.stat().st_mtime))
+    except OSError:
+        return None
+
+
+def sha16(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    import hashlib
+
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 16), b""):
+            h.update(chunk)
+    return h.hexdigest()[:16]
+
+
+def net_slot(name: str) -> dict | None:
+    path = ROOT / name
+    if not path.is_file():
+        return None
+    return {
+        "path": name,
+        "bytes": path.stat().st_size,
+        "sha16": sha16(path),
+        "age_s": file_age_s(path),
+    }
+
+
+def nets() -> dict:
+    ship = net_slot("net.bin.ship")
+    cur = net_slot("net.bin")
+    cand = net_slot("net-candidate.bin")
+    pilot = net_slot("net-lichess-pilot.bin")
+    ship_match = bool(
+        ship and cur and ship.get("sha16") and ship["sha16"] == cur.get("sha16")
+    )
+    return {
+        "shipping": ship,
+        "current": cur,
+        "candidate": cand,
+        "pilot": pilot,
+        "current_is_shipping": ship_match,
+        "pilot_is_candidate": bool(
+            pilot and cand and pilot.get("sha16") == cand.get("sha16")
+        ),
+    }
+
+
+def pilot() -> dict | None:
+    return load_json(ROOT / "web" / "pilot_last.json")
+
+
+def elo_history(limit: int = 8) -> list:
+    hist = load_json(ROOT / "web" / "elo_history.json")
+    if not isinstance(hist, list):
+        return []
+    return hist[-limit:]
+
+
+def classify_worker(line: str) -> str:
+    low = line.lower()
+    if "prepare_hf" in low:
+        return "prepare"
+    if "train_gate" in low or "arena.py" in low:
+        return "gate"
+    if "train.py" in low or "train_lichess" in low:
+        return "train"
+    if "datagen" in low:
+        return "datagen"
+    if "ml_cycle" in low:
+        return "cycle"
+    if "web/server.py" in low:
+        return "server"
+    if "target/release/sable" in low or "/sable" in low:
+        return "engine"
+    return "other"
+
+
+def workers() -> list[str]:
+    out = sh(
+        "pgrep",
+        "-lf",
+        "prepare_hf|train_gate|train\\.py|arena\\.py|datagen_parallel|datagen_daemon|ml_cycle|web/server\\.py|based-chess-rs/target/release/sable",
+    )
+    alive = []
+    for line in out.splitlines():
+        if "Helper" in line or "pgrep" in line:
+            continue
+        if any(
+            k in line
+            for k in (
+                "prepare_hf",
+                "train_gate",
+                "train.py",
+                "arena.py",
+                "datagen",
+                "ml_cycle",
+                "web/server.py",
+                "target/release/sable",
+            )
+        ):
+            alive.append(line[:160])
+    return alive
+
+
+def worker_summary(lines: list[str]) -> dict:
+    by: dict[str, list[str]] = {}
+    for line in lines:
+        kind = classify_worker(line)
+        by.setdefault(kind, []).append(line)
+    return {
+        "total": len(lines),
+        "counts": {k: len(v) for k, v in sorted(by.items())},
+        "by_kind": by,
+    }
+
+
+def datagen_wave() -> dict | None:
+    path = SP / "datagen_status.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+    if isinstance(data, dict):
+        data["status_age_s"] = file_age_s(path)
+    return data
+
+
+def health(snap_bits: dict) -> dict:
+    """Compact OK/warn flags for /api/status and the daily board."""
+    flags = []
+    g = snap_bits.get("gate") or {}
+    lf = snap_bits.get("lichess") or {}
+    wave = snap_bits.get("datagen") or {}
+    nets_info = snap_bits.get("nets") or {}
+    wsum = snap_bits.get("workers_summary") or {}
+    counts = wsum.get("counts") or {}
+
+    if g.get("status") == "running" or g.get("live"):
+        flags.append({"ok": True, "key": "gate", "msg": f"arena live pid {g.get('pid')} · {g.get('played', 0)}/{g.get('games', '?')}"})
+    elif g.get("shipped"):
+        flags.append({"ok": True, "key": "gate", "msg": f"last SHIPPED {g.get('elo'):+}"})
+    elif g.get("elo") is not None:
+        flags.append({"ok": False, "key": "gate", "msg": f"last {str(g.get('status','reject')).upper()} {float(g['elo']):+.1f} ±{g.get('elo_err', '?')}"})
+    else:
+        flags.append({"ok": False, "key": "gate", "msg": "no gate yet"})
+
+    if counts.get("datagen"):
+        wp = wave.get("wave_pct", 0)
+        flags.append({"ok": True, "key": "datagen", "msg": f"{counts['datagen']} workers · wave {wp}%"})
+    else:
+        flags.append({"ok": False, "key": "datagen", "msg": "no datagen workers"})
+
+    phase = lf.get("phase", "idle")
+    if counts.get("prepare") or phase in ("filtering", "skipping", "running"):
+        flags.append({
+            "ok": True,
+            "key": "prepare",
+            "msg": f"{phase} · kept {lf.get('kept', lf.get('emitted', 0))}/{lf.get('max_positions', '?')}",
+        })
+    else:
+        flags.append({"ok": True, "key": "prepare", "msg": f"idle · corpus {lf.get('lines', 0):,}"})
+
+    if nets_info.get("current_is_shipping"):
+        flags.append({"ok": True, "key": "net", "msg": "net.bin == shipping"})
+    else:
+        flags.append({"ok": False, "key": "net", "msg": "net.bin differs from ship (candidate loaded?)"})
+
+    gt = snap_bits.get("git") or {}
+    if gt.get("clean"):
+        flags.append({"ok": True, "key": "git", "msg": gt.get("head", "clean")})
+    else:
+        n = len(gt.get("changed") or [])
+        flags.append({"ok": False, "key": "git", "msg": f"{n} local change(s) · {gt.get('head', '?')}"})
+
+    ok_n = sum(1 for f in flags if f["ok"])
+    return {
+        "ok": ok_n == len(flags),
+        "score": f"{ok_n}/{len(flags)}",
+        "flags": flags,
+    }
 
 
 def lichess() -> dict:
@@ -243,6 +420,7 @@ def lichess() -> dict:
             info["max_positions"] = int(s.get("max_positions", info.get("max_positions", 0)) or 0)
             info["elapsed_s"] = int(s.get("elapsed_s", 0) or 0)
             info["when"] = s.get("when")
+            info["status_age_s"] = file_age_s(status)
             if info.get("skip_target"):
                 info["skip_pct"] = min(100, int(100 * info["stream_row"] / info["skip_target"]))
             if info.get("max_positions"):
@@ -256,15 +434,57 @@ def collect() -> dict:
     shards = list_sp_shards()
     g = gate()
     wave = datagen_wave()
+    lf = lichess()
+    wlines = workers()
+    wsum = worker_summary(wlines)
+    nets_info = nets()
+    pilot_info = pilot()
+    hist = elo_history()
+    gt = git_tree()
     active = []
     if wave and wave.get("active_shards") and wave.get("phase") == "running":
-        active = wave["active_shards"]
+        # Prefer live line counts from disk/tmp over stale status snapshot.
+        live = []
+        for ws in wave["active_shards"]:
+            name = ws.get("name") or f"aug_sp_{int(ws.get('index', 0)):05d}.txt"
+            path = SP / name
+            lines, on_disk, tmp_lines = shard_effective_lines(path)
+            target = int(ws.get("target", DEFAULT_TARGET))
+            live.append({
+                **ws,
+                "name": name,
+                "lines": lines,
+                "on_disk": on_disk,
+                "tmp_lines": tmp_lines,
+                "target": target,
+                "remaining": max(0, target - lines),
+                "pct": min(100, int(100 * lines / target)) if target else 0,
+                "done": on_disk >= target,
+            })
+        active = live
+        wave = {
+            **wave,
+            "active_shards": live,
+            "wave_lines": sum(s["lines"] for s in live),
+            "wave_pct": min(
+                100,
+                int(100 * sum(s["lines"] for s in live) / max(1, int(wave.get("wave_target") or 1))),
+            ),
+        }
     else:
         active = [s for s in shards if s.get("running") or (not s["done"] and s["lines"] > 0)][-6:]
         if not active:
             active = [s for s in shards if not s["done"]][-4:]
     done_n = sum(1 for s in shards if s["done"])
     partial_n = sum(1 for s in shards if 0 < s["lines"] < s["target"])
+    snap_bits = {
+        "gate": g,
+        "lichess": lf,
+        "datagen": wave,
+        "nets": nets_info,
+        "workers_summary": wsum,
+        "git": gt,
+    }
     return {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "selfplay_lines": sum(s["lines"] for s in shards),
@@ -273,12 +493,49 @@ def collect() -> dict:
         "selfplay_partial": partial_n,
         "shards": shards[-8:],
         "active_shards": active,
-        "lichess": lichess(),
+        "lichess": lf,
         "gate": g,
         "gate_need": g.get("min_elo", 25) if g else 25,
         "gate_elo": g.get("elo") if g else None,
-        "workers": workers(),
+        "gate_err": g.get("elo_err") if g else None,
+        "gate_status": g.get("status") if g else None,
+        "workers": wlines,
+        "workers_summary": wsum,
         "datagen": wave,
-        "git": git_tree(),
+        "nets": nets_info,
+        "pilot": pilot_info,
+        "elo_history": hist,
+        "health": health(snap_bits),
+        "git": gt,
         "engine": probe_engine(),
     }
+
+
+if __name__ == "__main__":
+    import pprint
+
+    data = collect()
+    if "--json" in sys.argv:
+        print(json.dumps(data, indent=2))
+    else:
+        h = data.get("health") or {}
+        print(f"Sable lab status  {data.get('generated_at')}  health {h.get('score')}")
+        for f in h.get("flags") or []:
+            mark = "ok" if f.get("ok") else "!!"
+            print(f"  [{mark}] {f.get('key')}: {f.get('msg')}")
+        print(f"  SP {data.get('selfplay_lines'):,} lines · {data.get('selfplay_done')}/{data.get('selfplay_shards')} done")
+        lf = data.get("lichess") or {}
+        print(f"  HF {lf.get('lines'):,} · phase {lf.get('phase')} · kept {lf.get('kept', '?')}/{lf.get('max_positions', '?')}")
+        g = data.get("gate") or {}
+        if g:
+            print(
+                f"  gate {g.get('status')} Elo {g.get('elo')} ±{g.get('elo_err')} "
+                f"path={g.get('path')} pid={g.get('pid')}"
+            )
+        ws = data.get("workers_summary") or {}
+        print(f"  workers {ws.get('total')} {ws.get('counts')}")
+        n = data.get("nets") or {}
+        print(f"  net ship_match={n.get('current_is_shipping')} pilot=cand {n.get('pilot_is_candidate')}")
+        if "--full" in sys.argv:
+            pprint.pp(data)
+

@@ -170,7 +170,13 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/status":
             body = collect()
             body["engine"] = engine_info()
-            self._send(200, json.dumps(body).encode())
+            self._send(200, json.dumps(body, indent=2).encode())
+        elif self.path == "/pilot_last.json":
+            path = os.path.join(ROOT, "pilot_last.json")
+            if not os.path.isfile(path):
+                return self._send(200, b"{}")
+            with open(path, "rb") as f:
+                self._send(200, f.read(), "application/json")
         else:
             self._send(404, b"{}")
 

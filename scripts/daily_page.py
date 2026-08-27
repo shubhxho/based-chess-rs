@@ -252,6 +252,23 @@ def elo_history_panel() -> str:
     )
 
 
+def health_panel(h: dict | None) -> str:
+    if not h:
+        return "<p class='dim'>No health snapshot.</p>"
+    score = esc(h.get("score", "?"))
+    rows = []
+    for f in h.get("flags") or []:
+        cls = "ok" if f.get("ok") else "bad"
+        rows.append(
+            f"<tr><th>{esc(f.get('key'))}</th>"
+            f"<td class='{cls}'>{esc(f.get('msg'))}</td></tr>"
+        )
+    return (
+        f"<p class='dim' id='health-score'>health <b>{score}</b></p>"
+        f"<table id='health-table'>{''.join(rows)}</table>"
+    )
+
+
 def repo_panel(gt: dict) -> str:
     state = "clean · synced" if gt.get("clean") else f"{len(gt.get('changed') or [])} change(s)"
     rows = [
@@ -304,6 +321,10 @@ def main() -> None:
     gate_row, gate_panel, gate_bar = gate_section(g, need)
     tiles_html = elo_tiles(g, need)
     hist_html = elo_history_panel()
+    health_html = health_panel(snap.get("health"))
+    wsum = snap.get("workers_summary") or {}
+    counts = wsum.get("counts") or {}
+    count_txt = " · ".join(f"{k} {v}" for k, v in counts.items()) if counts else "none"
 
     rows = [
         ("Generated", now),
@@ -319,9 +340,14 @@ def main() -> None:
     ]
 
     proc_html = (
-        "<ul id='workers'>" + "".join(f"<li><code>{esc(p)}</code></li>" for p in snap["workers"]) + "</ul>"
-        if snap["workers"]
-        else "<p class='dim' id='workers'>No workers.</p>"
+        f"<p class='dim' id='worker-counts'>{esc(count_txt)} · total {wsum.get('total', 0)}</p>"
+        + (
+            "<ul id='workers'>"
+            + "".join(f"<li><code>{esc(p)}</code></li>" for p in snap["workers"])
+            + "</ul>"
+            if snap["workers"]
+            else "<p class='dim' id='workers'>No workers.</p>"
+        )
     )
     datagen_html = progress_bars(snap.get("active_shards") or [])
     wave = snap.get("datagen")
@@ -478,6 +504,11 @@ def main() -> None:
       <table>{table}</table>
     </section>
   </div>
+
+  <section class="panel" style="margin-top:16px">
+    <div class="label">Lab health</div>
+    <div id="health">{health_html}</div>
+  </section>
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Elo estimate</div>
