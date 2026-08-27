@@ -181,5 +181,51 @@
     "draws": 150,
     "losses": 126,
     "score": 0.497
+  },
+  {
+    "when": "2026-08-27T17:56:59+05:30",
+    "status": "rejected",
+    "pid": 5971,
+    "elo": -1.7,
+    "elo_err": 34.0,
+    "elo_lo": -35.7,
+    "elo_hi": 32.3,
+    "min_elo": 10.0,
+    "games": 400,
+    "nodes": 20000,
+    "epochs": 40,
+    "concurrency": 4,
+    "path": "mix",
+    "data_dir": "data/mix",
+    "data_glob": "aug*.txt",
+    "eval_w": "0.9",
+    "out_scale": "0.70",
+    "sp_boost": "3.0",
+    "shipped": false,
+    "skip_train": true,
+    "candidate": {
+      "path": "net-candidate.bin",
+      "bytes": 60976,
+      "sha16": "95a18bd070a4505f"
+    },
+    "shipping": {
+      "path": "net.bin.ship",
+      "bytes": 60976,
+      "sha16": "5e4817c6e33b6bd9"
+    },
+    "pilot": {
+      "path": "net-lichess-pilot.bin",
+      "bytes": 60976,
+      "sha16": "95a18bd070a4505f"
+    },
+    "val": 0.00511,
+    "val_r": 0.9514,
+    "val_mae_cp": 132.3,
+    "train_epochs_done": 33,
+    "played": 400,
+    "wins": 124,
+    "draws": 150,
+    "losses": 126,
+    "score": 0.497
   }
 ]

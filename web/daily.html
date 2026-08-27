@@ -103,12 +103,12 @@
     <a href="/blog">blog</a>
     <a href="/api/status">status</a>
   </nav>
-  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T17:49:29</span>
+  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T17:57:03</span>
     · <span class="tag dirty" id="git-tag">dirty</span></p>
 </header>
 <main>
   <div class="tiles">
-    <div class="tile"><div class="n" id="t-sp">13,177,668</div><div class="l">Self-play lines</div></div>
+    <div class="tile"><div class="n" id="t-sp">13,493,664</div><div class="l">Self-play lines</div></div>
     <div class="tile"><div class="n" id="t-hf">10,644,688</div><div class="l">Lichess positions</div></div>
     
     <div class="tile"><div class="n" id="t-elo">-1.7</div><div class="l">Last Elo estimate</div></div>
@@ -124,38 +124,38 @@
     <section class="panel">
       <div class="label">Gate</div>
       <div class='gate-bar'><div id='gate-fill' class='gate-fill' style='width:0%'></div></div><p class='dim'>Progress toward <b>+25 Elo</b> ship bar (current estimate <span id='gate-elo-inline'>-1.7 ± 34</span>).</p>
-      <div id="gate-panel"><table><tr><th>Result</th><td><span id='gate-result'>REJECTED</span></td></tr><tr><th>Elo estimate</th><td><span id='gate-elo'>-1.7 ± 34</span> (95%)</td></tr><tr><th>CI band</th><td>[-35.7, 32.3]</td></tr><tr><th>Path</th><td><span id='gate-path'>mix</span> · EVAL_W=0.85</td></tr><tr><th>PID</th><td>83112</td></tr><tr><th>Match</th><td>+124 =150 -126 · score 0.497 · 400@20000n ×4</td></tr><tr><th>Pilot fit</th><td>val 0.00568 · r=0.9549 · mae=129.6cp</td></tr><tr><th>Candidate</th><td>0c28d75271337d67 · 60976B</td></tr><tr><th>This gate need</th><td>+10</td></tr><tr><th>Ship need (SP)</th><td>+25</td></tr><tr><th>Best SP gate</th><td>+19.1 (1.34M SP) · last SP +18.3</td></tr><tr><th>Epochs</th><td>50</td></tr><tr><th>When</th><td>2026-08-27T09:43:12+05:30</td></tr></table><p class='dim' style='margin-top:10px'>Shipping trust is self-play only. Lichess score-only nets measure teacher fit; arena Elo is the estimate that matters.</p></div>
+      <div id="gate-panel"><table><tr><th>Result</th><td><span id='gate-result'>REJECTED</span></td></tr><tr><th>Elo estimate</th><td><span id='gate-elo'>-1.7 ± 34</span> (95%)</td></tr><tr><th>CI band</th><td>[-35.7, 32.3]</td></tr><tr><th>Path</th><td><span id='gate-path'>mix</span> · EVAL_W=0.9</td></tr><tr><th>PID</th><td>5971</td></tr><tr><th>Match</th><td>+124 =150 -126 · score 0.497 · 400@20000n ×4</td></tr><tr><th>Pilot fit</th><td>val 0.00511 · r=0.9514 · mae=132.3cp</td></tr><tr><th>Candidate</th><td>95a18bd070a4505f · 60976B</td></tr><tr><th>This gate need</th><td>+10</td></tr><tr><th>Ship need (SP)</th><td>+25</td></tr><tr><th>Best SP gate</th><td>+19.1 (1.34M SP) · last SP +18.3</td></tr><tr><th>Epochs</th><td>40</td></tr><tr><th>When</th><td>2026-08-27T17:56:59+05:30</td></tr></table><p class='dim' style='margin-top:10px'>Shipping trust is self-play only. Lichess score-only nets measure teacher fit; arena Elo is the estimate that matters.</p></div>
     </section>
     <section class="panel">
       <div class="label">Repository</div>
-      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>abb9f8a Update daily web page</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>3 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>scripts/ml_cycle.sh</code></td></tr><tr><th><code>M</code></th><td><code>scripts/push_3000.sh</code></td></tr><tr><th><code>M</code></th><td><code>scripts/sync_mix.sh</code></td></tr></table><p class='dim' id='git-diff'>3 files changed, 61 insertions(+), 49 deletions(-)</p><pre class='diff-stat' id='git-stat'>scripts/ml_cycle.sh  | 15 +++++++++--
- scripts/push_3000.sh | 19 ++++++-------
- scripts/sync_mix.sh  | 76 ++++++++++++++++++++++++++--------------------------
- 3 files changed, 61 insertions(+), 49 deletions(-)</pre></div>
+      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>ab33bd8 Flip mix so SP outcomes win on overlap; cap SP gate shards.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>3 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>web/elo_history.json</code></td></tr><tr><th><code>M</code></th><td><code>web/gate_last.json</code></td></tr><tr><th><code>M</code></th><td><code>web/pilot_last.json</code></td></tr></table><p class='dim' id='git-diff'>3 files changed, 66 insertions(+), 20 deletions(-)</p><pre class='diff-stat' id='git-stat'>web/elo_history.json | 46 ++++++++++++++++++++++++++++++++++++++++++++++
+ web/gate_last.json   | 22 +++++++++++-----------
+ web/pilot_last.json  | 18 +++++++++---------
+ 3 files changed, 66 insertions(+), 20 deletions(-)</pre></div>
     </section>
     <section class="panel">
       <div class="label">Lab snapshot</div>
-      <table><tr><th>Generated</th><td>2026-08-27 17:49 IST</td></tr>
+      <table><tr><th>Generated</th><td>2026-08-27 17:57 IST</td></tr>
 <tr><th>Engine</th><td>Sable 1.2.0</td></tr>
 <tr><th>Author</th><td>shubh (based-chess-rs, no_std neural eval)</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>abb9f8a Update daily web page</td></tr>
+<tr><th>HEAD</th><td>ab33bd8 Flip mix so SP outcomes win on overlap; cap SP gate shards.</td></tr>
 <tr><th>Tree</th><td>dirty</td></tr>
-<tr><th>Self-play</th><td>68 shards · 13,177,668 lines</td></tr>
+<tr><th>Self-play</th><td>68 shards · 13,493,664 lines</td></tr>
 <tr><th>Lichess HF</th><td>46 shards · 10,644,688 lines</td></tr>
 <tr><th>Lichess cursor</th><td>46,721,842</td></tr>
-<tr><th>Last gate</th><td>REJECTED  Elo -1.7 ± 34 · band [-35.7, +32.3] (need +10) · mix · pid 83112 · 400/400 games · 2026-08-27T09:43:12+05:30</td></tr></table>
+<tr><th>Last gate</th><td>REJECTED  Elo -1.7 ± 34 · band [-35.7, +32.3] (need +10) · mix · pid 5971 · 400/400 games · 2026-08-27T17:56:59+05:30</td></tr></table>
     </section>
   </div>
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Lab health</div>
-    <div id="health"><p class='dim' id='health-score'>health <b>3/5</b></p><table id='health-table'><tr><th>gate</th><td class='bad'>last REJECTED -1.7 ±34.0</td></tr><tr><th>datagen</th><td class='ok'>2 workers · wave 41%</td></tr><tr><th>prepare</th><td class='ok'>idle · corpus 10,644,688</td></tr><tr><th>net</th><td class='ok'>net.bin == shipping</td></tr><tr><th>git</th><td class='bad'>3 local change(s) · abb9f8a Update daily web page</td></tr></table></div>
+    <div id="health"><p class='dim' id='health-score'>health <b>3/5</b></p><table id='health-table'><tr><th>gate</th><td class='bad'>last REJECTED -1.7 ±34.0</td></tr><tr><th>datagen</th><td class='ok'>2 workers · wave 80%</td></tr><tr><th>prepare</th><td class='ok'>idle · corpus 10,644,688</td></tr><tr><th>net</th><td class='ok'>net.bin == shipping</td></tr><tr><th>git</th><td class='bad'>3 local change(s) · ab33bd8 Flip mix so SP outcomes win on overlap; cap SP gate shards.</td></tr></table></div>
   </section>
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Elo estimate</div>
-    <table class='mini' id='elo-hist'><caption class='dim'>Elo estimate history (arena vs shipping · 95% CI)</caption><thead><tr><th>when</th><th>path</th><th>Elo ± CI</th><th>match</th><th>blend</th><th></th></tr></thead><tbody><tr><td class='dim'>2026-08-27T09:43:12</td><td><span class='tag mix'>mix</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=0.85</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T09:27:28</td><td><span class='tag mix'>mix</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=0.9</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T07:24:54</td><td><span class='tag lichess'>lichess</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=1</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T07:21:25</td><td><span class='tag lichess'>lichess</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=1</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T07:06:20</td><td><span class='tag lichess'>lichess</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=1</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T03:43:06</td><td><span class='tag selfplay'>selfplay</span></td><td class='warn'>+18.3 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=0.9</td><td>reject</td></tr></tbody></table>
+    <table class='mini' id='elo-hist'><caption class='dim'>Elo estimate history (arena vs shipping · 95% CI)</caption><thead><tr><th>when</th><th>path</th><th>Elo ± CI</th><th>match</th><th>blend</th><th></th></tr></thead><tbody><tr><td class='dim'>2026-08-27T17:56:59</td><td><span class='tag mix'>mix</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=0.9</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T09:43:12</td><td><span class='tag mix'>mix</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=0.85</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T09:27:28</td><td><span class='tag mix'>mix</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=0.9</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T07:24:54</td><td><span class='tag lichess'>lichess</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=1</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T07:21:25</td><td><span class='tag lichess'>lichess</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=1</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T07:06:20</td><td><span class='tag lichess'>lichess</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=1</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T03:43:06</td><td><span class='tag selfplay'>selfplay</span></td><td class='warn'>+18.3 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=0.9</td><td>reject</td></tr></tbody></table>
   </section>
 
   <section class="panel" style="margin-top:16px">
@@ -165,10 +165,10 @@
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Self-play datagen</div>
-    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [68,69,70,71] · 200000@8000n · 64 done · 4 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:41%'></i></div><span class='bar-num' id='dg-wave-num'>328,936/800,000</span></div><div class='bar-row' data-shard='aug_sp_00068.txt'><span class='bar-label'>aug_sp_00068.txt</span><div class='bar'><i style='width:41%'></i></div><span class='bar-num'>82,703/200,000 (+82,703 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00069.txt'><span class='bar-label'>aug_sp_00069.txt</span><div class='bar'><i style='width:40%'></i></div><span class='bar-num'>81,770/200,000 (+81,770 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00070.txt'><span class='bar-label'>aug_sp_00070.txt</span><div class='bar'><i style='width:41%'></i></div><span class='bar-num'>82,443/200,000 (+82,443 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00071.txt'><span class='bar-label'>aug_sp_00071.txt</span><div class='bar'><i style='width:41%'></i></div><span class='bar-num'>82,020/200,000 (+82,020 tmp)</span></div></div>
+    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [68,69,70,71] · 200000@8000n · 64 done · 4 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:80%'></i></div><span class='bar-num' id='dg-wave-num'>644,715/800,000</span></div><div class='bar-row' data-shard='aug_sp_00068.txt'><span class='bar-label'>aug_sp_00068.txt</span><div class='bar'><i style='width:80%'></i></div><span class='bar-num'>161,203/200,000 (+161,203 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00069.txt'><span class='bar-label'>aug_sp_00069.txt</span><div class='bar'><i style='width:80%'></i></div><span class='bar-num'>160,516/200,000 (+160,516 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00070.txt'><span class='bar-label'>aug_sp_00070.txt</span><div class='bar'><i style='width:80%'></i></div><span class='bar-num'>161,595/200,000 (+161,595 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00071.txt'><span class='bar-label'>aug_sp_00071.txt</span><div class='bar'><i style='width:80%'></i></div><span class='bar-num'>161,401/200,000 (+161,401 tmp)</span></div></div>
   </section>
 
   <div class="grid grid-2" style="margin-top:16px">
