@@ -25,6 +25,7 @@ WEB=0
 DATAGEN_PID=""
 PREP_PID=""
 WEB_PID=""
+GATE_PID=""
 
 mkdir -p "$STATE"
 
@@ -47,6 +48,7 @@ write_status() {
     printf 'datagen_pid=%s\n' "$DATAGEN_PID"
     printf 'prepare_pid=%s\n' "$PREP_PID"
     printf 'web_pid=%s\n' "$WEB_PID"
+    printf 'gate_pid=%s\n' "$GATE_PID"
     printf 'updated=%s\n' "$(date -Iseconds 2>/dev/null || date)"
   } >"$STATUS.tmp"
   mv -f "$STATUS.tmp" "$STATUS"
@@ -84,9 +86,27 @@ refresh() {
   python3 scripts/blog_page.py >>"$LOG" 2>&1 || true
 }
 
+adopt_worker() {
+  # Worker-level PID locks survive a supervisor restart.  Adopt them instead
+  # of spawning a duplicate process that immediately fails its own lock.
+  local file=$1
+  [[ -f "$file" ]] || return 1
+  local pid
+  pid=$(sed -n 's/[^0-9].*//p' "$file" 2>/dev/null | head -n 1)
+  alive "$pid" || return 1
+  printf '%s\n' "$pid"
+}
+
 start_datagen() {
   alive "$DATAGEN_PID" && return
-  echo "supervisor: starting self-play datagen" | tee -a "$LOG"
+  local adopted=""
+  adopted=$(adopt_worker "$ROOT/data/selfplay/.datagen_daemon.pid" || true)
+  if alive "$adopted"; then
+    DATAGEN_PID=$adopted
+    echo "supervisor: adopted self-play datagen pid $DATAGEN_PID" >>"$LOG"
+    return
+  fi
+  echo "supervisor: starting self-play datagen" >>"$LOG"
   bash scripts/datagen_daemon.sh >>/tmp/datagen_daemon.log 2>&1 &
   DATAGEN_PID=$!
 }
@@ -94,7 +114,14 @@ start_datagen() {
 start_prepare() {
   [[ -f "$ROOT/data/lichess-sf/.prepare_paused" ]] && return
   alive "$PREP_PID" && return
-  echo "supervisor: starting Lichess preparation" | tee -a "$LOG"
+  local adopted=""
+  adopted=$(adopt_worker "$ROOT/data/lichess-sf/.prepare_hf.lock" || true)
+  if alive "$adopted"; then
+    PREP_PID=$adopted
+    echo "supervisor: adopted Lichess preparation pid $PREP_PID" >>"$LOG"
+    return
+  fi
+  echo "supervisor: starting Lichess preparation" >>"$LOG"
   bash scripts/prepare_lichess.sh >>/tmp/prepare_resume.log 2>&1 &
   PREP_PID=$!
 }
@@ -128,13 +155,20 @@ run_training() {
   fi
   stop_prepare_for_train
   write_status training
-  echo "supervisor: starting gated self-play attempt → /tmp/sable_gate.log" | tee -a "$LOG"
-  if bash scripts/ml_cycle.sh "${GATE_EPOCHS:-35}" "${GATE_GAMES:-400}" "${GATE_MIN_ELO:-25}" \
-      >>/tmp/sable_gate.log 2>&1; then
-    echo "supervisor: gated attempt completed" | tee -a "$LOG"
+  echo "supervisor: starting gated self-play attempt → /tmp/sable_gate.log" >>"$LOG"
+  bash scripts/ml_cycle.sh "${GATE_EPOCHS:-35}" "${GATE_GAMES:-400}" "${GATE_MIN_ELO:-25}" \
+      >>/tmp/sable_gate.log 2>&1 &
+  GATE_PID=$!
+  write_status training
+  # train_gate.py continuously writes gate_last.json during the arena, while
+  # the owned web server refreshes the page.  Waiting here keeps net.bin under
+  # this supervisor's exclusive gate window.
+  if wait "$GATE_PID"; then
+    echo "supervisor: gated attempt completed" >>"$LOG"
   else
-    echo "supervisor: gated attempt rejected or failed; see /tmp/sable_gate.log" | tee -a "$LOG"
+    echo "supervisor: gated attempt rejected or failed; see /tmp/sable_gate.log" >>"$LOG"
   fi
+  GATE_PID=""
   rm -f "$ROOT/data/lichess-sf/.prepare_paused"
   refresh
 }

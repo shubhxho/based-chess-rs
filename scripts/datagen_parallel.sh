@@ -137,7 +137,10 @@ PY
 finalize_shard() {
   local shard=$1
   local tmp="${shard}.tmp"
-  local err=$(printf '%s_%05d.err' "$LOG" "$(basename "$shard" .txt | sed 's/aug_sp_//')")
+  local shard_id=$(basename "$shard" .txt | sed 's/aug_sp_//')
+  # Bash printf treats leading-zero shard names as octal; shards 00080+ are
+  # decimal names, so force base 10 before formatting the log filename.
+  local err=$(printf '%s_%05d.err' "$LOG" "$((10#$shard_id))")
   if [[ ! -f "$tmp" ]]; then
     return 0
   fi
@@ -252,8 +255,15 @@ while (( ${#pids[@]} )); do
       fi
     fi
   done
-  pids=("${still_pids[@]}")
-  pid_shard=("${still_shards[@]}")
+  # Bash with nounset treats an empty array expansion as unset on some
+  # versions.  Keep both arrays explicitly empty when the last worker exits.
+  if (( ${#still_pids[@]} )); then
+    pids=("${still_pids[@]}")
+    pid_shard=("${still_shards[@]}")
+  else
+    pids=()
+    pid_shard=()
+  fi
   if (( ${#pids[@]} )); then
     write_status running
     total=0
