@@ -29,6 +29,17 @@ echo "  note: score-only teacher — does not pass shipping gate by itself"
 
 .venv/bin/python train.py "$LIMIT" "$EPOCHS"
 
+# train.py writes net.bin — park the pilot as candidate and restore shipping.
+cp -f net.bin net-lichess-pilot.bin
+cp -f net.bin net-candidate.bin
+if [[ -f net.bin.ship ]]; then
+  cp -f net.bin.ship net.bin
+  cargo build --release -q
+  echo "  restored shipping net.bin from net.bin.ship"
+fi
+
 echo ""
-echo "  pilot weights → net-candidate.bin (shipping net.bin unchanged)"
-echo "  to arena vs shipping: DATA_DIR=data/lichess-sf EVAL_W=1 python train_gate.py --epochs $EPOCHS --min-elo 10"
+echo "  pilot → net-candidate.bin + net-lichess-pilot.bin"
+echo "  arena (no retrain):"
+echo "    DATA_DIR=data/lichess-sf DATA_GLOB='aug_hf_*.txt' EVAL_W=1 OUT_SCALE=0.70 \\"
+echo "      .venv/bin/python train_gate.py --skip-train --epochs $EPOCHS --games 400 --nodes 20000 --min-elo 10"
