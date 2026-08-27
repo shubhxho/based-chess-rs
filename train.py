@@ -36,12 +36,34 @@ import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
 
-# Prefer Apple GPU. MX_FORCE_GPU=0 keeps whatever the runtime defaulted to.
-if os.environ.get("MX_FORCE_GPU", "1") != "0":
+# Prefer Apple GPU. Fail loudly if forced GPU is unavailable.
+_MX_FORCE = os.environ.get("MX_FORCE_GPU", "1") != "0"
+if _MX_FORCE:
     try:
         mx.set_default_device(mx.gpu)
+    except Exception as e:
+        raise SystemExit(f"MX_FORCE_GPU=1 but mx.gpu unavailable: {e}") from e
+    # Bound default stream work; helps keep Metal from stalling mid-epoch.
+    try:
+        mx.set_default_stream(mx.default_stream(mx.default_device()))
     except Exception:
         pass
+
+
+def _mlx_device_banner():
+    """One-line GPU confirmation for gate logs."""
+    dev = mx.default_device()
+    extra = ""
+    try:
+        extra = f", metal={mx.metal.device_info()}"
+    except Exception:
+        try:
+            extra = f", mem_used_mb={mx.metal.get_active_memory()/1e6:.0f}"
+        except Exception:
+            pass
+    print(f"  mlx device={dev}{extra}", flush=True)
+    if _MX_FORCE and "gpu" not in str(dev).lower():
+        raise SystemExit(f"expected mlx gpu device, got {dev}")
 
 
 def _mlx_clear():
@@ -98,10 +120,16 @@ SIGMOID_K = float(os.environ.get("SIG_K", "400"))
 # Floor on the cosine LR so late epochs still move on the int8 grid.
 LR_FLOOR = float(os.environ.get("LR_FLOOR", "0.08"))
 # Print a cheap quantised-vs-teacher probe every N epochs (0 = only at end).
-EVAL_EVERY = int(os.environ.get("EVAL_EVERY", "5"))
-# Export-time gain. `None` means "derive it from how loud this network actually
-# came out" -- see export(). Setting it pins the old constant behaviour.
-OUT_SCALE = float(os.environ["OUT_SCALE"]) if "OUT_SCALE" in os.environ else None
+EVAL_EVERY = int(os.environ.get("EVAL_EVERY", "1"))
+WARMUP = int(os.environ.get("WARMUP", "2"))
+# Export-time gain. `None` / OUT_SCALE=auto means derive from TARGET_STD.
+_out_env = os.environ.get("OUT_SCALE")
+if _out_env is None or _out_env.strip() == "":
+    OUT_SCALE = None
+elif _out_env.strip().lower() in ("auto", "none", "derive"):
+    OUT_SCALE = None
+else:
+    OUT_SCALE = float(_out_env)
 # The evaluation spread the search's margins were tuned against, in centipawns:
 # the standard deviation of the shipping network's own output over self-play
 # positions. Every threshold in search.rs that is compared with a static
@@ -512,13 +540,6 @@ def main():
     # 64. Lower is both a better fit and a wider network for the same bytes.
     base_lr = float(os.environ.get("LR", "3e-3"))
     opt = optim.AdamW(learning_rate=base_lr, weight_decay=WEIGHT_DECAY)
-    print(
-        f"  mlx {mx.default_device()}, batch {batch}, lr {base_lr:g}, "
-        f"lr_floor {LR_FLOOR:g}, weight_decay {WEIGHT_DECAY:g}, "
-        f"patience {PATIENCE}, min_epochs {MIN_EPOCHS}, "
-        f"eval_w {EVAL_WEIGHT:g}, sp_boost {SP_BOOST:g}, eval_every {EVAL_EVERY}",
-        flush=True,
-    )
 
     def loss_fn(model, u, t, bk, y, w):
         # SCALE / SIGMOID_K converts network units into the sigmoid's argument.
@@ -545,9 +566,19 @@ def main():
         return total / m
 
     best = (float("inf"), None)
-    warmup = int(os.environ.get("WARMUP", "3"))
+    warmup = WARMUP
     stale = 0
     import math
+
+    _mlx_device_banner()
+    print(
+        f"  mlx {mx.default_device()}, batch {batch}, lr {base_lr:g}, "
+        f"lr_floor {LR_FLOOR:g}, weight_decay {WEIGHT_DECAY:g}, "
+        f"patience {PATIENCE}, min_epochs {MIN_EPOCHS}, warmup {warmup}, "
+        f"eval_w {EVAL_WEIGHT:g}, sp_boost {SP_BOOST:g}, eval_every {EVAL_EVERY}, "
+        f"out_scale {'auto' if OUT_SCALE is None else OUT_SCALE}",
+        flush=True,
+    )
 
     for ep in range(epochs):
         # Linear warmup, then cosine down to LR_FLOOR * base — late epochs still

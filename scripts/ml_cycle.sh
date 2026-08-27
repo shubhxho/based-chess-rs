@@ -8,7 +8,7 @@
 #
 #   scripts/ml_cycle.sh              # foreground gate @ +25
 #   scripts/ml_cycle.sh bg           # durable background (survives shell teardown)
-#   scripts/ml_cycle.sh 45 400 25
+#   scripts/ml_cycle.sh 55 400 25
 #   SP_KEEP=10 scripts/ml_cycle.sh
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -42,24 +42,27 @@ PY
   exit 0
 fi
 
-EPOCHS=${1:-45}
+EPOCHS=${1:-55}
 GAMES=${2:-400}
 MIN_ELO=${3:-25}
 
 export DATA_DIR=data/selfplay
 export DATA_GLOB='aug_sp_0*.txt'
 export EVAL_W=${EVAL_W:-0.9}
+# Proven pin is 0.70; set OUT_SCALE=auto to derive from TARGET_STD.
 export OUT_SCALE=${OUT_SCALE:-0.70}
 export WEIGHT_DECAY=${WEIGHT_DECAY:-1e-4}
-export PATIENCE=${PATIENCE:-10}
-export MIN_EPOCHS=${MIN_EPOCHS:-20}
-export EVAL_EVERY=${EVAL_EVERY:-5}
-export LR_FLOOR=${LR_FLOOR:-0.08}
+export PATIENCE=${PATIENCE:-12}
+export MIN_EPOCHS=${MIN_EPOCHS:-25}
+export EVAL_EVERY=${EVAL_EVERY:-1}
+export LR_FLOOR=${LR_FLOOR:-0.10}
+export WARMUP=${WARMUP:-2}
 export SP_BOOST=${SP_BOOST:-1.0}
 export MIN_SHARD=${MIN_SHARD:-0}
-export SHARD_DECAY=${SHARD_DECAY:-1.0}
+export SHARD_DECAY=${SHARD_DECAY:-0.95}
 export LR=${LR:-3e-3}
 export BATCH=${BATCH:-16384}
+export SEED=${SEED:-43}
 export ENGINE=${ENGINE:-$ROOT/target/release/sable}
 export MX_FORCE_GPU=${MX_FORCE_GPU:-1}
 
@@ -121,7 +124,8 @@ fi
 
 n=$(cat "${ready[@]}" | wc -l | tr -d ' ')
 echo "ml_cycle: $n lines in ${#ready[@]} shards → epochs=$EPOCHS games=$GAMES min-elo=$MIN_ELO"
-echo "  PATIENCE=$PATIENCE MIN_EPOCHS=$MIN_EPOCHS LR=$LR BATCH=$BATCH EVAL_W=$EVAL_W OUT_SCALE=$OUT_SCALE EVAL_EVERY=$EVAL_EVERY"
+echo "  PATIENCE=$PATIENCE MIN_EPOCHS=$MIN_EPOCHS LR=$LR LR_FLOOR=$LR_FLOOR BATCH=$BATCH"
+echo "  EVAL_W=$EVAL_W OUT_SCALE=$OUT_SCALE EVAL_EVERY=$EVAL_EVERY SEED=$SEED SHARD_DECAY=$SHARD_DECAY"
 if (( n < 800000 )); then
   echo "warning: under 800k SP lines; gate will likely reject" >&2
 fi

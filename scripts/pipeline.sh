@@ -21,19 +21,22 @@ MODE=${1:-datagen}
 export DATAGEN_NODES=${DATAGEN_NODES:-12000}
 export DATAGEN_POS=${DATAGEN_POS:-200000}
 export DATAGEN_N=${DATAGEN_N:-4}
-export GATE_EPOCHS=${GATE_EPOCHS:-45}
+export GATE_EPOCHS=${GATE_EPOCHS:-55}
 export GATE_GAMES=${GATE_GAMES:-400}
 export GATE_MIN_ELO=${GATE_MIN_ELO:-25}
 export SP_KEEP=${SP_KEEP:-7}
-# MLX / train.py — proven arena recipe (+23.5 / +20.9), not the −20 nudge.
+# MLX / train.py — GPU-forced SP gate with per-epoch eval + LR floor.
 export BATCH=${BATCH:-16384}
 export LR=${LR:-3e-3}
-export PATIENCE=${PATIENCE:-10}
-export MIN_EPOCHS=${MIN_EPOCHS:-20}
-export EVAL_EVERY=${EVAL_EVERY:-5}
-export LR_FLOOR=${LR_FLOOR:-0.08}
+export LR_FLOOR=${LR_FLOOR:-0.10}
+export PATIENCE=${PATIENCE:-12}
+export MIN_EPOCHS=${MIN_EPOCHS:-25}
+export EVAL_EVERY=${EVAL_EVERY:-1}
+export WARMUP=${WARMUP:-2}
 export EVAL_W=${EVAL_W:-0.9}
 export OUT_SCALE=${OUT_SCALE:-0.70}
+export SEED=${SEED:-43}
+export SHARD_DECAY=${SHARD_DECAY:-0.95}
 export MX_FORCE_GPU=${MX_FORCE_GPU:-1}
 
 python3 scripts/daily_page.py >/dev/null 2>&1 || true

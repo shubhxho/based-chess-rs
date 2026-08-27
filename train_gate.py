@@ -279,8 +279,14 @@ def main():
             shutil.copy2(NET, SHIP_BAK)
             print(f"backed up shipping net -> {SHIP_BAK}", flush=True)
         env = os.environ.copy()
-        env.setdefault("OUT_SCALE", "0.70")
+        # OUT_SCALE=auto|none|derive → leave unset so train.py derives gain.
+        out = env.get("OUT_SCALE", "0.70")
+        if str(out).strip().lower() in ("auto", "none", "derive", ""):
+            env.pop("OUT_SCALE", None)
+        else:
+            env["OUT_SCALE"] = str(out)
         env.setdefault("ENGINE", str(ENGINE))
+        env.setdefault("MX_FORCE_GPU", "1")
         run([py, str(ROOT / "train.py"), "0", str(args.epochs)], cwd=ROOT, env=env)
         shutil.copy2(NET, CAND_BAK)
         print(f"candidate saved -> {CAND_BAK}", flush=True)

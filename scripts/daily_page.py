@@ -191,7 +191,7 @@ def gate_section(g: dict | None, need: float) -> tuple[str, str, str]:
                 ("Candidate", f"{esc(cand.get('sha16', '—'))} · {esc(cand.get('bytes', '—'))}B"),
                 ("This gate need", f"+{float(g.get('min_elo', need)):.0f}"),
                 ("Ship need (SP)", f"+{ship_need:.0f}"),
-                ("Best SP gate", "+23.5 (1.4M SP) · last SP −20.0"),
+                ("Best SP gate", "+23.5 (1.4M SP) · last SP +7.8"),
                 ("Epochs", g.get("epochs")),
                 ("When", g.get("when", "")),
             ]
