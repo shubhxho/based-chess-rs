@@ -44,5 +44,50 @@
     "eval_w": "1",
     "out_scale": "0.70",
     "shipped": false
+  },
+  {
+    "when": "2026-08-27T07:24:54+05:30",
+    "status": "rejected",
+    "pid": 90125,
+    "elo": -1.7,
+    "elo_err": 34.0,
+    "elo_lo": -35.7,
+    "elo_hi": 32.3,
+    "min_elo": 10.0,
+    "games": 400,
+    "nodes": 20000,
+    "epochs": 25,
+    "concurrency": 4,
+    "path": "lichess",
+    "data_dir": "data/lichess-sf",
+    "data_glob": "aug_hf_*.txt",
+    "eval_w": "1",
+    "out_scale": "0.70",
+    "shipped": false,
+    "skip_train": true,
+    "candidate": {
+      "path": "net-candidate.bin",
+      "bytes": 60976,
+      "sha16": "a9ee52c48372d5c0"
+    },
+    "shipping": {
+      "path": "net.bin.ship",
+      "bytes": 60976,
+      "sha16": "5e4817c6e33b6bd9"
+    },
+    "pilot": {
+      "path": "net-lichess-pilot.bin",
+      "bytes": 60976,
+      "sha16": "a9ee52c48372d5c0"
+    },
+    "val": 0.01084,
+    "val_r": 0.7547,
+    "val_mae_cp": 117.7,
+    "train_epochs_done": 19,
+    "played": 400,
+    "wins": 124,
+    "draws": 150,
+    "losses": 126,
+    "score": 0.497
   }
 ]
