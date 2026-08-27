@@ -98,6 +98,7 @@ adopt_worker() {
 }
 
 start_datagen() {
+  [[ -f "$ROOT/data/selfplay/.datagen_paused" ]] && return
   alive "$DATAGEN_PID" && return
   local adopted=""
   adopted=$(adopt_worker "$ROOT/data/selfplay/.datagen_daemon.pid" || true)

@@ -103,12 +103,12 @@
     <a href="/blog">blog</a>
     <a href="/api/status">status</a>
   </nav>
-  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T20:02:05</span>
+  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T20:04:15</span>
     · <span class="tag dirty" id="git-tag">dirty</span></p>
 </header>
 <main>
   <div class="tiles">
-    <div class="tile"><div class="n" id="t-sp">17,906,647</div><div class="l">Self-play lines</div></div>
+    <div class="tile"><div class="n" id="t-sp">17,657,579</div><div class="l">Self-play lines</div></div>
     <div class="tile"><div class="n" id="t-hf">12,394,688</div><div class="l">Lichess positions</div></div>
     
     <div class="tile"><div class="n" id="t-elo">-6.9</div><div class="l">Last Elo estimate</div></div>
@@ -128,25 +128,24 @@
     </section>
     <section class="panel">
       <div class="label">Repository</div>
-      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>e0978a7 Harden datagen/supervisor and refresh the lab board.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>8 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>scripts/datagen_daemon.sh</code></td></tr><tr><th><code>M</code></th><td><code>scripts/datagen_parallel.sh</code></td></tr><tr><th><code>M</code></th><td><code>scripts/ml_cycle.sh</code></td></tr><tr><th><code>M</code></th><td><code>scripts/pipeline.sh</code></td></tr><tr><th><code>M</code></th><td><code>web/blog.html</code></td></tr><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr><tr><th><code>M</code></th><td><code>web/elo_history.json</code></td></tr><tr><th><code>M</code></th><td><code>web/gate_last.json</code></td></tr></table><p class='dim' id='git-diff'>8 files changed, 104 insertions(+), 63 deletions(-)</p><pre class='diff-stat' id='git-stat'>scripts/datagen_daemon.sh   |  2 +-
- scripts/datagen_parallel.sh |  4 ++--
- scripts/ml_cycle.sh         | 35 +++++++++++++++----------------
+      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>e3a7d68 Tighten SP gate to ~1.6M full shards and stronger datagen.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>7 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>scripts/datagen_daemon.sh</code></td></tr><tr><th><code>M</code></th><td><code>scripts/datagen_parallel.sh</code></td></tr><tr><th><code>M</code></th><td><code>scripts/lab_supervisor.sh</code></td></tr><tr><th><code>M</code></th><td><code>scripts/ml_cycle.sh</code></td></tr><tr><th><code>M</code></th><td><code>scripts/pipeline.sh</code></td></tr><tr><th><code>M</code></th><td><code>web/blog.html</code></td></tr><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr></table><p class='dim' id='git-diff'>7 files changed, 95 insertions(+), 35 deletions(-)</p><pre class='diff-stat' id='git-stat'>scripts/datagen_daemon.sh   |  2 +-
+ scripts/datagen_parallel.sh |  4 +--
+ scripts/lab_supervisor.sh   |  1 +
+ scripts/ml_cycle.sh         | 79 +++++++++++++++++++++++++++++++++++++++------
  scripts/pipeline.sh         |  2 +-
- web/blog.html               | 12 +++++------
- web/daily.html              | 50 ++++++++++++++++++++++-----------------------
- web/elo_history.json        | 42 +++++++++++++++++++++++++++++++++++++
- web/gate_last.json          | 20 +++++++++---------
- 8 files changed, 104 insertions(+), 63 deletions(-)</pre></div>
+ web/blog.html               |  6 ++--
+ web/daily.html              | 36 ++++++++++-----------
+ 7 files changed, 95 insertions(+), 35 deletions(-)</pre></div>
     </section>
     <section class="panel">
       <div class="label">Lab snapshot</div>
-      <table><tr><th>Generated</th><td>2026-08-27 20:02 IST</td></tr>
+      <table><tr><th>Generated</th><td>2026-08-27 20:04 IST</td></tr>
 <tr><th>Engine</th><td>Sable 1.2.0</td></tr>
 <tr><th>Author</th><td>shubh (based-chess-rs, no_std neural eval)</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>e0978a7 Harden datagen/supervisor and refresh the lab board.</td></tr>
+<tr><th>HEAD</th><td>e3a7d68 Tighten SP gate to ~1.6M full shards and stronger datagen.</td></tr>
 <tr><th>Tree</th><td>dirty</td></tr>
-<tr><th>Self-play</th><td>92 shards · 17,906,647 lines</td></tr>
+<tr><th>Self-play</th><td>92 shards · 17,657,579 lines</td></tr>
 <tr><th>Lichess HF</th><td>53 shards · 12,394,688 lines</td></tr>
 <tr><th>Lichess cursor</th><td>57,850,021</td></tr>
 <tr><th>Last gate</th><td>REJECTED  Elo -6.9 ± 34 · band [-41.0, +27.2] (need +25) · selfplay · pid 20065 · 400/400 games · 2026-08-27T19:33:27+05:30</td></tr></table>
@@ -155,7 +154,7 @@
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Lab health</div>
-    <div id="health"><p class='dim' id='health-score'>health <b>3/5</b></p><table id='health-table'><tr><th>gate</th><td class='bad'>last REJECTED -6.9 ±34.1</td></tr><tr><th>datagen</th><td class='ok'>2 workers · wave 32%</td></tr><tr><th>prepare</th><td class='ok'>filtering · kept 400000/2000000</td></tr><tr><th>net</th><td class='ok'>net.bin == shipping</td></tr><tr><th>git</th><td class='bad'>8 local change(s) · e0978a7 Harden datagen/supervisor and refresh the lab board.</td></tr></table></div>
+    <div id="health"><p class='dim' id='health-score'>health <b>3/5</b></p><table id='health-table'><tr><th>gate</th><td class='bad'>last REJECTED -6.9 ±34.1</td></tr><tr><th>datagen</th><td class='ok'>2 workers · wave 1%</td></tr><tr><th>prepare</th><td class='ok'>filtering · kept 400000/2000000</td></tr><tr><th>net</th><td class='ok'>net.bin == shipping</td></tr><tr><th>git</th><td class='bad'>7 local change(s) · e3a7d68 Tighten SP gate to ~1.6M full shards and stronger datagen.</td></tr></table></div>
   </section>
 
   <section class="panel" style="margin-top:16px">
@@ -170,16 +169,16 @@
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Self-play datagen</div>
-    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [92,93,94,95] · 200000@8000n · 88 done · 4 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:32%'></i></div><span class='bar-num' id='dg-wave-num'>257,846/800,000</span></div><div class='bar-row' data-shard='aug_sp_00092.txt'><span class='bar-label'>aug_sp_00092.txt</span><div class='bar'><i style='width:32%'></i></div><span class='bar-num'>65,035/200,000 (+65,035 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00093.txt'><span class='bar-label'>aug_sp_00093.txt</span><div class='bar'><i style='width:32%'></i></div><span class='bar-num'>64,814/200,000 (+64,814 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00094.txt'><span class='bar-label'>aug_sp_00094.txt</span><div class='bar'><i style='width:32%'></i></div><span class='bar-num'>64,448/200,000 (+64,448 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00095.txt'><span class='bar-label'>aug_sp_00095.txt</span><div class='bar'><i style='width:31%'></i></div><span class='bar-num'>63,549/200,000 (+63,549 tmp)</span></div></div>
+    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [92,93,94,95] · 200000@12000n · 88 done · 4 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:1%'></i></div><span class='bar-num' id='dg-wave-num'>8,166/800,000</span></div><div class='bar-row' data-shard='aug_sp_00092.txt'><span class='bar-label'>aug_sp_00092.txt</span><div class='bar'><i style='width:1%'></i></div><span class='bar-num'>2,087/200,000 (+2,087 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00093.txt'><span class='bar-label'>aug_sp_00093.txt</span><div class='bar'><i style='width:1%'></i></div><span class='bar-num'>2,057/200,000 (+2,057 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00094.txt'><span class='bar-label'>aug_sp_00094.txt</span><div class='bar'><i style='width:1%'></i></div><span class='bar-num'>2,065/200,000 (+2,065 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00095.txt'><span class='bar-label'>aug_sp_00095.txt</span><div class='bar'><i style='width:0%'></i></div><span class='bar-num'>1,957/200,000 (+1,957 tmp)</span></div></div>
   </section>
 
   <div class="grid grid-2" style="margin-top:16px">
     <section class="panel">
       <div class="label">Workers</div>
-      <p class='dim' id='worker-counts'>datagen 2 · engine 4 · prepare 1 · server 1 · total 8</p><ul id='workers'><li><code>19690 /opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python web/server.py</code></li><li><code>21866 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 2000000 --min-depth 18 --resume</code></li><li><code>24935 bash scripts/datagen_parallel.sh 200000 8000 4 auto</code></li><li><code>24953 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>24962 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>24971 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>24980 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>48475 bash scripts/datagen_daemon.sh</code></li></ul>
+      <p class='dim' id='worker-counts'>datagen 2 · engine 8 · server 1 · total 11</p><ul id='workers'><li><code>19690 /opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python web/server.py</code></li><li><code>24953 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>24962 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>24971 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>24980 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>27841 bash scripts/datagen_daemon.sh</code></li><li><code>27855 bash scripts/datagen_parallel.sh 200000 12000 4 auto</code></li><li><code>27993 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>28005 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>28017 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>28029 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li></ul>
     </section>
     <section class="panel cmds">
       <div class="label">Commands</div>

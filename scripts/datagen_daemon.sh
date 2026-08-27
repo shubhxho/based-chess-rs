@@ -8,7 +8,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 PIDFILE="$ROOT/data/selfplay/.datagen_daemon.pid"
 POS=${POS:-200000}
-NODES=${NODES:-10000}
+NODES=${NODES:-12000}
 N=${N:-4}
 
 stop_daemon() {

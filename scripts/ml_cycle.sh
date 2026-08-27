@@ -1,17 +1,46 @@
 #!/usr/bin/env bash
 # Canonical SP-first gated train. Never ships a net that loses the arena.
 #
-# Best measured: +23.5 on finished SP @ EVAL_W=0.9 OUT_SCALE=0.70 LR=3e-3.
-# Lab all-time +19.1 was on ~1.34M lines — not every shard on disk. Newest-only
-# 3.2M windows have also measured −6.9, so default to ~8 full 200k shards
-# (~1.6M) with more epochs/patience.
+# Best measured: +23.5 @ EVAL_W=0.9 OUT_SCALE=0.70 LR=3e-3 on ~finished SP.
+# A 3.2M newest window measured −6.9; default ~1.4–1.6M (7–8 full 200k shards).
+# Datagen engines fight train for RAM — pause them for the gate window.
 #
-#   scripts/ml_cycle.sh              # newest full shards → gate @ +25
+#   scripts/ml_cycle.sh              # foreground gate @ +25
+#   scripts/ml_cycle.sh bg           # durable background (survives shell teardown)
 #   scripts/ml_cycle.sh 45 400 25
-#   SP_KEEP=12 scripts/ml_cycle.sh   # larger window
+#   SP_KEEP=10 scripts/ml_cycle.sh
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
+
+if [[ "${1:-}" == "bg" ]]; then
+  shift || true
+  LOG=${LOG:-/tmp/ml_cycle.log}
+  : >"$LOG"
+  .venv/bin/python - <<PY
+import subprocess
+from pathlib import Path
+root = Path("$ROOT")
+log = Path("$LOG")
+args = ["bash", str(root / "scripts" / "ml_cycle.sh")] + """$*""".split()
+args = [a for a in args if a]
+out = open(log, "a", buffering=1)
+subprocess.Popen(
+    args,
+    cwd=str(root),
+    stdin=subprocess.DEVNULL,
+    stdout=out,
+    stderr=subprocess.STDOUT,
+    start_new_session=True,
+    close_fds=True,
+)
+print(f"ml_cycle bg → {log}", flush=True)
+PY
+  sleep 2
+  tail -15 "$LOG" || true
+  exit 0
+fi
+
 EPOCHS=${1:-45}
 GAMES=${2:-400}
 MIN_ELO=${3:-25}
@@ -29,9 +58,39 @@ export LR=${LR:-3e-3}
 export BATCH=${BATCH:-16384}
 export ENGINE=${ENGINE:-$ROOT/target/release/sable}
 
-# Full finished shards only (datagen target is 200k). Reject truncated / tiny.
+PAUSE_DG=${PAUSE_DG:-$ROOT/data/selfplay/.datagen_paused}
+PAUSE_PREP=${PAUSE_PREP:-$ROOT/data/lichess-sf/.prepare_paused}
+
+pause_workers() {
+  mkdir -p "$(dirname "$PAUSE_DG")" "$(dirname "$PAUSE_PREP")"
+  touch "$PAUSE_DG" "$PAUSE_PREP"
+  echo "pausing datagen + prepare for SP gate RAM"
+  bash scripts/datagen_daemon.sh stop 2>/dev/null || true
+  pkill -f 'datagen_parallel.sh' 2>/dev/null || true
+  pkill -9 -f 'prepare_hf.py' 2>/dev/null || true
+  # Stop stray sable datagen children (not the gate arena binaries).
+  pkill -f 'target/release/sable' 2>/dev/null || true
+  sleep 2
+}
+
+resume_workers() {
+  rm -f "$PAUSE_DG"
+  # Leave prepare paused only if caller wants; default resume both.
+  rm -f "$PAUSE_PREP"
+  if ! pgrep -f 'datagen_daemon.sh' >/dev/null 2>&1; then
+    echo "resuming datagen @ ${DATAGEN_NODES:-12000}n"
+    NODES=${DATAGEN_NODES:-12000} POS=${DATAGEN_POS:-200000} N=${DATAGEN_N:-4} \
+      nohup bash scripts/datagen_daemon.sh >>/tmp/datagen_daemon.log 2>&1 &
+  fi
+  if ! pgrep -f 'prepare_hf.py data/lichess-sf' >/dev/null 2>&1; then
+    nohup bash scripts/prepare_lichess.sh >>/tmp/prepare_resume.log 2>&1 &
+  fi
+}
+
+# Full finished shards only.
 min_lines=${MIN_LINES:-200000}
-SP_KEEP=${SP_KEEP:-8}
+# 7×200k ≈ 1.4M — near the +19.1 / +23.5 sweet spot.
+SP_KEEP=${SP_KEEP:-7}
 shopt -s nullglob
 all_ready=()
 for f in data/selfplay/aug_sp_0*.txt; do
@@ -63,7 +122,9 @@ if (( n < 800000 )); then
 fi
 
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+pause_workers
+trap 'resume_workers; rm -rf "$tmp"' EXIT
+
 for f in "${ready[@]}"; do
   ln -s "$(cd "$(dirname "$f")" && pwd)/$(basename "$f")" "$tmp/$(basename "$f")"
 done
