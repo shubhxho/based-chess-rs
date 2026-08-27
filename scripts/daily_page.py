@@ -59,7 +59,7 @@ def dropped_table(dropped: dict | None) -> str:
         for k, v in sorted(dropped.items(), key=lambda kv: -int(kv[1]))
     )
     return (
-        f"<table class='mini'><caption class='dim'>filtered out ({fmt(total):,} rows)</caption>"
+        f"<table class='mini'><caption class='dim'>filtered out ({fmt(total)} rows)</caption>"
         f"{rows}</table>"
     )
 

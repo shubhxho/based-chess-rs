@@ -95,64 +95,61 @@
     <a href="/blog">blog</a>
     <a href="/api/status">status</a>
   </nav>
-  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T06:19:47</span>
+  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T07:06:54</span>
     · <span class="tag dirty" id="git-tag">dirty</span></p>
 </header>
 <main>
   <div class="tiles">
-    <div class="tile"><div class="n" id="t-sp">2,365,408</div><div class="l">Self-play lines</div></div>
+    <div class="tile"><div class="n" id="t-sp">4,050,063</div><div class="l">Self-play lines</div></div>
     <div class="tile"><div class="n" id="t-hf">7,750,531</div><div class="l">Lichess positions</div></div>
-    <div class="tile"><div class="n" id="t-gate">+18.3</div><div class="l">Last gate Elo</div></div>
-    <div class="tile"><div class="n">+25</div><div class="l">Ship threshold</div></div>
+    <div class="tile"><div class="n" id="t-gate">-1.7</div><div class="l">Last gate Elo</div></div>
+    <div class="tile"><div class="n">+10</div><div class="l">Ship threshold</div></div>
   </div>
 
   <div class="grid grid-2">
     <section class="panel">
       <div class="label">Gate</div>
-      <div class='gate-bar'><div id='gate-fill' class='gate-fill' style='width:73%'></div></div><p class='dim'>Arena must clear +25 Elo before <code>net.bin</code> ships.</p>
-      <div id="gate-panel"><table><tr><th>Result</th><td><span id='gate-result'>REJECTED</span></td></tr><tr><th>Elo</th><td><span id='gate-elo'>+18.3</span> ± arena</td></tr><tr><th>Threshold</th><td>+25</td></tr><tr><th>Best so far</th><td>+19.1 (1.34M SP, EVAL_W=0.9)</td></tr><tr><th>Games / nodes</th><td>400 / 20000</td></tr><tr><th>Epochs</th><td>35</td></tr><tr><th>When</th><td>2026-08-27T03:43:06+05:30</td></tr></table></div>
+      <div class='gate-bar'><div id='gate-fill' class='gate-fill' style='width:0%'></div></div><p class='dim'>Arena must clear +10 Elo before <code>net.bin</code> ships.</p>
+      <div id="gate-panel"><table><tr><th>Result</th><td><span id='gate-result'>REJECTED</span></td></tr><tr><th>Elo</th><td><span id='gate-elo'>-1.7</span> ± arena</td></tr><tr><th>Threshold</th><td>+10</td></tr><tr><th>Best so far</th><td>+19.1 (1.34M SP, EVAL_W=0.9)</td></tr><tr><th>Games / nodes</th><td>400 / 20000</td></tr><tr><th>Epochs</th><td>20</td></tr><tr><th>When</th><td>2026-08-27T07:06:20+05:30</td></tr></table></div>
     </section>
     <section class="panel">
       <div class="label">Repository</div>
-      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>5e93cd3 Add Lichess trainer script and boost lab gold accent.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>7 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>scripts/daily_page.py</code></td></tr><tr><th><code>M</code></th><td><code>scripts/run_all.sh</code></td></tr><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr><tr><th><code>M</code></th><td><code>web/index.html</code></td></tr><tr><th><code>M</code></th><td><code>web/server.py</code></td></tr><tr><th><code>??</code></th><td><code>scripts/blog_page.py</code></td></tr><tr><th><code>?</code></th><td><code>scripts/blog_page.py</code></td></tr></table><p class='dim' id='git-diff'>5 files changed, 38 insertions(+), 20 deletions(-)</p><pre class='diff-stat' id='git-stat'>scripts/daily_page.py |  5 +++--
- scripts/run_all.sh    |  4 +++-
- web/daily.html        | 30 ++++++++++++++----------------
- web/index.html        |  1 +
- web/server.py         | 18 +++++++++++++++++-
- 5 files changed, 38 insertions(+), 20 deletions(-)</pre></div>
+      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>1a52f18 Record Lichess pilot smoke gate (−0 Elo) and refresh lab blog.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>2 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>scripts/daily_page.py</code></td></tr><tr><th><code>M</code></th><td><code>web/gate_last.json</code></td></tr></table><p class='dim' id='git-diff'>2 files changed, 5 insertions(+), 5 deletions(-)</p><pre class='diff-stat' id='git-stat'>scripts/daily_page.py | 2 +-
+ web/gate_last.json    | 8 ++++----
+ 2 files changed, 5 insertions(+), 5 deletions(-)</pre></div>
     </section>
     <section class="panel">
       <div class="label">Lab snapshot</div>
-      <table><tr><th>Generated</th><td>2026-08-27 06:19 IST</td></tr>
+      <table><tr><th>Generated</th><td>2026-08-27 07:06 IST</td></tr>
 <tr><th>Engine</th><td>Sable 1.2.0</td></tr>
 <tr><th>Author</th><td>shubh (based-chess-rs, no_std neural eval)</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>5e93cd3 Add Lichess trainer script and boost lab gold accent.</td></tr>
+<tr><th>HEAD</th><td>1a52f18 Record Lichess pilot smoke gate (−0 Elo) and refresh lab blog.</td></tr>
 <tr><th>Tree</th><td>dirty</td></tr>
-<tr><th>Self-play</th><td>20 shards · 2,365,408 lines</td></tr>
+<tr><th>Self-play</th><td>20 shards · 4,050,063 lines</td></tr>
 <tr><th>Lichess HF</th><td>34 shards · 7,750,531 lines</td></tr>
-<tr><th>Lichess cursor</th><td>12,669,722</td></tr>
-<tr><th>Last gate</th><td>REJECTED  Elo +18.3 (need +25) · 2026-08-27T03:43:06+05:30</td></tr></table>
+<tr><th>Lichess cursor</th><td>29,985,461</td></tr>
+<tr><th>Last gate</th><td>REJECTED  Elo -1.7 (need +10) · 2026-08-27T07:06:20+05:30</td></tr></table>
     </section>
   </div>
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Lichess trainer</div>
-    <div id="lichess"><table class='meta'><tr><th>Phase</th><td><b id='lf-phase'>filtering</b></td></tr><tr><th>Corpus</th><td><span id='lf-corpus'>34 shards · 7,750,531 positions</span></td></tr><tr><th>Stream cursor</th><td><span id='lf-cursor'>12,500,000</span></td></tr><tr><th>Elapsed</th><td><span id='lf-elapsed'>344s</span></td></tr></table><div class='bar-row'><span class='bar-label'>batch</span><div class='bar bar-keep'><i style='width:0%'></i></div><span class='bar-num'>0/500,000</span></div><div class='callout callout-gold' id='lf-format'><div class='callout-title'>Lichess trainer</div><code>FEN | cp_white | result</code><p>result=<b>1</b> is a neutral draw placeholder — with <code>EVAL_W=1 — score-only teacher; result column is inert</code> only the Stockfish cp label trains the net. The dummy result cannot pull the target toward win/loss.</p><p class='dim trust'>Arena gate (+25 Elo) applies to <b>self-play</b> only. Lichess pilots measure fit, not shipping trust.</p></div></div>
+    <div id="lichess"><table class='meta'><tr><th>Phase</th><td><b id='lf-phase'>filtering</b></td></tr><tr><th>Corpus</th><td><span id='lf-corpus'>34 shards · 7,750,531 positions</span></td></tr><tr><th>Stream cursor</th><td><span id='lf-cursor'>29,985,461</span></td></tr><tr><th>Keep rate</th><td><span id='lf-keep-rate'>1.16%</td></tr><tr><th>Elapsed</th><td><span id='lf-elapsed'>2,171s</span></td></tr></table><div class='bar-row'><span class='bar-label'>batch</span><div class='bar bar-keep'><i style='width:40%'></i></div><span class='bar-num'>200,000/500,000</span></div><div class='callout callout-gold' id='lf-format'><div class='callout-title'>Lichess trainer</div><code>FEN | cp_white | result</code><p>result=<b>1</b> is a neutral draw placeholder — with <code>EVAL_W=1 — score-only teacher; result column is inert</code> only the Stockfish cp label trains the net. The dummy result cannot pull the target toward win/loss.</p><p class='dim trust'>Arena gate (+25 Elo) applies to <b>self-play</b> only. Lichess pilots measure fit, not shipping trust.</p></div><table class='mini'><caption class='dim'>filtered out (17,115,740 rows)</caption><tr><th>duplicate</th><td>10,759,214</td><td class='dim'>62.9%</td></tr><tr><th>tactical</th><td>1,945,100</td><td class='dim'>11.4%</td></tr><tr><th>depth</th><td>1,925,963</td><td class='dim'>11.3%</td></tr><tr><th>score</th><td>1,810,730</td><td class='dim'>10.6%</td></tr><tr><th>fen</th><td>674,733</td><td class='dim'>3.9%</td></tr><tr><th>sample</th><td>0</td><td class='dim'>0.0%</td></tr></table></div>
   </section>
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Self-play datagen</div>
-    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [18,22,20,15] · 200000@8000n · 8 done · 12 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:87%'></i></div><span class='bar-num' id='dg-wave-num'>698,561/800,000</span></div><div class='bar-row' data-shard='aug_sp_00018.txt'><span class='bar-label'>aug_sp_00018.txt</span><div class='bar'><i style='width:86%'></i></div><span class='bar-num'>173,525/200,000 (+173,525 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00022.txt'><span class='bar-label'>aug_sp_00022.txt</span><div class='bar'><i style='width:87%'></i></div><span class='bar-num'>174,946/200,000 (+174,946 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00020.txt'><span class='bar-label'>aug_sp_00020.txt</span><div class='bar'><i style='width:87%'></i></div><span class='bar-num'>174,989/200,000 (+174,989 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00015.txt'><span class='bar-label'>aug_sp_00015.txt</span><div class='bar'><i style='width:87%'></i></div><span class='bar-num'>175,101/200,000 (+175,101 tmp)</span></div></div>
+    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [24,25,26,27] · 200000@8000n · 20 done · 0 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:61%'></i></div><span class='bar-num' id='dg-wave-num'>490,754/800,000</span></div><div class='bar-row' data-shard='aug_sp_00024.txt'><span class='bar-label'>aug_sp_00024.txt</span><div class='bar'><i style='width:61%'></i></div><span class='bar-num'>122,704/200,000 (+122,704 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00025.txt'><span class='bar-label'>aug_sp_00025.txt</span><div class='bar'><i style='width:61%'></i></div><span class='bar-num'>122,523/200,000 (+122,523 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00026.txt'><span class='bar-label'>aug_sp_00026.txt</span><div class='bar'><i style='width:61%'></i></div><span class='bar-num'>122,824/200,000 (+122,824 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00027.txt'><span class='bar-label'>aug_sp_00027.txt</span><div class='bar'><i style='width:61%'></i></div><span class='bar-num'>122,703/200,000 (+122,703 tmp)</span></div></div>
   </section>
 
   <div class="grid grid-2" style="margin-top:16px">
     <section class="panel">
       <div class="label">Workers</div>
-      <ul id='workers'><li><code>48475 bash scripts/datagen_daemon.sh</code></li><li><code>48483 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 500000 --min-depth 18 --resume</code></li><li><code>59665 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 500000 --min-depth 18 --resume</code></li><li><code>62245 bash scripts/datagen_parallel.sh 200000 8000 4 auto</code></li><li><code>62265 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>62276 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>62287 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>62298 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li></ul>
+      <ul id='workers'><li><code>48475 bash scripts/datagen_daemon.sh</code></li><li><code>48483 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 500000 --min-depth 18 --resume</code></li><li><code>74670 bash scripts/datagen_parallel.sh 200000 8000 4 auto</code></li><li><code>74692 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>74701 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>74710 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>74719 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>  # detect completion markers (arena stdout flushed at end by train_gate)</code></li></ul>
     </section>
     <section class="panel cmds">
       <div class="label">Commands</div>
