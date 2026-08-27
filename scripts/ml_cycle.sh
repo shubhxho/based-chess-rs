@@ -28,17 +28,28 @@ export LR=${LR:-3e-3}
 export ENGINE=${ENGINE:-$ROOT/target/release/sable}
 
 # Drop any still-writing / tiny shards so train never sees truncated games.
+# Cap to newest SP_KEEP finished shards — full 12M+ OOMs a 16GB Mac and the
+# best measured pass was on ~1.3M, not every shard ever written.
 min_lines=${MIN_LINES:-100000}
+SP_KEEP=${SP_KEEP:-16}
 shopt -s nullglob
-ready=()
+all_ready=()
 for f in data/selfplay/aug_sp_0*.txt; do
   lines=$(wc -l <"$f" | tr -d ' ')
   if (( lines >= min_lines )); then
-    ready+=("$f")
+    all_ready+=("$f")
   else
     echo "  skip incomplete $(basename "$f") ($lines < $min_lines lines)" >&2
   fi
 done
+ready=()
+if (( ${#all_ready[@]} > SP_KEEP )); then
+  start=$((${#all_ready[@]} - SP_KEEP))
+  ready=("${all_ready[@]:$start}")
+  echo "  SP_KEEP=$SP_KEEP: using newest ${#ready[@]}/${#all_ready[@]} finished shards" >&2
+else
+  ready=("${all_ready[@]}")
+fi
 if (( ${#ready[@]} < 2 )); then
   echo "need ≥2 finished shards (≥$min_lines lines); have ${#ready[@]}" >&2
   exit 1

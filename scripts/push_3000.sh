@@ -4,7 +4,8 @@
 # Honest framing:
 #   - Shipping trust is still self-play arena ≥ +25 Elo.
 #   - Pure Lichess pilots measured ~0 vs shipping (−1.7 ± 34).
-#   - Mix = finished SP (outcomes, SP_BOOST) then newest HF (SF labels win on overlap).
+#   - Mix = newest HF (SF garnish) then finished SP (outcomes win on overlap).
+#     Prior HF-last mix measured −1.7 twice; SP-last matches shipping's play signal.
 #
 #   scripts/push_3000.sh              # foreground: sync → train → arena
 #   scripts/push_3000.sh bg           # durable background (survives terminal close)
@@ -22,20 +23,20 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 MODE=${1:-all}
 
-EPOCHS=${EPOCHS:-50}
+EPOCHS=${EPOCHS:-40}
 GAMES=${GAMES:-400}
 NODES=${NODES:-20000}
 MIN_ELO=${MIN_ELO:-10}
 LIMIT=${LIMIT:-0}
-SP_BOOST=${SP_BOOST:-2.5}
-EVAL_W=${EVAL_W:-0.85}
+# SP-last mix: lean on outcomes (shipping recipe EVAL_W=0.9) with hard SP_BOOST.
+SP_BOOST=${SP_BOOST:-3.0}
+EVAL_W=${EVAL_W:-0.9}
 OUT_SCALE=${OUT_SCALE:-0.70}
-# Prior runs flatlined by epoch ~7 and early-stopped at 14; give the cosine
-# tail room to shave val before declaring done.
-PATIENCE=${PATIENCE:-12}
+PATIENCE=${PATIENCE:-10}
 LR=${LR:-2e-3}
-HF_KEEP=${HF_KEEP:-3}
-SP_KEEP=${SP_KEEP:-6}
+# Few newest HF + more finished SP — SF as garnish, play signal as main dish.
+HF_KEEP=${HF_KEEP:-2}
+SP_KEEP=${SP_KEEP:-10}
 BATCH=${BATCH:-8192}
 
 PIDFILE=${PIDFILE:-$ROOT/data/mix/.push_3000.pid}
