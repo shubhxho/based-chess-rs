@@ -32,8 +32,8 @@ EVAL_W=${EVAL_W:-0.9}
 OUT_SCALE=${OUT_SCALE:-0.70}
 PATIENCE=${PATIENCE:-7}
 LR=${LR:-3e-3}
-HF_KEEP=${HF_KEEP:-5}
-SP_KEEP=${SP_KEEP:-8}
+HF_KEEP=${HF_KEEP:-3}
+SP_KEEP=${SP_KEEP:-5}
 BATCH=${BATCH:-8192}
 
 PIDFILE=${PIDFILE:-$ROOT/data/mix/.push_3000.pid}
@@ -47,7 +47,9 @@ pause_prepare_for_train() {
   if pgrep -f "prepare_hf.py data/lichess-sf" >/dev/null 2>&1; then
     echo "pausing prepare_hf for mix train RAM (was ~2.5GB) → $PAUSE_PREPARE"
     pkill -f "prepare_hf.py data/lichess-sf" 2>/dev/null || true
-    sleep 2
+    sleep 1
+    pkill -9 -f "prepare_hf.py data/lichess-sf" 2>/dev/null || true
+    sleep 1
   fi
 }
 
@@ -77,7 +79,8 @@ claim_lock() {
   fi
   rm -f "$PIDFILE"
   echo $$ >"$PIDFILE"
-  trap 'resume_prepare_after_train; rm -f "$PIDFILE"' EXIT
+  # On crash/OOM keep prepare paused so a retry still has RAM.
+  trap 'rm -f "$PIDFILE"' EXIT
 }
 
 show_status() {
@@ -210,6 +213,7 @@ run_pipeline() {
   pause_prepare_for_train
   train_mix
   arena_mix
+  resume_prepare_after_train
   echo ""
   echo "  next: if arena ≥ +10 → scripts/ml_cycle.sh 35 400 25"
   echo "  then: scripts/push_3000.sh calibrate"

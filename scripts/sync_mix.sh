@@ -8,13 +8,13 @@
 # Also: a LIMIT that fills on early shards never reaches later ones. Keep HF_KEEP
 # modest so the full mix fits in memory without a LIMIT that skips provenance.
 #
-#   scripts/sync_mix.sh           # 8 SP + 5 newest HF (~2.5M, fits 16GB)
-#   scripts/sync_mix.sh 12 8
+#   scripts/sync_mix.sh           # 5 SP + 3 newest HF (~1.6M, fits busy 16GB Mac)
+#   scripts/sync_mix.sh 8 5
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
-SP_KEEP=${1:-8}
-HF_KEEP=${2:-5}
+SP_KEEP=${1:-5}
+HF_KEEP=${2:-3}
 MIX="$ROOT/data/mix"
 MIN_SP_LINES=${MIN_SP_LINES:-100000}
 
