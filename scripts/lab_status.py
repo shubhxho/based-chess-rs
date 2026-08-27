@@ -82,14 +82,52 @@ def list_sp_shards() -> list[dict]:
 
 
 def workers() -> list[str]:
-    out = sh("pgrep", "-lf", "prepare_hf|train_gate|datagen_parallel|datagen_daemon|ml_cycle|release/sable")
+    out = sh(
+        "pgrep", "-lf",
+        "prepare_hf|train_gate|datagen_parallel|datagen_daemon|ml_cycle|based-chess-rs/target/release/sable",
+    )
     alive = []
     for line in out.splitlines():
         if "Helper" in line or "pgrep" in line:
             continue
-        if any(k in line for k in ("prepare_hf", "train_gate", "datagen", "ml_cycle", "release/sable")):
+        if any(
+            k in line
+            for k in ("prepare_hf", "train_gate", "datagen", "ml_cycle", "target/release/sable")
+        ):
             alive.append(line[:140])
     return alive
+
+
+def git_tree() -> dict:
+    """Working tree snapshot for the daily board and /api/status."""
+    status_sb = sh("git", "status", "-sb")
+    lines = [ln for ln in status_sb.splitlines() if ln.strip()]
+    branch_line = lines[0] if lines else "?"
+    changed: list[dict] = []
+    for line in lines[1:]:
+        code = line[:2].strip() or "?"
+        path = line[3:].strip()
+        if path:
+            changed.append({"code": code, "path": path})
+    untracked = [p for p in sh("git", "ls-files", "--others", "--exclude-standard").splitlines() if p.strip()]
+    for path in untracked:
+        changed.append({"code": "?", "path": path})
+    diff_stat = sh("git", "diff", "--stat")
+    diff_short = sh("git", "diff", "--shortstat")
+    staged_stat = sh("git", "diff", "--cached", "--shortstat")
+    return {
+        "branch_line": branch_line,
+        "head": sh("git", "log", "-1", "--oneline") or "?",
+        "author": sh("git", "log", "-1", "--format=%an") or "?",
+        "when": sh("git", "log", "-1", "--format=%ci") or "?",
+        "subject": sh("git", "log", "-1", "--format=%s") or "?",
+        "short_hash": sh("git", "rev-parse", "--short", "HEAD") or "?",
+        "clean": not changed,
+        "changed": changed,
+        "diff_stat": diff_stat,
+        "diff_short": diff_short,
+        "staged_short": staged_stat,
+    }
 
 
 def gate() -> dict | None:
@@ -199,4 +237,5 @@ def collect() -> dict:
         "gate_elo": g.get("elo") if g else None,
         "workers": workers(),
         "datagen": wave,
+        "git": git_tree(),
     }

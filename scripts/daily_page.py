@@ -155,13 +155,44 @@ def gate_section(g: dict | None, need: float) -> tuple[str, str, str]:
     return gate_row, panel, bar
 
 
+def repo_panel(gt: dict) -> str:
+    state = "clean · synced" if gt.get("clean") else f"{len(gt.get('changed') or [])} change(s)"
+    rows = [
+        ("Branch", f"<code id='git-branch'>{esc(gt.get('branch_line', '?'))}</code>"),
+        ("HEAD", f"<span id='git-head'>{esc(gt.get('head', '?'))}</span>"),
+        ("Author", esc(gt.get("author", "?"))),
+        ("Tree", f"<span id='git-tree'>{esc(state)}</span>"),
+    ]
+    meta = "<table>" + "".join(f"<tr><th>{k}</th><td>{v}</td></tr>" for k, v in rows) + "</table>"
+    files = gt.get("changed") or []
+    file_rows = ""
+    if files:
+        file_rows = (
+            "<table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption>"
+            + "".join(
+                f"<tr><th><code>{esc(c['code'])}</code></th><td><code>{esc(c['path'])}</code></td></tr>"
+                for c in files[:24]
+            )
+            + ("<tr><td colspan='2' class='dim'>…</td></tr>" if len(files) > 24 else "")
+            + "</table>"
+        )
+    diff = gt.get("diff_short") or gt.get("staged_short") or ""
+    diff_block = f"<p class='dim' id='git-diff'>{esc(diff)}</p>" if diff else ""
+    stat = gt.get("diff_stat") or ""
+    stat_block = (
+        f"<pre class='diff-stat' id='git-stat'>{esc(stat)}</pre>" if stat else ""
+    )
+    return meta + file_rows + diff_block + stat_block
+
+
 def main() -> None:
     now = dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
     snap = collect()
+    gt = snap.get("git") or {}
     branch = sh("git", "rev-parse", "--abbrev-ref", "HEAD") or "?"
-    commit = sh("git", "log", "-1", "--oneline") or "?"
-    status = sh("git", "status", "-sb") or "?"
-    dirty = any(line[:1] in " MADRCU?" for line in status.splitlines()[1:])
+    commit = gt.get("head") or sh("git", "log", "-1", "--oneline") or "?"
+    dirty = not gt.get("clean", True)
+    repo_html = repo_panel(gt)
 
     lf = snap.get("lichess") or {}
     sp_lines = snap.get("selfplay_lines", 0)
@@ -282,12 +313,26 @@ def main() -> None:
     color: var(--dim); margin-bottom: 8px; }}
   .callout code {{ display: block; margin: 6px 0; color: var(--ink); }}
   .foot {{ margin-top: 28px; font-size: 12px; color: var(--dim); }}
+  .nav {{ display: flex; gap: 16px; font-size: 12px; }}
+  .nav a {{ color: var(--amber); }}
+  pre.diff-stat {{ margin-top: 10px; padding: 10px 12px; background: var(--panel2);
+    border: 1px solid var(--line); font-size: 11px; line-height: 1.5; overflow-x: auto; white-space: pre-wrap; }}
+  .tag {{ display: inline-block; padding: 2px 6px; border: 1px solid var(--line);
+    font-size: 10px; letter-spacing: .08em; }}
+  .tag.clean {{ color: var(--green); border-color: var(--green); }}
+  .tag.dirty {{ color: var(--amber); border-color: var(--amber); }}
 </style>
 </head>
 <body>
 <header class="top">
   <h1>SABLE <span>LAB</span></h1>
-  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">{esc(snap.get('generated_at', ''))}</span></p>
+  <nav class="nav">
+    <a href="/">play</a>
+    <a href="/daily">daily</a>
+    <a href="/api/status">status JSON</a>
+  </nav>
+  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">{esc(snap.get('generated_at', ''))}</span>
+    · <span class="tag {'clean' if gt.get('clean') else 'dirty'}" id="git-tag">{'clean' if gt.get('clean') else 'dirty'}</span></p>
 </header>
 <main>
   <div class="tiles">
@@ -304,7 +349,11 @@ def main() -> None:
       <div id="gate-panel">{gate_panel}</div>
     </section>
     <section class="panel">
-      <div class="label">Snapshot</div>
+      <div class="label">Repository</div>
+      <div id="repo">{repo_html}</div>
+    </section>
+    <section class="panel">
+      <div class="label">Lab snapshot</div>
       <table>{table}</table>
     </section>
   </div>
@@ -334,7 +383,7 @@ def main() -> None:
     </section>
   </div>
 
-  <p class="foot"><a href="/">← play chess</a></p>
+  <p class="foot"><a href="/">← play chess</a> · <a href="/api/status">raw status</a></p>
 </main>
 <script>
 function fmt(n) {{ return n == null ? '—' : Number(n).toLocaleString(); }}

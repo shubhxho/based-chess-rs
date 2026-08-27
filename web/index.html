@@ -130,9 +130,11 @@
     </div>
     <div class="sub" style="margin-top:2px">
       <a href="/daily">lab daily</a> &middot;
-      <a href="https://github.com/shubhxho/sable">source</a> &middot;
+      <a href="/api/status">status</a> &middot;
+      <a href="https://github.com/shubhxho/based-chess-rs">source</a> &middot;
       <a href="https://huggingface.co/shubhxho/sable-chess-net">network on the Hub</a>
       <span id="gate-hint"></span>
+      <span id="lab-hint"></span>
     </div>
   </div>
 </div>
@@ -310,5 +312,12 @@ fetch('/gate_last.json').then(r => r.ok ? r.json() : null).then(g => {
   if (!g || g.elo == null) return;
   const tag = g.shipped ? 'shipped' : 'gate';
   $id('gate-hint').textContent = ` · ${tag} ${g.elo >= 0 ? '+' : ''}${g.elo.toFixed(1)} Elo`;
+}).catch(() => {});
+
+fetch('/api/status').then(r => r.ok ? r.json() : null).then(d => {
+  if (!d) return;
+  const sp = d.selfplay_lines != null ? `${(d.selfplay_lines/1e6).toFixed(2)}M sp` : '';
+  const tree = d.git?.clean === false ? ' · dirty tree' : '';
+  if (sp || tree) $id('lab-hint').textContent = ` · ${sp}${tree}`;
 }).catch(() => {});
 </script>

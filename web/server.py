@@ -119,9 +119,14 @@ class Handler(BaseHTTPRequestHandler):
             with open(path, "rb") as f:
                 self._send(200, f.read(), "application/json")
         elif self.path == "/api/meta":
+            body = {"engine": ident, "lab": collect()}
             with lock:
-                engine()
-            self._send(200, json.dumps({"engine": ident}).encode())
+                try:
+                    engine()
+                    body["engine"] = ident
+                except Exception:
+                    pass
+            self._send(200, json.dumps(body).encode())
         elif self.path == "/api/status":
             body = collect()
             with lock:
