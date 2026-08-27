@@ -40,7 +40,7 @@ if [[ -f "$PIDFILE" ]]; then
 fi
 
 echo $$ >"$PIDFILE"
-trap 'rm -f "$PIDFILE"' EXIT
+trap 'rm -f "$PIDFILE"; pkill -TERM -P $$ 2>/dev/null || true' EXIT INT TERM
 
 echo "datagen_daemon: ${POS} @ ${NODES}n, ${N} shards, auto index (Ctrl-C to stop)"
 wave=0

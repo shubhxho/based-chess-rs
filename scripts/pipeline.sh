@@ -7,15 +7,17 @@
 #   scripts/pipeline.sh selfplay       # SP gate @ +25 (pauses datagen for RAM)
 #   scripts/pipeline.sh selfplay-bg    # durable SP gate
 #   scripts/pipeline.sh bench          # engine bench + SP arena smoke + SF calibrate
-#   scripts/pipeline.sh stress         # deeper bench + longer SP arena smoke
+#   scripts/pipeline.sh stress         # deeper bench + longer SP arena smoke (+ /tmp/sable_nps.log)
+#   scripts/pipeline.sh stockfish      # short Stockfish UCI_Elo calibrate
+#   scripts/pipeline.sh run|lab        # stress → SF → ml_cycle SP gate (GATE_EPOCHS/GAMES/MIN_ELO)
 #   scripts/pipeline.sh arena          # candidate vs shipping arena (no retrain)
 #   scripts/pipeline.sh 3000           # Lichess+SP mix candidate path
 #   scripts/pipeline.sh bg|all         # full lab supervisor
 #
 # Env: DATAGEN_NODES (default 12000) DATAGEN_POS DATAGEN_N
 #      GATE_EPOCHS GATE_GAMES GATE_MIN_ELO SP_KEEP
-#      BATCH LR PATIENCE  (MLX train.py)
-#      BENCH_DEPTH ARENA_NODES (bench / arena)
+#      BATCH LR PATIENCE SHARD_DECAY MX_FORCE_GPU SEED (MLX train.py)
+#      BENCH_DEPTH ARENA_NODES STRESS_GAMES SF_GAMES
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -110,6 +112,17 @@ case "$MODE" in
     ;;
   stress|stress-test)
     # Heavier engine stress: deeper UCI bench + longer SP arena smoke.
+    # Clean SIGTERM so a killed run does not leave orphan arena children.
+    _kids=()
+    on_sig() {
+      echo "stress: SIGTERM/INT — stopping children ${_kids[*]:-}" >&2
+      for p in "${_kids[@]+"${_kids[@]}"}"; do kill -TERM "$p" 2>/dev/null || true; done
+      sleep 1
+      for p in "${_kids[@]+"${_kids[@]}"}"; do kill -KILL "$p" 2>/dev/null || true; done
+      echo "stress aborted (signal)" | tee -a /tmp/sable_engine_stress.log >/dev/null
+      exit 143
+    }
+    trap on_sig INT TERM
     cargo build --release
     ENG=${ENGINE:-$ROOT/target/release/sable}
     DEPTH=${BENCH_DEPTH:-14}
@@ -117,15 +130,46 @@ case "$MODE" in
     NODES=${ARENA_NODES:-20000}
     echo "=== stress engine bench (depth $DEPTH) ==="
     printf 'bench %s\nquit\n' "$DEPTH" | "$ENG" | tee /tmp/sable_engine_stress.log
-    echo "=== stress SP arena smoke ($SMOKE games @ ${NODES}n) ==="
+    rg -N "Nodes/second|Total nodes|Time \(ms\)" /tmp/sable_engine_stress.log \
+      | tee /tmp/sable_nps.log || true
+    echo "=== stress SP arena smoke ($SMOKE games @ ${NODES}n) → /tmp/sable_sp_arena_stress.log ==="
     .venv/bin/python arena.py "$ENG" "$ENG" "$SMOKE" "nodes $NODES" 4 \
       | tee /tmp/sable_sp_arena_stress.log
+    # Also refresh the short smoke log so the lab board has a current smoke line.
+    cp -f /tmp/sable_sp_arena_stress.log /tmp/sable_sp_arena_smoke.log
     if [[ "${STRESS_AB:-0}" == "1" ]]; then
       echo "=== presearch A/B stress ==="
       bash tests/presearch_ab.sh "${STRESS_BASE:-60ab7d3}" "${STRESS_AB_GAMES:-100}" "$NODES" 4 \
         | tee /tmp/sable_presearch_ab.log
     fi
-    echo "stress logs: /tmp/sable_engine_stress.log /tmp/sable_sp_arena_stress.log"
+    echo "stress logs: /tmp/sable_engine_stress.log /tmp/sable_sp_arena_stress.log /tmp/sable_nps.log"
+    ;;
+  stockfish|sf|calibrate)
+    cargo build --release
+    ENG=${ENGINE:-$ROOT/target/release/sable}
+    G=${SF_GAMES:-12}
+    echo "=== Stockfish calibrate (movetime 100, ${G} games/level) → /tmp/sable_calibrate.log ==="
+    if ! command -v stockfish >/dev/null 2>&1; then
+      echo "stockfish not on PATH" | tee /tmp/sable_calibrate.log
+      exit 1
+    fi
+    .venv/bin/python tests/calibrate.py "$ENG" "movetime 100" "$G" \
+      2700 2800 2900 3000 | tee /tmp/sable_calibrate.log
+    ;;
+  run|lab|through)
+    # Full pass: stress (bench+smoke+nps) → short SF → SP gate (ml_cycle) @ GATE_*.
+    LOG=${LAB_RUN_LOG:-/tmp/sable_lab_run.log}
+    : >"$LOG"
+    {
+      echo "=== lab run $(date -Iseconds) GATE_EPOCHS=$GATE_EPOCHS GATE_GAMES=$GATE_GAMES GATE_MIN_ELO=$GATE_MIN_ELO ==="
+      echo "SHARD_DECAY=$SHARD_DECAY MX_FORCE_GPU=$MX_FORCE_GPU SEED=$SEED"
+      STRESS_GAMES=${STRESS_GAMES:-40} BENCH_DEPTH=${BENCH_DEPTH:-14} \
+        bash "$ROOT/scripts/pipeline.sh" stress
+      SF_GAMES=${SF_GAMES:-8} bash "$ROOT/scripts/pipeline.sh" stockfish || true
+      echo "=== starting ml_cycle SP gate ==="
+      bash "$ROOT/scripts/pipeline.sh" selfplay-bg
+      echo "lab run kicked SP gate; see /tmp/ml_cycle.log"
+    } 2>&1 | tee -a "$LOG"
     ;;
   bg)
     echo "background: lab supervisor"
@@ -144,10 +188,15 @@ for p in [root/'web/gate_last.json', root/'data/selfplay/datagen_status.json']:
         d = json.loads(p.read_text())
         print(p.name, {k: d.get(k) for k in list(d)[:12]})
 PY
+    echo "--- /tmp logs ---"
+    for f in /tmp/sable_nps.log /tmp/sable_sp_arena_smoke.log /tmp/sable_engine_stress.log \
+             /tmp/sable_calibrate.log /tmp/ml_cycle.log /tmp/datagen_daemon.log; do
+      [[ -f $f ]] && echo "$f ($(wc -l <"$f" | tr -d ' ') lines)" || echo "$f (missing)"
+    done
     pgrep -fl 'datagen|ml_cycle|train_gate|arena|prepare_hf' | head -20 || true
     ;;
   *)
-    echo "usage: $0 [datagen|datagen-bg|selfplay|selfplay-bg|bench|stress|arena|3000|bg|all|status]" >&2
+    echo "usage: $0 [datagen|datagen-bg|selfplay|selfplay-bg|bench|stress|stockfish|run|arena|3000|bg|all|status]" >&2
     exit 2
     ;;
 esac

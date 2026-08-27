@@ -235,6 +235,21 @@ fi
 
 write_status running
 
+# SIGTERM/INT: stop workers, keep .tmp shards (resume-safe), then exit 143.
+on_signal() {
+  echo "datagen_parallel: got signal — stopping ${#pids[@]} workers" >&2
+  for pid in "${pids[@]+"${pids[@]}"}"; do
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+  sleep 1
+  for pid in "${pids[@]+"${pids[@]}"}"; do
+    kill -KILL "$pid" 2>/dev/null || true
+  done
+  write_status interrupted
+  exit 143
+}
+trap on_signal INT TERM
+
 fail=0
 while (( ${#pids[@]} )); do
   still_pids=()
