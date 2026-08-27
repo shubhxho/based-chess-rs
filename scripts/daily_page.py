@@ -191,7 +191,7 @@ def gate_section(g: dict | None, need: float) -> tuple[str, str, str]:
                 ("Candidate", f"{esc(cand.get('sha16', '—'))} · {esc(cand.get('bytes', '—'))}B"),
                 ("This gate need", f"+{float(g.get('min_elo', need)):.0f}"),
                 ("Ship need (SP)", f"+{ship_need:.0f}"),
-                ("Best SP gate", "+19.1 (1.34M SP) · last SP +18.3"),
+                ("Best SP gate", "+23.5 (1.4M SP) · last SP +20.9"),
                 ("Epochs", g.get("epochs")),
                 ("When", g.get("when", "")),
             ]
@@ -222,7 +222,7 @@ def elo_tiles(g: dict | None, need: float) -> str:
     <div class="tile"><div class="n" id="t-path">{esc(path)}</div><div class="l">Gate path</div></div>
     <div class="tile"><div class="n">+{need:.0f}</div><div class="l">This-gate need</div></div>
     <div class="tile"><div class="n">+25</div><div class="l">Ship threshold</div></div>
-    <div class="tile"><div class="n">+19.1</div><div class="l">Best SP Elo</div></div>
+    <div class="tile"><div class="n">+23.5</div><div class="l">Best SP Elo</div></div>
     """
 
 

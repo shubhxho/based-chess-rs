@@ -21,16 +21,17 @@ MODE=${1:-datagen}
 export DATAGEN_NODES=${DATAGEN_NODES:-12000}
 export DATAGEN_POS=${DATAGEN_POS:-200000}
 export DATAGEN_N=${DATAGEN_N:-4}
-export GATE_EPOCHS=${GATE_EPOCHS:-45}
+export GATE_EPOCHS=${GATE_EPOCHS:-50}
 export GATE_GAMES=${GATE_GAMES:-400}
 export GATE_MIN_ELO=${GATE_MIN_ELO:-25}
-export SP_KEEP=${SP_KEEP:-7}
+export SP_KEEP=${SP_KEEP:-8}
 # MLX / train.py knobs used by ml_cycle → train_gate → train.py
+# Tuned off the +20.9 near-miss (was 7 shards / 0.9 / 0.70 / 3e-3 / 10).
 export BATCH=${BATCH:-16384}
-export LR=${LR:-3e-3}
-export PATIENCE=${PATIENCE:-10}
-export EVAL_W=${EVAL_W:-0.9}
-export OUT_SCALE=${OUT_SCALE:-0.70}
+export LR=${LR:-2.5e-3}
+export PATIENCE=${PATIENCE:-14}
+export EVAL_W=${EVAL_W:-0.88}
+export OUT_SCALE=${OUT_SCALE:-0.68}
 export MX_FORCE_GPU=${MX_FORCE_GPU:-1}
 
 python3 scripts/daily_page.py >/dev/null 2>&1 || true

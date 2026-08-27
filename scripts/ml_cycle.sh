@@ -2,12 +2,14 @@
 # Canonical SP-first gated train. Never ships a net that loses the arena.
 #
 # Best measured: +23.5 @ EVAL_W=0.9 OUT_SCALE=0.70 LR=3e-3 on ~finished SP.
-# A 3.2M newest window measured −6.9; default ~1.4–1.6M (7–8 full 200k shards).
+# Near miss: +20.9 on 7×200k. Defaults nudge toward clearing +25:
+#   SP_KEEP=8 (~1.6M), EVAL_W=0.88, OUT_SCALE=0.68, LR=2.5e-3, PATIENCE=14.
+# A 3.2M newest window measured −6.9 — stay in the 1.4–1.6M band.
 # Datagen engines fight train for RAM — pause them for the gate window.
 #
 #   scripts/ml_cycle.sh              # foreground gate @ +25
 #   scripts/ml_cycle.sh bg           # durable background (survives shell teardown)
-#   scripts/ml_cycle.sh 45 400 25
+#   scripts/ml_cycle.sh 50 400 25
 #   SP_KEEP=10 scripts/ml_cycle.sh
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -41,20 +43,20 @@ PY
   exit 0
 fi
 
-EPOCHS=${1:-45}
+EPOCHS=${1:-50}
 GAMES=${2:-400}
 MIN_ELO=${3:-25}
 
 export DATA_DIR=data/selfplay
 export DATA_GLOB='aug_sp_0*.txt'
-export EVAL_W=0.9
-export OUT_SCALE=0.70
+export EVAL_W=${EVAL_W:-0.88}
+export OUT_SCALE=${OUT_SCALE:-0.68}
 export WEIGHT_DECAY=${WEIGHT_DECAY:-1e-4}
-export PATIENCE=${PATIENCE:-10}
+export PATIENCE=${PATIENCE:-14}
 export SP_BOOST=${SP_BOOST:-1.0}
 export MIN_SHARD=${MIN_SHARD:-0}
 export SHARD_DECAY=${SHARD_DECAY:-1.0}
-export LR=${LR:-3e-3}
+export LR=${LR:-2.5e-3}
 export BATCH=${BATCH:-16384}
 export ENGINE=${ENGINE:-$ROOT/target/release/sable}
 
@@ -89,8 +91,8 @@ resume_workers() {
 
 # Full finished shards only.
 min_lines=${MIN_LINES:-200000}
-# 7×200k ≈ 1.4M — near the +19.1 / +23.5 sweet spot.
-SP_KEEP=${SP_KEEP:-7}
+# 8×200k ≈ 1.6M — top of the +19.1 / +23.5 sweet spot (avoid 3.2M).
+SP_KEEP=${SP_KEEP:-8}
 shopt -s nullglob
 all_ready=()
 for f in data/selfplay/aug_sp_0*.txt; do

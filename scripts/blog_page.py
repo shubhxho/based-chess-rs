@@ -151,7 +151,7 @@ scripts/push_3000.sh calibrate       # Stockfish UCI_Elo anchor</pre>
   <h3>What “measure” means here</h3>
   <p>
     Last gate: <b>{esc(elo_txt)}</b> Elo vs shipping (need +25), status
-    <b>{esc(shipped)}</b>. Best so far in this lab loop: <b>+19.1</b> on ~1.34M
+    <b>{esc(shipped)}</b>. Best so far in this lab loop: <b>+23.5</b> on ~1.4M
     self-play with <code>EVAL_W=0.9</code>. Pure Lichess score-only pilots have
     been dead even with shipping (~−1.7). The mix path is the credible route
     toward a ~3000-Elo <i>candidate</i> — then calibrate; fit loss is not Elo.

@@ -158,7 +158,7 @@ run_training() {
   stop_prepare_for_train
   write_status training
   echo "supervisor: starting gated self-play attempt → /tmp/sable_gate.log" >>"$LOG"
-  bash scripts/ml_cycle.sh "${GATE_EPOCHS:-45}" "${GATE_GAMES:-400}" "${GATE_MIN_ELO:-25}" \
+  bash scripts/ml_cycle.sh "${GATE_EPOCHS:-50}" "${GATE_GAMES:-400}" "${GATE_MIN_ELO:-25}" \
       >>/tmp/sable_gate.log 2>&1 &
   GATE_PID=$!
   write_status training
