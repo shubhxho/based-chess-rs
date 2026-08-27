@@ -257,17 +257,35 @@ case "$MODE" in
       exit 1
     fi
     echo "starting background push_3000 → $LOG"
-    # Fully detach: no controlling TTY, so terminal paste / Ctrl-C cannot SIGTERM it.
-    if command -v setsid >/dev/null 2>&1; then
-      setsid -f bash "$ROOT/scripts/push_3000.sh" all >>"$LOG" 2>&1
-      sleep 1
-      echo "  started via setsid — status: scripts/push_3000.sh status"
+    # Double-fork + setsid so Cursor/agent shell teardown cannot SIGTERM the train.
+    .venv/bin/python - <<PY
+import os, sys, time
+from pathlib import Path
+root = Path("$ROOT")
+log = Path("$LOG")
+script = root / "scripts" / "push_3000.sh"
+if os.fork() > 0:
+    time.sleep(0.3)
+    sys.exit(0)
+os.setsid()
+if os.fork() > 0:
+    sys.exit(0)
+os.chdir(root)
+os.closerange(0, 3)
+fd = os.open("/dev/null", os.O_RDONLY)
+os.dup2(fd, 0)
+out = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+os.dup2(out, 1)
+os.dup2(out, 2)
+os.execv("/bin/bash", ["bash", str(script), "all"])
+PY
+    sleep 2
+    if is_running; then
+      echo "  running pid $(cat "$PIDFILE")"
     else
-      nohup bash "$ROOT/scripts/push_3000.sh" all >>"$LOG" 2>&1 </dev/null &
-      disown $! 2>/dev/null || true
-      echo "  pid $!  (wait ~10–20 min for train, then arena)"
-      echo "  status: scripts/push_3000.sh status"
+      echo "  launched — check $LOG / scripts/push_3000.sh status"
     fi
+    echo "  status: scripts/push_3000.sh status"
     ;;
   prepare)
     echo "growing Lichess corpus (2M batch, depth≥${MIN_DEPTH:-18})"
