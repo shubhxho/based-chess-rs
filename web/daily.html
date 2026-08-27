@@ -103,12 +103,12 @@
     <a href="/blog">blog</a>
     <a href="/api/status">status</a>
   </nav>
-  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T23:18:02</span>
+  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T23:18:39</span>
     · <span class="tag dirty" id="git-tag">dirty</span></p>
 </header>
 <main>
   <div class="tiles">
-    <div class="tile"><div class="n" id="t-sp">17,806,769</div><div class="l">Self-play lines</div></div>
+    <div class="tile"><div class="n" id="t-sp">17,815,587</div><div class="l">Self-play lines</div></div>
     <div class="tile"><div class="n" id="t-hf">12,394,688</div><div class="l">Lichess positions</div></div>
     
     <div class="tile"><div class="n" id="t-elo">-10.4</div><div class="l">Last Elo estimate</div></div>
@@ -128,22 +128,18 @@
     </section>
     <section class="panel">
       <div class="label">Repository</div>
-      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>2dcca9a Record live SP gate arena progress on the daily board.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>5 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>scripts/daily_page.py</code></td></tr><tr><th><code>M</code></th><td><code>web/blog.html</code></td></tr><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr><tr><th><code>M</code></th><td><code>web/elo_history.json</code></td></tr><tr><th><code>M</code></th><td><code>web/gate_last.json</code></td></tr></table><p class='dim' id='git-diff'>5 files changed, 83 insertions(+), 42 deletions(-)</p><pre class='diff-stat' id='git-stat'>scripts/daily_page.py |  2 +-
- web/blog.html         | 10 +++++-----
- web/daily.html        | 48 ++++++++++++++++++++++++------------------------
- web/elo_history.json  | 42 ++++++++++++++++++++++++++++++++++++++++++
- web/gate_last.json    | 23 +++++++++++------------
- 5 files changed, 83 insertions(+), 42 deletions(-)</pre></div>
+      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>b37d702 Record SP gate reject (−10.4) and refresh the lab board.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>1 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr></table><p class='dim' id='git-diff'>1 file changed, 15 insertions(+), 20 deletions(-)</p><pre class='diff-stat' id='git-stat'>web/daily.html | 35 +++++++++++++++--------------------
+ 1 file changed, 15 insertions(+), 20 deletions(-)</pre></div>
     </section>
     <section class="panel">
       <div class="label">Lab snapshot</div>
-      <table><tr><th>Generated</th><td>2026-08-27 23:17 IST</td></tr>
+      <table><tr><th>Generated</th><td>2026-08-27 23:18 IST</td></tr>
 <tr><th>Engine</th><td>Sable 1.2.0</td></tr>
 <tr><th>Author</th><td>shubh (based-chess-rs, no_std neural eval)</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>2dcca9a Record live SP gate arena progress on the daily board.</td></tr>
+<tr><th>HEAD</th><td>b37d702 Record SP gate reject (−10.4) and refresh the lab board.</td></tr>
 <tr><th>Tree</th><td>dirty</td></tr>
-<tr><th>Self-play</th><td>92 shards · 17,806,769 lines</td></tr>
+<tr><th>Self-play</th><td>92 shards · 17,815,587 lines</td></tr>
 <tr><th>Lichess HF</th><td>53 shards · 12,394,688 lines</td></tr>
 <tr><th>Lichess cursor</th><td>58,879,122</td></tr>
 <tr><th>Last gate</th><td>REJECTED  Elo -10.4 ± 34 · band [-44.5, +23.7] (need +25) · selfplay · pid 70449 · 400/400 games · 2026-08-27T23:07:41+05:30</td></tr></table>
@@ -152,7 +148,7 @@
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Lab health</div>
-    <div id="health"><p class='dim' id='health-score'>health <b>3/5</b></p><table id='health-table'><tr><th>gate</th><td class='bad'>last REJECTED -10.4 ±34.1</td></tr><tr><th>datagen</th><td class='ok'>2 workers · wave 19%</td></tr><tr><th>prepare</th><td class='ok'>skipping · kept 0/2000000</td></tr><tr><th>net</th><td class='ok'>net.bin == shipping</td></tr><tr><th>git</th><td class='bad'>5 local change(s) · 2dcca9a Record live SP gate arena progress on the daily board.</td></tr></table></div>
+    <div id="health"><p class='dim' id='health-score'>health <b>2/5</b></p><table id='health-table'><tr><th>gate</th><td class='bad'>last REJECTED -10.4 ±34.1</td></tr><tr><th>datagen</th><td class='bad'>no datagen workers</td></tr><tr><th>prepare</th><td class='ok'>skipping · kept 0/2000000</td></tr><tr><th>net</th><td class='ok'>net.bin == shipping</td></tr><tr><th>git</th><td class='bad'>1 local change(s) · b37d702 Record SP gate reject (−10.4) and refresh the lab board.</td></tr></table></div>
   </section>
 
   <section class="panel" style="margin-top:16px">
@@ -162,26 +158,26 @@
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Pipeline /tmp</div>
-    <table class='mini' id='tmp-pipeline'><caption class='dim'>Pipeline /tmp logs (stress · smoke · nps · gate)</caption><tr><th>nps</th><td><code>Nodes/second : 825149</code> <span class='dim'>(3 lines)</span></td></tr><tr><th>smoke</th><td><code>Elo +43.7 +/- 242.7 (95%)</code> <span class='dim'>(3 lines)</span></td></tr><tr><th>stress</th><td><code>Elo +43.7 +/- 242.7 (95%)</code> <span class='dim'>(3 lines)</span></td></tr><tr><th>calibrate</th><td class='dim'>sable_calibrate.log · empty/missing</td></tr><tr><th>lab_run</th><td><code>Nodes/second : 825149</code> <span class='dim'>(171 lines)</span></td></tr><tr><th>ml_cycle</th><td><code>gate: Elo -10.4 ± 34 vs shipping (threshold +25.0) [rejected]</code> <span class='dim'>(108 lines)</span></td></tr></table>
+    <table class='mini' id='tmp-pipeline'><caption class='dim'>Pipeline /tmp logs (stress · smoke · nps · gate)</caption><tr><th>nps</th><td><code>Nodes/second : 1861444</code> <span class='dim'>(3 lines)</span></td></tr><tr><th>smoke</th><td><code>Elo +43.7 +/- 242.7 (95%)</code> <span class='dim'>(3 lines)</span></td></tr><tr><th>stress</th><td><code>20 games  +7 =5 -8  Elo -17 +/- 152</code> <span class='dim'>(2 lines)</span></td></tr><tr><th>calibrate</th><td class='dim'>sable_calibrate.log · empty/missing</td></tr><tr><th>lab_run</th><td><code>Nodes/second : 825149</code> <span class='dim'>(171 lines)</span></td></tr><tr><th>ml_cycle</th><td><code>gate: Elo -10.4 ± 34 vs shipping (threshold +25.0) [rejected]</code> <span class='dim'>(108 lines)</span></td></tr></table>
   </section>
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Lichess trainer</div>
-    <div id="lichess"><table class='meta'><tr><th>Phase</th><td><b id='lf-phase'>skipping</b></td></tr><tr><th>Corpus</th><td><span id='lf-corpus'>53 shards · 12,394,688 positions</span></td></tr><tr><th>Stream cursor</th><td><span id='lf-cursor'>11,250,000</span></td></tr><tr><th>Elapsed</th><td><span id='lf-elapsed'>605s</span></td></tr></table><div class='bar-row'><span class='bar-label'>skip</span><div class='bar bar-skip'><i style='width:19%'></i></div><span class='bar-num'>11,250,000/58,879,122</span></div><div class='callout callout-gold' id='lf-format'><div class='callout-title'>Lichess trainer</div><code>FEN | cp_white | result</code><p>result=<b>1</b> is a neutral draw placeholder — with <code>EVAL_W=1 — score-only teacher; result column is inert</code> only the Stockfish cp label trains the net. The dummy result cannot pull the target toward win/loss.</p><p class='dim trust'>Ship bar is still <b>self-play +25 Elo</b>. Toward ~3000: grow Lichess → <code>scripts/push_3000.sh</code> (SF+SP mix) → arena → SP gate → Stockfish calibrate.</p></div></div>
+    <div id="lichess"><table class='meta'><tr><th>Phase</th><td><b id='lf-phase'>skipping</b></td></tr><tr><th>Corpus</th><td><span id='lf-corpus'>53 shards · 12,394,688 positions</span></td></tr><tr><th>Stream cursor</th><td><span id='lf-cursor'>13,750,000</span></td></tr><tr><th>Elapsed</th><td><span id='lf-elapsed'>645s</span></td></tr></table><div class='bar-row'><span class='bar-label'>skip</span><div class='bar bar-skip'><i style='width:23%'></i></div><span class='bar-num'>13,750,000/58,879,122</span></div><div class='callout callout-gold' id='lf-format'><div class='callout-title'>Lichess trainer</div><code>FEN | cp_white | result</code><p>result=<b>1</b> is a neutral draw placeholder — with <code>EVAL_W=1 — score-only teacher; result column is inert</code> only the Stockfish cp label trains the net. The dummy result cannot pull the target toward win/loss.</p><p class='dim trust'>Ship bar is still <b>self-play +25 Elo</b>. Toward ~3000: grow Lichess → <code>scripts/push_3000.sh</code> (SF+SP mix) → arena → SP gate → Stockfish calibrate.</p></div></div>
   </section>
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Self-play datagen</div>
-    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [92,93,94,95] · 200000@12000n · 88 done · 4 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:19%'></i></div><span class='bar-num' id='dg-wave-num'>157,463/800,000</span></div><div class='bar-row' data-shard='aug_sp_00092.txt'><span class='bar-label'>aug_sp_00092.txt</span><div class='bar'><i style='width:19%'></i></div><span class='bar-num'>38,941/200,000 (+38,941 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00093.txt'><span class='bar-label'>aug_sp_00093.txt</span><div class='bar'><i style='width:20%'></i></div><span class='bar-num'>40,400/200,000 (+40,400 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00094.txt'><span class='bar-label'>aug_sp_00094.txt</span><div class='bar'><i style='width:19%'></i></div><span class='bar-num'>39,048/200,000 (+39,048 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00095.txt'><span class='bar-label'>aug_sp_00095.txt</span><div class='bar'><i style='width:19%'></i></div><span class='bar-num'>39,074/200,000 (+39,074 tmp)</span></div></div>
+    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>interrupted</b> · shards [92,93,94,95] · 200000@12000n · 88 done · 4 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:20%'></i></div><span class='bar-num' id='dg-wave-num'>165,524/800,000</span></div><div class='bar-row' data-shard='aug_sp_00092.txt'><span class='bar-label'>aug_sp_00092.txt</span><div class='bar'><i style='width:20%'></i></div><span class='bar-num'>40,903/200,000 (+40,903 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00093.txt'><span class='bar-label'>aug_sp_00093.txt</span><div class='bar'><i style='width:21%'></i></div><span class='bar-num'>42,509/200,000 (+42,509 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00094.txt'><span class='bar-label'>aug_sp_00094.txt</span><div class='bar'><i style='width:20%'></i></div><span class='bar-num'>40,931/200,000 (+40,931 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00095.txt'><span class='bar-label'>aug_sp_00095.txt</span><div class='bar'><i style='width:20%'></i></div><span class='bar-num'>41,181/200,000 (+41,181 tmp)</span></div></div>
   </section>
 
   <div class="grid grid-2" style="margin-top:16px">
     <section class="panel">
       <div class="label">Workers</div>
-      <p class='dim' id='worker-counts'>datagen 2 · engine 4 · prepare 1 · server 1 · total 8</p><ul id='workers'><li><code>19690 /opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python web/server.py</code></li><li><code>71861 bash scripts/datagen_daemon.sh</code></li><li><code>71869 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 2000000 --min-depth 18 --resume</code></li><li><code>71871 bash scripts/datagen_parallel.sh 200000 12000 4 auto</code></li><li><code>71895 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>71907 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>71919 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>71954 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li></ul>
+      <p class='dim' id='worker-counts'>prepare 1 · server 1 · total 2</p><ul id='workers'><li><code>19690 /opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python web/server.py</code></li><li><code>71869 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 2000000 --min-depth 18 --resume</code></li></ul>
     </section>
     <section class="panel cmds">
       <div class="label">Commands</div>
