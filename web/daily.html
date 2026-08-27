@@ -103,12 +103,12 @@
     <a href="/blog">blog</a>
     <a href="/api/status">status</a>
   </nav>
-  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T22:38:16</span>
+  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T22:38:53</span>
     · <span class="tag dirty" id="git-tag">dirty</span></p>
 </header>
 <main>
   <div class="tiles">
-    <div class="tile"><div class="n" id="t-sp">17,818,789</div><div class="l">Self-play lines</div></div>
+    <div class="tile"><div class="n" id="t-sp">17,827,242</div><div class="l">Self-play lines</div></div>
     <div class="tile"><div class="n" id="t-hf">12,394,688</div><div class="l">Lichess positions</div></div>
     
     <div class="tile"><div class="n" id="t-elo">-8.7</div><div class="l">Last Elo estimate</div></div>
@@ -128,11 +128,8 @@
     </section>
     <section class="panel">
       <div class="label">Repository</div>
-      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>8d2bf58 Sync daily counters after lab-run kickoff.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>4 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>scripts/daily_page.py</code></td></tr><tr><th><code>M</code></th><td><code>scripts/pipeline.sh</code></td></tr><tr><th><code>M</code></th><td><code>web/blog.html</code></td></tr><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr></table><p class='dim' id='git-diff'>4 files changed, 98 insertions(+), 30 deletions(-)</p><pre class='diff-stat' id='git-stat'>scripts/daily_page.py | 65 +++++++++++++++++++++++++++++++++++++++++++++++----
- scripts/pipeline.sh   |  6 ++++-
- web/blog.html         |  6 ++---
- web/daily.html        | 51 +++++++++++++++++++++++-----------------
- 4 files changed, 98 insertions(+), 30 deletions(-)</pre></div>
+      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>a45e25e Show /tmp pipeline logs on the daily board and harden lab-run smoke.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>1 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr></table><p class='dim' id='git-diff'>1 file changed, 13 insertions(+), 16 deletions(-)</p><pre class='diff-stat' id='git-stat'>web/daily.html | 29 +++++++++++++----------------
+ 1 file changed, 13 insertions(+), 16 deletions(-)</pre></div>
     </section>
     <section class="panel">
       <div class="label">Lab snapshot</div>
@@ -140,9 +137,9 @@
 <tr><th>Engine</th><td>Sable 1.2.0</td></tr>
 <tr><th>Author</th><td>shubh (based-chess-rs, no_std neural eval)</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>8d2bf58 Sync daily counters after lab-run kickoff.</td></tr>
+<tr><th>HEAD</th><td>a45e25e Show /tmp pipeline logs on the daily board and harden lab-run smoke.</td></tr>
 <tr><th>Tree</th><td>dirty</td></tr>
-<tr><th>Self-play</th><td>92 shards · 17,818,789 lines</td></tr>
+<tr><th>Self-play</th><td>92 shards · 17,827,242 lines</td></tr>
 <tr><th>Lichess HF</th><td>53 shards · 12,394,688 lines</td></tr>
 <tr><th>Lichess cursor</th><td>58,362,503</td></tr>
 <tr><th>Last gate</th><td>REJECTED  Elo -8.7 ± 34 · band [-42.8, +25.4] (need +25) · selfplay · pid 47286 · 400/400 games · 2026-08-27T21:26:32+05:30</td></tr></table>
@@ -151,7 +148,7 @@
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Lab health</div>
-    <div id="health"><p class='dim' id='health-score'>health <b>3/5</b></p><table id='health-table'><tr><th>gate</th><td class='bad'>last REJECTED -8.7 ±34.1</td></tr><tr><th>datagen</th><td class='ok'>2 workers · wave 21%</td></tr><tr><th>prepare</th><td class='ok'>filtering · kept 100000/2000000</td></tr><tr><th>net</th><td class='ok'>net.bin == shipping</td></tr><tr><th>git</th><td class='bad'>4 local change(s) · 8d2bf58 Sync daily counters after lab-run kickoff.</td></tr></table></div>
+    <div id="health"><p class='dim' id='health-score'>health <b>2/5</b></p><table id='health-table'><tr><th>gate</th><td class='bad'>last REJECTED -8.7 ±34.1</td></tr><tr><th>datagen</th><td class='bad'>no datagen workers</td></tr><tr><th>prepare</th><td class='ok'>filtering · kept 100000/2000000</td></tr><tr><th>net</th><td class='ok'>net.bin == shipping</td></tr><tr><th>git</th><td class='bad'>1 local change(s) · a45e25e Show /tmp pipeline logs on the daily board and harden lab-run smoke.</td></tr></table></div>
   </section>
 
   <section class="panel" style="margin-top:16px">
@@ -161,7 +158,7 @@
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Pipeline /tmp</div>
-    <table class='mini' id='tmp-pipeline'><caption class='dim'>Pipeline /tmp logs (stress · smoke · nps · gate)</caption><tr><th>nps</th><td><code>Nodes/second : 857805</code> <span class='dim'>(3 lines)</span></td></tr><tr><th>smoke</th><td><code>20 games  +7 =6 -7  Elo -0 +/- 152</code> <span class='dim'>(2 lines)</span></td></tr><tr><th>stress</th><td><code>stress smoke start 2026-08-27T22:36:15+05:30 games=40 nodes=20000 eng=/Users/shubh/Documents/based-chess-rs/target/release/sable</code> <span class='dim'>(1 lines)</span></td></tr><tr><th>calibrate</th><td><code>calibrate aborted (empty log) — cleared</code> <span class='dim'>(1 lines)</span></td></tr><tr><th>lab_run</th><td><code>Nodes/second : 857805</code> <span class='dim'>(171 lines)</span></td></tr><tr><th>ml_cycle</th><td><code>gate: Elo -8.7 ± 34 vs shipping (threshold +25.0) [rejected]</code> <span class='dim'>(114 lines)</span></td></tr></table>
+    <table class='mini' id='tmp-pipeline'><caption class='dim'>Pipeline /tmp logs (stress · smoke · nps · gate)</caption><tr><th>nps</th><td><code>Nodes/second : 825149</code> <span class='dim'>(3 lines)</span></td></tr><tr><th>smoke</th><td><code>20 games  +7 =6 -7  Elo -0 +/- 152</code> <span class='dim'>(2 lines)</span></td></tr><tr><th>stress</th><td><code>stress smoke start 2026-08-27T22:38:37+05:30 games=40 nodes=20000 eng=/Users/shubh/Documents/based-chess-rs/target/release/sable</code> <span class='dim'>(1 lines)</span></td></tr><tr><th>calibrate</th><td><code>calibrate aborted (empty log) — cleared</code> <span class='dim'>(1 lines)</span></td></tr><tr><th>lab_run</th><td><code>Nodes/second : 825149</code> <span class='dim'>(171 lines)</span></td></tr><tr><th>ml_cycle</th><td><code>gate: Elo -8.7 ± 34 vs shipping (threshold +25.0) [rejected]</code> <span class='dim'>(114 lines)</span></td></tr></table>
   </section>
 
   <section class="panel" style="margin-top:16px">
@@ -171,16 +168,16 @@
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Self-play datagen</div>
-    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [92,93,94,95] · 200000@12000n · 88 done · 4 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:21%'></i></div><span class='bar-num' id='dg-wave-num'>169,071/800,000</span></div><div class='bar-row' data-shard='aug_sp_00092.txt'><span class='bar-label'>aug_sp_00092.txt</span><div class='bar'><i style='width:21%'></i></div><span class='bar-num'>42,396/200,000 (+42,396 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00093.txt'><span class='bar-label'>aug_sp_00093.txt</span><div class='bar'><i style='width:21%'></i></div><span class='bar-num'>42,344/200,000 (+42,344 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00094.txt'><span class='bar-label'>aug_sp_00094.txt</span><div class='bar'><i style='width:21%'></i></div><span class='bar-num'>42,036/200,000 (+42,036 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00095.txt'><span class='bar-label'>aug_sp_00095.txt</span><div class='bar'><i style='width:21%'></i></div><span class='bar-num'>42,295/200,000 (+42,295 tmp)</span></div></div>
+    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [92,93,94,95] · 200000@12000n · 88 done · 4 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:22%'></i></div><span class='bar-num' id='dg-wave-num'>177,689/800,000</span></div><div class='bar-row' data-shard='aug_sp_00092.txt'><span class='bar-label'>aug_sp_00092.txt</span><div class='bar'><i style='width:22%'></i></div><span class='bar-num'>44,543/200,000 (+44,543 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00093.txt'><span class='bar-label'>aug_sp_00093.txt</span><div class='bar'><i style='width:22%'></i></div><span class='bar-num'>44,547/200,000 (+44,547 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00094.txt'><span class='bar-label'>aug_sp_00094.txt</span><div class='bar'><i style='width:22%'></i></div><span class='bar-num'>44,166/200,000 (+44,166 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00095.txt'><span class='bar-label'>aug_sp_00095.txt</span><div class='bar'><i style='width:22%'></i></div><span class='bar-num'>44,433/200,000 (+44,433 tmp)</span></div></div>
   </section>
 
   <div class="grid grid-2" style="margin-top:16px">
     <section class="panel">
       <div class="label">Workers</div>
-      <p class='dim' id='worker-counts'>datagen 2 · engine 12 · prepare 1 · server 1 · total 16</p><ul id='workers'><li><code>19690 /opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python web/server.py</code></li><li><code>48623 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>48637 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>48653 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>48667 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>49338 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 2000000 --min-depth 18 --resume</code></li><li><code>53719 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>53731 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>53743 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>53755 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>60591 bash scripts/datagen_daemon.sh</code></li><li><code>60613 bash scripts/datagen_parallel.sh 200000 12000 4 auto</code></li><li><code>60635 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>60647 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>60659 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>60671 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li></ul>
+      <p class='dim' id='worker-counts'>engine 11 · prepare 1 · server 1 · total 13</p><ul id='workers'><li><code>19690 /opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python web/server.py</code></li><li><code>48623 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>48637 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>48653 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>49338 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 2000000 --min-depth 18 --resume</code></li><li><code>53719 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>53731 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>53743 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>53755 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>60635 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>60647 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>60659 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>60671 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li></ul>
     </section>
     <section class="panel cmds">
       <div class="label">Commands</div>
