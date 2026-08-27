@@ -1,11 +1,11 @@
 {
-  "when": "2026-08-27T19:14:53+05:30",
+  "when": "2026-08-27T19:33:27+05:30",
   "status": "rejected",
-  "pid": 15063,
-  "elo": 23.5,
+  "pid": 20065,
+  "elo": -6.9,
   "elo_err": 34.1,
-  "elo_lo": -10.6,
-  "elo_hi": 57.6,
+  "elo_lo": -41.0,
+  "elo_hi": 27.2,
   "min_elo": 25.0,
   "games": 400,
   "nodes": 20000,
@@ -22,7 +22,7 @@
   "candidate": {
     "path": "net-candidate.bin",
     "bytes": 60976,
-    "sha16": "bcf6a15ca5c0a0bf"
+    "sha16": "a7acb6a82a97f75e"
   },
   "shipping": {
     "path": "net.bin.ship",
@@ -35,8 +35,8 @@
   "val_mae_cp": 132.3,
   "train_epochs_done": 33,
   "played": 400,
-  "wins": 140,
-  "draws": 147,
-  "losses": 113,
-  "score": 0.534
+  "wins": 123,
+  "draws": 146,
+  "losses": 131,
+  "score": 0.49
 }

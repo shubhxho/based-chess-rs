@@ -1,37 +1,37 @@
 #!/usr/bin/env bash
 # Canonical SP-first gated train. Never ships a net that loses the arena.
 #
-# The best measured pass so far was +19.1 Elo on ~1.34M lines with EVAL_W=0.9,
-# OUT_SCALE=0.70, default LR 3e-3, no shard decay, full finished 5-digit shards.
-# Keep those knobs; only raise epochs/patience a little and drop the 10k pilot.
+# Best measured: +23.5 on finished SP @ EVAL_W=0.9 OUT_SCALE=0.70 LR=3e-3.
+# Lab all-time +19.1 was on ~1.34M lines — not every shard on disk. Newest-only
+# 3.2M windows have also measured −6.9, so default to ~8 full 200k shards
+# (~1.6M) with more epochs/patience.
 #
-#   scripts/ml_cycle.sh              # finished SP corpus → gate @ +25
-#   scripts/ml_cycle.sh 25 400 25
+#   scripts/ml_cycle.sh              # newest full shards → gate @ +25
+#   scripts/ml_cycle.sh 45 400 25
+#   SP_KEEP=12 scripts/ml_cycle.sh   # larger window
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
-EPOCHS=${1:-35}
+EPOCHS=${1:-45}
 GAMES=${2:-400}
 MIN_ELO=${3:-25}
 
 export DATA_DIR=data/selfplay
-# Five-digit shards only. Skip aug_sp_10000 (tiny pilot).
 export DATA_GLOB='aug_sp_0*.txt'
 export EVAL_W=0.9
 export OUT_SCALE=0.70
 export WEIGHT_DECAY=${WEIGHT_DECAY:-1e-4}
-export PATIENCE=${PATIENCE:-7}
+export PATIENCE=${PATIENCE:-10}
 export SP_BOOST=${SP_BOOST:-1.0}
 export MIN_SHARD=${MIN_SHARD:-0}
 export SHARD_DECAY=${SHARD_DECAY:-1.0}
 export LR=${LR:-3e-3}
+export BATCH=${BATCH:-16384}
 export ENGINE=${ENGINE:-$ROOT/target/release/sable}
 
-# Drop any still-writing / tiny shards so train never sees truncated games.
-# Cap to newest SP_KEEP finished shards — full 12M+ OOMs a 16GB Mac and the
-# best measured pass was on ~1.3M, not every shard ever written.
-min_lines=${MIN_LINES:-100000}
-SP_KEEP=${SP_KEEP:-16}
+# Full finished shards only (datagen target is 200k). Reject truncated / tiny.
+min_lines=${MIN_LINES:-200000}
+SP_KEEP=${SP_KEEP:-8}
 shopt -s nullglob
 all_ready=()
 for f in data/selfplay/aug_sp_0*.txt; do
@@ -46,7 +46,7 @@ ready=()
 if (( ${#all_ready[@]} > SP_KEEP )); then
   start=$((${#all_ready[@]} - SP_KEEP))
   ready=("${all_ready[@]:$start}")
-  echo "  SP_KEEP=$SP_KEEP: using newest ${#ready[@]}/${#all_ready[@]} finished shards" >&2
+  echo "  SP_KEEP=$SP_KEEP: newest ${#ready[@]}/${#all_ready[@]} full shards (≥$min_lines)" >&2
 else
   ready=("${all_ready[@]}")
 fi
@@ -56,13 +56,12 @@ if (( ${#ready[@]} < 2 )); then
 fi
 
 n=$(cat "${ready[@]}" | wc -l | tr -d ' ')
-echo "ml_cycle: $n lines in ${#ready[@]} finished shards → epochs=$EPOCHS games=$GAMES min-elo=$MIN_ELO"
-echo "  SHARD_DECAY=$SHARD_DECAY PATIENCE=$PATIENCE LR=$LR"
+echo "ml_cycle: $n lines in ${#ready[@]} shards → epochs=$EPOCHS games=$GAMES min-elo=$MIN_ELO"
+echo "  PATIENCE=$PATIENCE LR=$LR BATCH=$BATCH EVAL_W=$EVAL_W OUT_SCALE=$OUT_SCALE"
 if (( n < 800000 )); then
   echo "warning: under 800k SP lines; gate will likely reject" >&2
 fi
 
-# Point DATA_GLOB at only the ready files via a temp dir of symlinks.
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 for f in "${ready[@]}"; do
@@ -74,6 +73,6 @@ export REPORT_DATA_DIR="$ROOT/data/selfplay"
 export REPORT_DATA_GLOB='aug_sp_0*.txt'
 
 .venv/bin/python train_gate.py --epochs "$EPOCHS" --games "$GAMES" --min-elo "$MIN_ELO"
-# Restore daily page with repo paths (not the temp DATA_DIR).
 unset DATA_DIR DATA_GLOB
 python3 scripts/daily_page.py
+python3 scripts/blog_page.py

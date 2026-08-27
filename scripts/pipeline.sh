@@ -13,7 +13,7 @@ python3 scripts/daily_page.py
 echo "=== daily page refreshed ==="
 
 run_datagen() {
-  bash scripts/datagen_parallel.sh 200000 8000 4 auto
+  bash scripts/datagen_parallel.sh 200000 10000 4 auto
 }
 
 run_prepare() {

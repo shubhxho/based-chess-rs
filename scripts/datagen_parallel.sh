@@ -3,7 +3,7 @@
 #
 # usage: scripts/datagen_parallel.sh [positions] [nodes] [n_shards] [start]
 #   start=auto → fill highest-progress partial shards first, then new indices
-# defaults: 200000  8000  4  auto
+# defaults: 200000  10000  4  auto
 #
 # Workers write to *.txt.tmp and atomically replace the shard only on success,
 # so a killed run never truncates an on-disk partial shard.
@@ -11,7 +11,7 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 POS=${1:-200000}
-NODES=${2:-8000}
+NODES=${2:-10000}
 N=${3:-4}
 START=${4:-auto}
 OUT="$ROOT/data/selfplay"
