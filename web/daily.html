@@ -103,12 +103,12 @@
     <a href="/blog">blog</a>
     <a href="/api/status">status</a>
   </nav>
-  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T09:33:13</span>
+  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T09:53:45</span>
     · <span class="tag dirty" id="git-tag">dirty</span></p>
 </header>
 <main>
   <div class="tiles">
-    <div class="tile"><div class="n" id="t-sp">8,850,063</div><div class="l">Self-play lines</div></div>
+    <div class="tile"><div class="n" id="t-sp">9,569,429</div><div class="l">Self-play lines</div></div>
     <div class="tile"><div class="n" id="t-hf">8,644,688</div><div class="l">Lichess positions</div></div>
     
     <div class="tile"><div class="n" id="t-elo">-1.7</div><div class="l">Last Elo estimate</div></div>
@@ -124,60 +124,59 @@
     <section class="panel">
       <div class="label">Gate</div>
       <div class='gate-bar'><div id='gate-fill' class='gate-fill' style='width:0%'></div></div><p class='dim'>Progress toward <b>+25 Elo</b> ship bar (current estimate <span id='gate-elo-inline'>-1.7 ± 34</span>).</p>
-      <div id="gate-panel"><table><tr><th>Result</th><td><span id='gate-result'>REJECTED</span></td></tr><tr><th>Elo estimate</th><td><span id='gate-elo'>-1.7 ± 34</span> (95%)</td></tr><tr><th>CI band</th><td>[-35.7, 32.3]</td></tr><tr><th>Path</th><td><span id='gate-path'>mix</span> · EVAL_W=0.9</td></tr><tr><th>PID</th><td>59314</td></tr><tr><th>Match</th><td>+124 =150 -126 · score 0.497 · 400@20000n ×4</td></tr><tr><th>Pilot fit</th><td>val 0.00542 · r=0.9541 · mae=142.6cp</td></tr><tr><th>Candidate</th><td>493744895885d3af · 60976B</td></tr><tr><th>This gate need</th><td>+10</td></tr><tr><th>Ship need (SP)</th><td>+25</td></tr><tr><th>Best SP gate</th><td>+19.1 (1.34M SP) · last SP +18.3</td></tr><tr><th>Epochs</th><td>30</td></tr><tr><th>When</th><td>2026-08-27T09:27:28+05:30</td></tr></table><p class='dim' style='margin-top:10px'>Shipping trust is self-play only. Lichess score-only nets measure teacher fit; arena Elo is the estimate that matters.</p></div>
+      <div id="gate-panel"><table><tr><th>Result</th><td><span id='gate-result'>REJECTED</span></td></tr><tr><th>Elo estimate</th><td><span id='gate-elo'>-1.7 ± 34</span> (95%)</td></tr><tr><th>CI band</th><td>[-35.7, 32.3]</td></tr><tr><th>Path</th><td><span id='gate-path'>mix</span> · EVAL_W=0.85</td></tr><tr><th>PID</th><td>83112</td></tr><tr><th>Match</th><td>+124 =150 -126 · score 0.497 · 400@20000n ×4</td></tr><tr><th>Pilot fit</th><td>val 0.00568 · r=0.9549 · mae=129.6cp</td></tr><tr><th>Candidate</th><td>0c28d75271337d67 · 60976B</td></tr><tr><th>This gate need</th><td>+10</td></tr><tr><th>Ship need (SP)</th><td>+25</td></tr><tr><th>Best SP gate</th><td>+19.1 (1.34M SP) · last SP +18.3</td></tr><tr><th>Epochs</th><td>50</td></tr><tr><th>When</th><td>2026-08-27T09:43:12+05:30</td></tr></table><p class='dim' style='margin-top:10px'>Shipping trust is self-play only. Lichess score-only nets measure teacher fit; arena Elo is the estimate that matters.</p></div>
     </section>
     <section class="panel">
       <div class="label">Repository</div>
-      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>eb6ac33 Run mix train under nohup so wrapper reaps cannot SIGHUP it.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>6 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>scripts/push_3000.sh</code></td></tr><tr><th><code>M</code></th><td><code>web/blog.html</code></td></tr><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr><tr><th><code>M</code></th><td><code>web/elo_history.json</code></td></tr><tr><th><code>M</code></th><td><code>web/gate_last.json</code></td></tr><tr><th><code>M</code></th><td><code>web/pilot_last.json</code></td></tr></table><p class='dim' id='git-diff'>6 files changed, 107 insertions(+), 63 deletions(-)</p><pre class='diff-stat' id='git-stat'>scripts/push_3000.sh | 14 ++++++++------
- web/blog.html        |  8 ++++----
- web/daily.html       | 54 +++++++++++++++++++++++-----------------------------
- web/elo_history.json | 46 ++++++++++++++++++++++++++++++++++++++++++++
- web/gate_last.json   | 27 +++++++++++++-------------
- web/pilot_last.json  | 21 ++++++++++----------
- 6 files changed, 107 insertions(+), 63 deletions(-)</pre></div>
+      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>2e07891 Fix push_3000 daemon spawn with start_new_session.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>5 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>web/blog.html</code></td></tr><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr><tr><th><code>M</code></th><td><code>web/elo_history.json</code></td></tr><tr><th><code>M</code></th><td><code>web/gate_last.json</code></td></tr><tr><th><code>M</code></th><td><code>web/pilot_last.json</code></td></tr></table><p class='dim' id='git-diff'>5 files changed, 88 insertions(+), 45 deletions(-)</p><pre class='diff-stat' id='git-stat'>web/blog.html        |  6 +++---
+ web/daily.html       | 41 +++++++++++++++++++----------------------
+ web/elo_history.json | 46 ++++++++++++++++++++++++++++++++++++++++++++++
+ web/gate_last.json   | 22 +++++++++++-----------
+ web/pilot_last.json  | 18 +++++++++---------
+ 5 files changed, 88 insertions(+), 45 deletions(-)</pre></div>
     </section>
     <section class="panel">
       <div class="label">Lab snapshot</div>
-      <table><tr><th>Generated</th><td>2026-08-27 09:33 IST</td></tr>
+      <table><tr><th>Generated</th><td>2026-08-27 09:53 IST</td></tr>
 <tr><th>Engine</th><td>Sable 1.2.0</td></tr>
 <tr><th>Author</th><td>shubh (based-chess-rs, no_std neural eval)</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>eb6ac33 Run mix train under nohup so wrapper reaps cannot SIGHUP it.</td></tr>
+<tr><th>HEAD</th><td>2e07891 Fix push_3000 daemon spawn with start_new_session.</td></tr>
 <tr><th>Tree</th><td>dirty</td></tr>
-<tr><th>Self-play</th><td>44 shards · 8,850,063 lines</td></tr>
+<tr><th>Self-play</th><td>48 shards · 9,569,429 lines</td></tr>
 <tr><th>Lichess HF</th><td>38 shards · 8,644,688 lines</td></tr>
 <tr><th>Lichess cursor</th><td>36,005,051</td></tr>
-<tr><th>Last gate</th><td>REJECTED  Elo -1.7 ± 34 · band [-35.7, +32.3] (need +10) · mix · pid 59314 · 400/400 games · 2026-08-27T09:27:28+05:30</td></tr></table>
+<tr><th>Last gate</th><td>REJECTED  Elo -1.7 ± 34 · band [-35.7, +32.3] (need +10) · mix · pid 83112 · 400/400 games · 2026-08-27T09:43:12+05:30</td></tr></table>
     </section>
   </div>
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Lab health</div>
-    <div id="health"><p class='dim' id='health-score'>health <b>3/5</b></p><table id='health-table'><tr><th>gate</th><td class='bad'>last REJECTED -1.7 ±34.0</td></tr><tr><th>datagen</th><td class='ok'>1 workers · wave 100%</td></tr><tr><th>prepare</th><td class='ok'>skipping · kept 0/2000000</td></tr><tr><th>net</th><td class='ok'>net.bin == shipping</td></tr><tr><th>git</th><td class='bad'>6 local change(s) · eb6ac33 Run mix train under nohup so wrapper reaps cannot SIGHUP it.</td></tr></table></div>
+    <div id="health"><p class='dim' id='health-score'>health <b>3/5</b></p><table id='health-table'><tr><th>gate</th><td class='bad'>last REJECTED -1.7 ±34.0</td></tr><tr><th>datagen</th><td class='ok'>2 workers · wave 90%</td></tr><tr><th>prepare</th><td class='ok'>skipping · kept 0/2000000</td></tr><tr><th>net</th><td class='ok'>net.bin == shipping</td></tr><tr><th>git</th><td class='bad'>5 local change(s) · 2e07891 Fix push_3000 daemon spawn with start_new_session.</td></tr></table></div>
   </section>
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Elo estimate</div>
-    <table class='mini' id='elo-hist'><caption class='dim'>Elo estimate history (arena vs shipping · 95% CI)</caption><thead><tr><th>when</th><th>path</th><th>Elo ± CI</th><th>match</th><th>blend</th><th></th></tr></thead><tbody><tr><td class='dim'>2026-08-27T09:27:28</td><td><span class='tag mix'>mix</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=0.9</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T07:24:54</td><td><span class='tag lichess'>lichess</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=1</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T07:21:25</td><td><span class='tag lichess'>lichess</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=1</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T07:06:20</td><td><span class='tag lichess'>lichess</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=1</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T03:43:06</td><td><span class='tag selfplay'>selfplay</span></td><td class='warn'>+18.3 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=0.9</td><td>reject</td></tr></tbody></table>
+    <table class='mini' id='elo-hist'><caption class='dim'>Elo estimate history (arena vs shipping · 95% CI)</caption><thead><tr><th>when</th><th>path</th><th>Elo ± CI</th><th>match</th><th>blend</th><th></th></tr></thead><tbody><tr><td class='dim'>2026-08-27T09:43:12</td><td><span class='tag mix'>mix</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=0.85</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T09:27:28</td><td><span class='tag mix'>mix</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=0.9</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T07:24:54</td><td><span class='tag lichess'>lichess</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=1</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T07:21:25</td><td><span class='tag lichess'>lichess</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=1</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T07:06:20</td><td><span class='tag lichess'>lichess</span></td><td class='bad'>-1.7 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=1</td><td>reject</td></tr><tr><td class='dim'>2026-08-27T03:43:06</td><td><span class='tag selfplay'>selfplay</span></td><td class='warn'>+18.3 ±34</td><td class='dim'>400@20000n</td><td class='dim'>EVAL_W=0.9</td><td>reject</td></tr></tbody></table>
   </section>
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Lichess trainer</div>
-    <div id="lichess"><table class='meta'><tr><th>Phase</th><td><b id='lf-phase'>skipping</b></td></tr><tr><th>Corpus</th><td><span id='lf-corpus'>38 shards · 8,644,688 positions</span></td></tr><tr><th>Stream cursor</th><td><span id='lf-cursor'>19,250,000</span></td></tr><tr><th>Elapsed</th><td><span id='lf-elapsed'>326s</span></td></tr></table><div class='bar-row'><span class='bar-label'>skip</span><div class='bar bar-skip'><i style='width:53%'></i></div><span class='bar-num'>19,250,000/36,005,051</span></div><div class='callout callout-gold' id='lf-format'><div class='callout-title'>Lichess trainer</div><code>FEN | cp_white | result</code><p>result=<b>1</b> is a neutral draw placeholder — with <code>EVAL_W=1 — score-only teacher; result column is inert</code> only the Stockfish cp label trains the net. The dummy result cannot pull the target toward win/loss.</p><p class='dim trust'>Ship bar is still <b>self-play +25 Elo</b>. Toward ~3000: grow Lichess → <code>scripts/push_3000.sh</code> (SF+SP mix) → arena → SP gate → Stockfish calibrate.</p></div></div>
+    <div id="lichess"><table class='meta'><tr><th>Phase</th><td><b id='lf-phase'>skipping</b></td></tr><tr><th>Corpus</th><td><span id='lf-corpus'>38 shards · 8,644,688 positions</span></td></tr><tr><th>Stream cursor</th><td><span id='lf-cursor'>23,000,000</span></td></tr><tr><th>Elapsed</th><td><span id='lf-elapsed'>612s</span></td></tr></table><div class='bar-row'><span class='bar-label'>skip</span><div class='bar bar-skip'><i style='width:63%'></i></div><span class='bar-num'>23,000,000/36,005,051</span></div><div class='callout callout-gold' id='lf-format'><div class='callout-title'>Lichess trainer</div><code>FEN | cp_white | result</code><p>result=<b>1</b> is a neutral draw placeholder — with <code>EVAL_W=1 — score-only teacher; result column is inert</code> only the Stockfish cp label trains the net. The dummy result cannot pull the target toward win/loss.</p><p class='dim trust'>Ship bar is still <b>self-play +25 Elo</b>. Toward ~3000: grow Lichess → <code>scripts/push_3000.sh</code> (SF+SP mix) → arena → SP gate → Stockfish calibrate.</p></div></div>
   </section>
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Self-play datagen</div>
-    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [44,45,46,47] · 200000@8000n · 44 done · 0 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:100%'></i></div><span class='bar-num' id='dg-wave-num'>800,000/800,000</span></div><div class='bar-row' data-shard='aug_sp_00044.txt'><span class='bar-label'>aug_sp_00044.txt</span><div class='bar'><i style='width:100%'></i></div><span class='bar-num'>200,000/200,000</span></div>
-<div class='bar-row' data-shard='aug_sp_00045.txt'><span class='bar-label'>aug_sp_00045.txt</span><div class='bar'><i style='width:100%'></i></div><span class='bar-num'>200,000/200,000</span></div>
-<div class='bar-row' data-shard='aug_sp_00046.txt'><span class='bar-label'>aug_sp_00046.txt</span><div class='bar'><i style='width:100%'></i></div><span class='bar-num'>200,000/200,000</span></div>
-<div class='bar-row' data-shard='aug_sp_00047.txt'><span class='bar-label'>aug_sp_00047.txt</span><div class='bar'><i style='width:100%'></i></div><span class='bar-num'>200,000/200,000</span></div></div>
+    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [48,49,50,51] · 200000@8000n · 44 done · 4 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:90%'></i></div><span class='bar-num' id='dg-wave-num'>720,147/800,000</span></div><div class='bar-row' data-shard='aug_sp_00048.txt'><span class='bar-label'>aug_sp_00048.txt</span><div class='bar'><i style='width:90%'></i></div><span class='bar-num'>180,707/200,000 (+180,707 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00049.txt'><span class='bar-label'>aug_sp_00049.txt</span><div class='bar'><i style='width:89%'></i></div><span class='bar-num'>179,860/200,000 (+179,860 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00050.txt'><span class='bar-label'>aug_sp_00050.txt</span><div class='bar'><i style='width:89%'></i></div><span class='bar-num'>179,621/200,000 (+179,621 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00051.txt'><span class='bar-label'>aug_sp_00051.txt</span><div class='bar'><i style='width:89%'></i></div><span class='bar-num'>179,959/200,000 (+179,959 tmp)</span></div></div>
   </section>
 
   <div class="grid grid-2" style="margin-top:16px">
     <section class="panel">
       <div class="label">Workers</div>
-      <p class='dim' id='worker-counts'>datagen 1 · prepare 1 · total 2</p><ul id='workers'><li><code>48475 bash scripts/datagen_daemon.sh</code></li><li><code>68548 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 2000000 --min-depth 18 --resume</code></li></ul>
+      <p class='dim' id='worker-counts'>datagen 2 · engine 4 · prepare 1 · total 7</p><ul id='workers'><li><code>48475 bash scripts/datagen_daemon.sh</code></li><li><code>78464 bash scripts/datagen_parallel.sh 200000 8000 4 auto</code></li><li><code>78594 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>78603 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>78612 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>78621 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>84285 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 2000000 --min-depth 18 --resume</code></li></ul>
     </section>
     <section class="panel cmds">
       <div class="label">Commands</div>
