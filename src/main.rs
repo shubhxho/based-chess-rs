@@ -37,6 +37,13 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
     sys::exit(101)
 }
 
+// libcore on recent rustc still references the unwinding personality even with
+// panic=abort. Provide a no-op so `cargo build` / `cargo run` (dev) link on
+// Darwin; release already succeeded via LTO eliminating the call.
+#[cfg(not(test))]
+#[no_mangle]
+extern "C" fn rust_eh_personality() {}
+
 #[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
