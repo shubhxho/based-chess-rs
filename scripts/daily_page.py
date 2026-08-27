@@ -184,6 +184,41 @@ def elo_tiles(g: dict | None, need: float) -> str:
     """
 
 
+def elo_history_panel() -> str:
+    path = ROOT / "web" / "elo_history.json"
+    if not path.is_file():
+        return "<p class='dim'>No Elo history yet.</p>"
+    try:
+        hist = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return "<p class='dim'>Elo history unreadable.</p>"
+    if not isinstance(hist, list) or not hist:
+        return "<p class='dim'>No Elo history yet.</p>"
+    rows = []
+    for e in reversed(hist[-12:]):
+        elo = float(e.get("elo", 0))
+        err = e.get("elo_err")
+        err_s = f"±{float(err):.0f}" if err is not None else "±?"
+        ship = "SHIP" if e.get("shipped") else "reject"
+        cls = "ok" if elo >= 25 else ("warn" if elo >= 0 else "bad")
+        rows.append(
+            "<tr>"
+            f"<td class='dim'>{esc(str(e.get('when', ''))[:19])}</td>"
+            f"<td><span class='tag {esc(e.get('path', '?'))}'>{esc(e.get('path', '?'))}</span></td>"
+            f"<td class='{cls}'>{elo:+.1f} {err_s}</td>"
+            f"<td class='dim'>{esc(e.get('games', '?'))}@{esc(e.get('nodes', '?'))}n</td>"
+            f"<td class='dim'>EVAL_W={esc(e.get('eval_w', '?'))}</td>"
+            f"<td>{ship}</td>"
+            "</tr>"
+        )
+    return (
+        "<table class='mini' id='elo-hist'>"
+        "<caption class='dim'>Elo estimate history (arena vs shipping · 95% CI)</caption>"
+        "<thead><tr><th>when</th><th>path</th><th>Elo ± CI</th><th>match</th><th>blend</th><th></th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
 def repo_panel(gt: dict) -> str:
     state = "clean · synced" if gt.get("clean") else f"{len(gt.get('changed') or [])} change(s)"
     rows = [
@@ -235,6 +270,7 @@ def main() -> None:
         need = float(g["min_elo"])
     gate_row, gate_panel, gate_bar = gate_section(g, need)
     tiles_html = elo_tiles(g, need)
+    hist_html = elo_history_panel()
 
     rows = [
         ("Generated", now),
@@ -366,6 +402,13 @@ def main() -> None:
     font-size: 10px; letter-spacing: .08em; }}
   .tag.clean {{ color: var(--green); border-color: var(--green); }}
   .tag.dirty {{ color: var(--amber); border-color: var(--amber); }}
+  .tag.lichess {{ color: var(--gold); border-color: var(--gold-deep); }}
+  .tag.selfplay {{ color: var(--green); border-color: var(--green); }}
+  td.ok {{ color: var(--green); }}
+  td.warn {{ color: var(--amber); }}
+  td.bad {{ color: var(--red); }}
+  #elo-hist th {{ width: auto; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }}
+  #elo-hist td {{ font-size: 12px; white-space: nowrap; }}
 </style>
 </head>
 <body>
@@ -402,6 +445,11 @@ def main() -> None:
       <table>{table}</table>
     </section>
   </div>
+
+  <section class="panel" style="margin-top:16px">
+    <div class="label">Elo estimate</div>
+    {hist_html}
+  </section>
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Lichess trainer</div>
