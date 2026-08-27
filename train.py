@@ -43,6 +43,39 @@ if os.environ.get("MX_FORCE_GPU", "1") != "0":
     except Exception:
         pass
 
+
+def _mlx_clear():
+    """Drop Metal temporary buffers between epochs when the runtime exposes it."""
+    try:
+        mx.metal.clear_cache()
+    except Exception:
+        pass
+
+
+def _teacher_probe(model, us, them, buckets, sc, idx, k=4000):
+    """Fast float-net vs teacher correlation on a fixed probe (pre-quant)."""
+    pick = idx[: min(k, len(idx))]
+    if len(pick) == 0:
+        return float("nan"), float("nan")
+    pred = []
+    for i in range(0, len(pick), BATCH):
+        sl = pick[i : i + BATCH]
+        pred.append(
+            np.array(
+                model(
+                    mx.array(us[sl].astype(np.int32)),
+                    mx.array(them[sl].astype(np.int32)),
+                    mx.array(buckets[sl]),
+                )
+            )
+            * SCALE
+        )
+    pred = np.concatenate(pred)
+    truth = sc[pick]
+    r = float(np.corrcoef(pred, truth)[0, 1])
+    mae = float(np.mean(np.abs(pred - truth)))
+    return r, mae
+
 IN = 934                 # feature rows; must match net.rs
 MAX_F = 96               # feature slots per perspective
 PAD = IN                 # index of the permanent zero row
@@ -57,9 +90,15 @@ SHARD_DECAY = float(os.environ.get("SHARD_DECAY", "1.0"))
 # Multiply provenance weight for self-play shards when mixed with HF dumps.
 SP_BOOST = float(os.environ.get("SP_BOOST", "1.0"))
 WEIGHT_DECAY = float(os.environ.get("WEIGHT_DECAY", "1e-4"))
-PATIENCE = int(os.environ.get("PATIENCE", "5"))  # 0 = disable early stop
+PATIENCE = int(os.environ.get("PATIENCE", "10"))  # 0 = disable early stop
+# Do not early-stop before this many epochs — short runs underfit the arena.
+MIN_EPOCHS = int(os.environ.get("MIN_EPOCHS", "20"))
 BATCH = int(os.environ.get("BATCH", "16384"))
 SIGMOID_K = float(os.environ.get("SIG_K", "400"))
+# Floor on the cosine LR so late epochs still move on the int8 grid.
+LR_FLOOR = float(os.environ.get("LR_FLOOR", "0.08"))
+# Print a cheap quantised-vs-teacher probe every N epochs (0 = only at end).
+EVAL_EVERY = int(os.environ.get("EVAL_EVERY", "5"))
 # Export-time gain. `None` means "derive it from how loud this network actually
 # came out" -- see export(). Setting it pins the old constant behaviour.
 OUT_SCALE = float(os.environ["OUT_SCALE"]) if "OUT_SCALE" in os.environ else None
@@ -475,8 +514,9 @@ def main():
     opt = optim.AdamW(learning_rate=base_lr, weight_decay=WEIGHT_DECAY)
     print(
         f"  mlx {mx.default_device()}, batch {batch}, lr {base_lr:g}, "
-        f"weight_decay {WEIGHT_DECAY:g}, patience {PATIENCE}, "
-        f"eval_w {EVAL_WEIGHT:g}, sp_boost {SP_BOOST:g}",
+        f"lr_floor {LR_FLOOR:g}, weight_decay {WEIGHT_DECAY:g}, "
+        f"patience {PATIENCE}, min_epochs {MIN_EPOCHS}, "
+        f"eval_w {EVAL_WEIGHT:g}, sp_boost {SP_BOOST:g}, eval_every {EVAL_EVERY}",
         flush=True,
     )
 
@@ -505,17 +545,19 @@ def main():
         return total / m
 
     best = (float("inf"), None)
-    warmup = int(os.environ.get("WARMUP", "2"))
+    warmup = int(os.environ.get("WARMUP", "3"))
     stale = 0
+    import math
+
     for ep in range(epochs):
-        # Linear warmup, then cosine to ~0: early steps explore, late steps
-        # settle into the quantisation grid.
+        # Linear warmup, then cosine down to LR_FLOOR * base — late epochs still
+        # tick the int8 grid instead of freezing at ~0.
         if ep < warmup:
             opt.learning_rate = base_lr * (ep + 1) / max(1, warmup)
         else:
-            import math
             t = (ep - warmup) / max(1, epochs - warmup - 1)
-            opt.learning_rate = base_lr * 0.5 * (1 + math.cos(math.pi * t))
+            cos = 0.5 * (1 + math.cos(math.pi * t))
+            opt.learning_rate = base_lr * (LR_FLOOR + (1.0 - LR_FLOOR) * cos)
         perm = train_idx[np.random.permutation(len(train_idx))]
         total, t0 = 0.0, time.time()
         for i in range(steps):
@@ -540,13 +582,21 @@ def main():
             stale = 0
         else:
             stale += 1
-        print(
+        line = (
             f"epoch {ep+1:2d}/{epochs}  loss {total/steps:.5f}  val {vl:.5f}{star}  "
-            f"lr {opt.learning_rate.item():.5f}  {time.time()-t0:.0f}s",
-            flush=True,
+            f"lr {opt.learning_rate.item():.5f}  {time.time()-t0:.0f}s"
         )
-        if PATIENCE and stale >= PATIENCE:
-            print(f"early stop: val flat for {PATIENCE} epochs", flush=True)
+        if EVAL_EVERY and ((ep + 1) % EVAL_EVERY == 0 or ep == 0):
+            r, mae = _teacher_probe(model, us, them, buckets, sc, val_idx)
+            line += f"  eval r={r:.4f} mae={mae:.0f}cp"
+        print(line, flush=True)
+        _mlx_clear()
+        if PATIENCE and stale >= PATIENCE and (ep + 1) >= MIN_EPOCHS:
+            print(
+                f"early stop: val flat for {PATIENCE} epochs "
+                f"(after min_epochs={MIN_EPOCHS})",
+                flush=True,
+            )
             break
 
     if best[1] is not None:

@@ -395,5 +395,47 @@
     "draws": 132,
     "losses": 122,
     "score": 0.53
+  },
+  {
+    "when": "2026-08-27T20:51:59+05:30",
+    "status": "rejected",
+    "pid": 37812,
+    "elo": -20.0,
+    "elo_err": 34.1,
+    "elo_lo": -54.1,
+    "elo_hi": 14.1,
+    "min_elo": 25.0,
+    "games": 400,
+    "nodes": 20000,
+    "epochs": 50,
+    "concurrency": 4,
+    "path": "selfplay",
+    "data_dir": "/Users/shubh/Documents/based-chess-rs/data/selfplay",
+    "data_glob": "aug_sp_0*.txt",
+    "eval_w": "0.88",
+    "out_scale": "0.68",
+    "sp_boost": "1.0",
+    "shipped": false,
+    "skip_train": false,
+    "candidate": {
+      "path": "net-candidate.bin",
+      "bytes": 60976,
+      "sha16": "12b9e5956ff17ab0"
+    },
+    "shipping": {
+      "path": "net.bin.ship",
+      "bytes": 60976,
+      "sha16": "5e4817c6e33b6bd9"
+    },
+    "pilot": null,
+    "val": 0.00511,
+    "val_r": 0.9514,
+    "val_mae_cp": 132.3,
+    "train_epochs_done": 33,
+    "played": 400,
+    "wins": 125,
+    "draws": 127,
+    "losses": 148,
+    "score": 0.471
   }
 ]
