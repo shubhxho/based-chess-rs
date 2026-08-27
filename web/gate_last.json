@@ -1,11 +1,11 @@
 {
-  "when": "2026-08-27T20:07:29+05:30",
-  "status": "running",
+  "when": "2026-08-27T20:08:42+05:30",
+  "status": "rejected",
   "pid": 28605,
-  "elo": 5.0,
-  "elo_err": 42.0,
-  "elo_lo": -37.0,
-  "elo_hi": 47.0,
+  "elo": -1.7,
+  "elo_err": 34.0,
+  "elo_lo": -35.7,
+  "elo_hi": 32.3,
   "min_elo": 25.0,
   "games": 400,
   "nodes": 20000,
@@ -34,10 +34,9 @@
   "val_r": 0.9514,
   "val_mae_cp": 132.3,
   "train_epochs_done": 33,
-  "played": 260,
-  "wins": 80,
-  "draws": 104,
-  "losses": 76,
-  "score": null,
-  "live": true
+  "played": 400,
+  "wins": 124,
+  "draws": 150,
+  "losses": 126,
+  "score": 0.497
 }

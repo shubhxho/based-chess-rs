@@ -36,6 +36,13 @@ import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
 
+# Prefer Apple GPU. MX_FORCE_GPU=0 keeps whatever the runtime defaulted to.
+if os.environ.get("MX_FORCE_GPU", "1") != "0":
+    try:
+        mx.set_default_device(mx.gpu)
+    except Exception:
+        pass
+
 IN = 934                 # feature rows; must match net.rs
 MAX_F = 96               # feature slots per perspective
 PAD = IN                 # index of the permanent zero row
@@ -467,8 +474,9 @@ def main():
     base_lr = float(os.environ.get("LR", "3e-3"))
     opt = optim.AdamW(learning_rate=base_lr, weight_decay=WEIGHT_DECAY)
     print(
-        f"  batch {batch}, lr {base_lr:g}, weight_decay {WEIGHT_DECAY:g}, "
-        f"patience {PATIENCE}, eval_w {EVAL_WEIGHT:g}, sp_boost {SP_BOOST:g}",
+        f"  mlx {mx.default_device()}, batch {batch}, lr {base_lr:g}, "
+        f"weight_decay {WEIGHT_DECAY:g}, patience {PATIENCE}, "
+        f"eval_w {EVAL_WEIGHT:g}, sp_boost {SP_BOOST:g}",
         flush=True,
     )
 

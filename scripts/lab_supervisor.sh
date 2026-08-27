@@ -108,7 +108,8 @@ start_datagen() {
     return
   fi
   echo "supervisor: starting self-play datagen" >>"$LOG"
-  bash scripts/datagen_daemon.sh >>/tmp/datagen_daemon.log 2>&1 &
+  NODES="${DATAGEN_NODES:-12000}" POS="${DATAGEN_POS:-200000}" N="${DATAGEN_N:-4}" \
+    bash scripts/datagen_daemon.sh >>/tmp/datagen_daemon.log 2>&1 &
   DATAGEN_PID=$!
 }
 
@@ -157,7 +158,7 @@ run_training() {
   stop_prepare_for_train
   write_status training
   echo "supervisor: starting gated self-play attempt → /tmp/sable_gate.log" >>"$LOG"
-  bash scripts/ml_cycle.sh "${GATE_EPOCHS:-35}" "${GATE_GAMES:-400}" "${GATE_MIN_ELO:-25}" \
+  bash scripts/ml_cycle.sh "${GATE_EPOCHS:-45}" "${GATE_GAMES:-400}" "${GATE_MIN_ELO:-25}" \
       >>/tmp/sable_gate.log 2>&1 &
   GATE_PID=$!
   write_status training
