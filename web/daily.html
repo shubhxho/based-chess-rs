@@ -103,12 +103,12 @@
     <a href="/blog">blog</a>
     <a href="/api/status">status</a>
   </nav>
-  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T19:21:17</span>
+  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T19:22:21</span>
     · <span class="tag dirty" id="git-tag">dirty</span></p>
 </header>
 <main>
   <div class="tiles">
-    <div class="tile"><div class="n" id="t-sp">16,116,938</div><div class="l">Self-play lines</div></div>
+    <div class="tile"><div class="n" id="t-sp">16,190,242</div><div class="l">Self-play lines</div></div>
     <div class="tile"><div class="n" id="t-hf">12,144,688</div><div class="l">Lichess positions</div></div>
     
     <div class="tile"><div class="n" id="t-elo">+23.5</div><div class="l">Last Elo estimate</div></div>
@@ -128,21 +128,19 @@
     </section>
     <section class="panel">
       <div class="label">Repository</div>
-      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>8f0103c Centralize lab workers and gated training in supervisor</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>4 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>web/blog.html</code></td></tr><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr><tr><th><code>M</code></th><td><code>web/elo_history.json</code></td></tr><tr><th><code>M</code></th><td><code>web/gate_last.json</code></td></tr></table><p class='dim' id='git-diff'>4 files changed, 89 insertions(+), 53 deletions(-)</p><pre class='diff-stat' id='git-stat'>web/blog.html        | 10 +++++-----
- web/daily.html       | 48 +++++++++++++++++++++++-------------------------
- web/elo_history.json | 42 ++++++++++++++++++++++++++++++++++++++++++
- web/gate_last.json   | 42 +++++++++++++++++++-----------------------
- 4 files changed, 89 insertions(+), 53 deletions(-)</pre></div>
+      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>53b7c7c Record supervised gate results</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>2 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>web/blog.html</code></td></tr><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr></table><p class='dim' id='git-diff'>2 files changed, 14 insertions(+), 18 deletions(-)</p><pre class='diff-stat' id='git-stat'>web/blog.html  |  2 +-
+ web/daily.html | 30 +++++++++++++-----------------
+ 2 files changed, 14 insertions(+), 18 deletions(-)</pre></div>
     </section>
     <section class="panel">
       <div class="label">Lab snapshot</div>
-      <table><tr><th>Generated</th><td>2026-08-27 19:21 IST</td></tr>
+      <table><tr><th>Generated</th><td>2026-08-27 19:22 IST</td></tr>
 <tr><th>Engine</th><td>Sable 1.2.0</td></tr>
 <tr><th>Author</th><td>shubh (based-chess-rs, no_std neural eval)</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>8f0103c Centralize lab workers and gated training in supervisor</td></tr>
+<tr><th>HEAD</th><td>53b7c7c Record supervised gate results</td></tr>
 <tr><th>Tree</th><td>dirty</td></tr>
-<tr><th>Self-play</th><td>84 shards · 16,116,938 lines</td></tr>
+<tr><th>Self-play</th><td>84 shards · 16,190,242 lines</td></tr>
 <tr><th>Lichess HF</th><td>52 shards · 12,144,688 lines</td></tr>
 <tr><th>Lichess cursor</th><td>55,275,123</td></tr>
 <tr><th>Last gate</th><td>REJECTED  Elo +23.5 ± 34 · band [-10.6, +57.6] (need +25) · selfplay · pid 15063 · 400/400 games · 2026-08-27T19:14:53+05:30</td></tr></table>
@@ -151,7 +149,7 @@
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Lab health</div>
-    <div id="health"><p class='dim' id='health-score'>health <b>3/5</b></p><table id='health-table'><tr><th>gate</th><td class='bad'>last REJECTED +23.5 ±34.1</td></tr><tr><th>datagen</th><td class='ok'>2 workers · wave 8%</td></tr><tr><th>prepare</th><td class='ok'>filtering · kept 1600000/2000000</td></tr><tr><th>net</th><td class='ok'>net.bin == shipping</td></tr><tr><th>git</th><td class='bad'>4 local change(s) · 8f0103c Centralize lab workers and gated training in supervisor</td></tr></table></div>
+    <div id="health"><p class='dim' id='health-score'>health <b>3/5</b></p><table id='health-table'><tr><th>gate</th><td class='bad'>last REJECTED +23.5 ±34.1</td></tr><tr><th>datagen</th><td class='ok'>2 workers · wave 17%</td></tr><tr><th>prepare</th><td class='ok'>filtering · kept 1600000/2000000</td></tr><tr><th>net</th><td class='ok'>net.bin == shipping</td></tr><tr><th>git</th><td class='bad'>2 local change(s) · 53b7c7c Record supervised gate results</td></tr></table></div>
   </section>
 
   <section class="panel" style="margin-top:16px">
@@ -166,10 +164,10 @@
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Self-play datagen</div>
-    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [84,85,86,87] · 200000@8000n · 80 done · 4 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:8%'></i></div><span class='bar-num' id='dg-wave-num'>67,645/800,000</span></div><div class='bar-row' data-shard='aug_sp_00084.txt'><span class='bar-label'>aug_sp_00084.txt</span><div class='bar'><i style='width:8%'></i></div><span class='bar-num'>16,819/200,000 (+16,819 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00085.txt'><span class='bar-label'>aug_sp_00085.txt</span><div class='bar'><i style='width:8%'></i></div><span class='bar-num'>16,810/200,000 (+16,810 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00086.txt'><span class='bar-label'>aug_sp_00086.txt</span><div class='bar'><i style='width:8%'></i></div><span class='bar-num'>16,996/200,000 (+16,996 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00087.txt'><span class='bar-label'>aug_sp_00087.txt</span><div class='bar'><i style='width:8%'></i></div><span class='bar-num'>17,020/200,000 (+17,020 tmp)</span></div></div>
+    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [84,85,86,87] · 200000@8000n · 80 done · 4 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:17%'></i></div><span class='bar-num' id='dg-wave-num'>141,111/800,000</span></div><div class='bar-row' data-shard='aug_sp_00084.txt'><span class='bar-label'>aug_sp_00084.txt</span><div class='bar'><i style='width:17%'></i></div><span class='bar-num'>35,230/200,000 (+35,230 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00085.txt'><span class='bar-label'>aug_sp_00085.txt</span><div class='bar'><i style='width:17%'></i></div><span class='bar-num'>35,064/200,000 (+35,064 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00086.txt'><span class='bar-label'>aug_sp_00086.txt</span><div class='bar'><i style='width:17%'></i></div><span class='bar-num'>35,426/200,000 (+35,426 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00087.txt'><span class='bar-label'>aug_sp_00087.txt</span><div class='bar'><i style='width:17%'></i></div><span class='bar-num'>35,391/200,000 (+35,391 tmp)</span></div></div>
   </section>
 
   <div class="grid grid-2" style="margin-top:16px">
