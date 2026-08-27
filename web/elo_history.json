@@ -29,5 +29,20 @@
     "eval_w": "1",
     "out_scale": "0.70",
     "shipped": false
+  },
+  {
+    "when": "2026-08-27T07:21:25+05:30",
+    "elo": -1.7,
+    "elo_err": 34.0,
+    "min_elo": 10.0,
+    "games": 400,
+    "nodes": 20000,
+    "epochs": 25,
+    "path": "lichess",
+    "data_dir": "data/lichess-sf",
+    "data_glob": "aug_hf_*.txt",
+    "eval_w": "1",
+    "out_scale": "0.70",
+    "shipped": false
   }
 ]

@@ -131,27 +131,58 @@ def gate_section(g: dict | None, need: float) -> tuple[str, str, str]:
             "<p class='dim'>No gate yet. <code>scripts/ml_cycle.sh 35 400 25</code></p>",
             "",
         )
-    shipped = "SHIPPED" if g.get("shipped") else "REJECTED"
-    elo = float(g.get("elo", 0))
+    status = g.get("status") or ("SHIPPED" if g.get("shipped") else "REJECTED")
+    status_u = str(status).upper()
+    elo = g.get("elo")
+    elo_f = float(elo) if elo is not None else None
     err = g.get("elo_err")
     path = g.get("path") or ("lichess" if "lichess" in str(g.get("data_dir", "")).lower() else "selfplay")
     ship_need = 25.0
-    pct = min(100, max(0, int(100 * elo / ship_need))) if ship_need > 0 and elo > 0 else 0
-    err_txt = f" ± {float(err):.0f}" if err is not None else " ± arena"
-    gate_row = f"{shipped}  Elo {elo:+.1f}{err_txt} (need {float(g.get('min_elo', need)):+.0f}) · {path} · {g.get('when', '')}"
+    pct = min(100, max(0, int(100 * elo_f / ship_need))) if ship_need > 0 and elo_f and elo_f > 0 else 0
+    err_txt = f" ± {float(err):.0f}" if err is not None else ""
+    elo_txt = f"{elo_f:+.1f}{err_txt}" if elo_f is not None else "…"
+    band = ""
+    if g.get("elo_lo") is not None and g.get("elo_hi") is not None:
+        band = f" · band [{float(g['elo_lo']):+.1f}, {float(g['elo_hi']):+.1f}]"
+    live = " · LIVE" if g.get("live") or status == "running" else ""
+    pid = g.get("pid")
+    pid_txt = f" · pid {pid}" if pid else ""
+    played = g.get("played")
+    play_txt = f" · {played}/{g.get('games')} games" if played else ""
+    gate_row = (
+        f"{status_u}  Elo {elo_txt}{band} (need {float(g.get('min_elo', need)):+.0f}) "
+        f"· {path}{live}{pid_txt}{play_txt} · {g.get('when', '')}"
+    )
+    wdl = ""
+    if g.get("wins") is not None:
+        wdl = f"+{g.get('wins')} ={g.get('draws')} -{g.get('losses')}"
+        if g.get("score") is not None:
+            wdl += f" · score {float(g['score']):.3f}"
+    val_bits = []
+    if g.get("val") is not None:
+        val_bits.append(f"val {g['val']}")
+    if g.get("val_r") is not None:
+        val_bits.append(f"r={g['val_r']}")
+    if g.get("val_mae_cp") is not None:
+        val_bits.append(f"mae={g['val_mae_cp']}cp")
+    val_txt = " · ".join(val_bits) if val_bits else "—"
+    cand = g.get("candidate") or {}
     panel = (
         "<table>"
         + "".join(
             f"<tr><th>{k}</th><td>{v}</td></tr>"
             for k, v in [
-                ("Result", f"<span id='gate-result'>{shipped}</span>"),
-                ("Elo estimate", f"<span id='gate-elo'>{elo:+.1f}</span>{err_txt} (95%)"),
+                ("Result", f"<span id='gate-result'>{status_u}</span>"),
+                ("Elo estimate", f"<span id='gate-elo'>{elo_txt if elo_f is not None else '…'}</span> (95%)"),
+                ("CI band", f"[{g.get('elo_lo', '—')}, {g.get('elo_hi', '—')}]"),
                 ("Path", f"<span id='gate-path'>{esc(path)}</span> · EVAL_W={esc(g.get('eval_w', '?'))}"),
+                ("PID", esc(pid) if pid else "—"),
+                ("Match", f"{esc(wdl) if wdl else '—'} · {g.get('games')}@{g.get('nodes')}n ×{g.get('concurrency', '?')}"),
+                ("Pilot fit", esc(val_txt)),
+                ("Candidate", f"{esc(cand.get('sha16', '—'))} · {esc(cand.get('bytes', '—'))}B"),
                 ("This gate need", f"+{float(g.get('min_elo', need)):.0f}"),
                 ("Ship need (SP)", f"+{ship_need:.0f}"),
                 ("Best SP gate", "+19.1 (1.34M SP) · last SP +18.3"),
-                ("Lichess pilot", "−1.7 ± 34 (400 @ 20k) — fit ≠ Elo"),
-                ("Games / nodes", f"{g.get('games')} / {g.get('nodes')}"),
                 ("Epochs", g.get("epochs")),
                 ("When", g.get("when", "")),
             ]
@@ -163,17 +194,19 @@ def gate_section(g: dict | None, need: float) -> tuple[str, str, str]:
     bar = (
         f"<div class='gate-bar'><div id='gate-fill' class='gate-fill' style='width:{pct}%'></div></div>"
         f"<p class='dim'>Progress toward <b>+{ship_need:.0f} Elo</b> ship bar "
-        f"(current estimate <span id='gate-elo-inline'>{elo:+.1f}</span>).</p>"
+        f"(current estimate <span id='gate-elo-inline'>{elo_txt if elo_f is not None else '…'}</span>).</p>"
     )
     return gate_row, panel, bar
 
 
 def elo_tiles(g: dict | None, need: float) -> str:
-    elo = float(g.get("elo", 0)) if g else None
+    elo_raw = g.get("elo") if g else None
+    elo = float(elo_raw) if elo_raw is not None else None
     err = g.get("elo_err") if g else None
     path = (g or {}).get("path", "—")
-    elo_n = f"{elo:+.1f}" if elo is not None else "—"
-    err_n = f"±{float(err):.0f}" if err is not None else "±?"
+    status = (g or {}).get("status")
+    elo_n = f"{elo:+.1f}" if elo is not None else ("…" if status == "running" else "—")
+    err_n = f"±{float(err):.0f}" if err is not None else ("live" if status == "running" else "±?")
     return f"""
     <div class="tile"><div class="n" id="t-elo">{elo_n}</div><div class="l">Last Elo estimate</div></div>
     <div class="tile"><div class="n" id="t-err">{err_n}</div><div class="l">95% CI</div></div>

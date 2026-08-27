@@ -1,15 +1,46 @@
 {
-  "when": "2026-08-27T07:06:20+05:30",
-  "elo": -1.7,
-  "elo_err": 34.0,
+  "when": "2026-08-27T07:23:52+05:30",
+  "status": "running",
+  "pid": 90125,
+  "elo": -7.0,
+  "elo_err": 44.0,
+  "elo_lo": -51.0,
+  "elo_hi": 37.0,
   "min_elo": 10.0,
   "games": 400,
   "nodes": 20000,
-  "epochs": 20,
+  "epochs": 25,
+  "concurrency": 4,
   "path": "lichess",
   "data_dir": "data/lichess-sf",
   "data_glob": "aug_hf_*.txt",
   "eval_w": "1",
   "out_scale": "0.70",
-  "shipped": false
+  "shipped": false,
+  "skip_train": true,
+  "candidate": {
+    "path": "net-candidate.bin",
+    "bytes": 60976,
+    "sha16": "a9ee52c48372d5c0"
+  },
+  "shipping": {
+    "path": "net.bin.ship",
+    "bytes": 60976,
+    "sha16": "5e4817c6e33b6bd9"
+  },
+  "pilot": {
+    "path": "net-lichess-pilot.bin",
+    "bytes": 60976,
+    "sha16": "a9ee52c48372d5c0"
+  },
+  "val": 0.01084,
+  "val_r": 0.7547,
+  "val_mae_cp": 117.7,
+  "train_epochs_done": 19,
+  "played": 240,
+  "wins": 76,
+  "draws": 83,
+  "losses": 81,
+  "score": null,
+  "live": true
 }

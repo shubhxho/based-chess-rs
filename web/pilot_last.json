@@ -1,0 +1,19 @@
+{
+  "when": "2026-08-27T07:21:41+05:30",
+  "path": "lichess",
+  "epochs_requested": 25,
+  "epochs_done": 19,
+  "limit": 0,
+  "val": 0.01084,
+  "r": 0.7547,
+  "mae_cp": 117.7,
+  "eval_w": "1",
+  "out_scale": "0.70",
+  "bytes": 60976,
+  "sha16": "a9ee52c48372d5c0",
+  "files": [
+    "net-lichess-pilot.bin",
+    "net-candidate.bin"
+  ],
+  "note": "from /tmp/lichess_train_full.log early-stop run"
+}
