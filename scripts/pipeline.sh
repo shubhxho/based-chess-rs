@@ -135,7 +135,7 @@ case "$MODE" in
     echo "=== stress SP arena smoke ($SMOKE games @ ${NODES}n) → /tmp/sable_sp_arena_stress.log ==="
     {
       echo "stress smoke start $(date -Iseconds) games=$SMOKE nodes=$NODES eng=$ENG"
-      .venv/bin/python arena.py "$ENG" "$ENG" "$SMOKE" "nodes $NODES" 4
+      PYTHONUNBUFFERED=1 .venv/bin/python -u arena.py "$ENG" "$ENG" "$SMOKE" "nodes $NODES" 4
       echo "stress smoke done rc=$? $(date -Iseconds)"
     } 2>&1 | tee /tmp/sable_sp_arena_stress.log
     # Also refresh the short smoke log so the lab board has a current smoke line.
@@ -166,6 +166,10 @@ case "$MODE" in
     {
       echo "=== lab run $(date -Iseconds) GATE_EPOCHS=$GATE_EPOCHS GATE_GAMES=$GATE_GAMES GATE_MIN_ELO=$GATE_MIN_ELO ==="
       echo "SHARD_DECAY=$SHARD_DECAY MX_FORCE_GPU=$MX_FORCE_GPU SEED=$SEED"
+      # Free CPU/RAM for smoke + gate; ml_cycle also pauses, but stress needs it too.
+      touch data/selfplay/.datagen_paused
+      bash scripts/datagen_daemon.sh stop 2>/dev/null || true
+      pkill -f 'datagen_parallel.sh' 2>/dev/null || true
       STRESS_GAMES=${STRESS_GAMES:-40} BENCH_DEPTH=${BENCH_DEPTH:-14} \
         bash "$ROOT/scripts/pipeline.sh" stress
       SF_GAMES=${SF_GAMES:-8} bash "$ROOT/scripts/pipeline.sh" stockfish || true

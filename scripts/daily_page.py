@@ -192,6 +192,7 @@ def gate_section(g: dict | None, need: float) -> tuple[str, str, str]:
                 ("This gate need", f"+{float(g.get('min_elo', need)):.0f}"),
                 ("Ship need (SP)", f"+{ship_need:.0f}"),
                 ("Best SP gate", "+23.5 (1.4M SP) · last SP −8.7"),
+                ("Gate recipe", "EPOCHS=45 · GAMES=400 · MIN_ELO=+25 · SHARD_DECAY=1.0 · MX_FORCE_GPU=1"),
                 ("Epochs", g.get("epochs")),
                 ("When", g.get("when", "")),
             ]
@@ -206,6 +207,53 @@ def gate_section(g: dict | None, need: float) -> tuple[str, str, str]:
         f"(current estimate <span id='gate-elo-inline'>{elo_txt if elo_f is not None else '…'}</span>).</p>"
     )
     return gate_row, panel, bar
+
+
+def tmp_pipeline_panel() -> str:
+    """Surface /tmp stress · smoke · nps · calibrate · lab-run tails on the board."""
+    files = [
+        ("nps", Path("/tmp/sable_nps.log")),
+        ("smoke", Path("/tmp/sable_sp_arena_smoke.log")),
+        ("stress", Path("/tmp/sable_sp_arena_stress.log")),
+        ("calibrate", Path("/tmp/sable_calibrate.log")),
+        ("lab_run", Path("/tmp/sable_lab_run.log")),
+        ("ml_cycle", Path("/tmp/ml_cycle.log")),
+    ]
+    rows = []
+    for label, path in files:
+        if not path.is_file() or path.stat().st_size == 0:
+            rows.append(
+                f"<tr><th>{esc(label)}</th><td class='dim'>{esc(path.name)} · empty/missing</td></tr>"
+            )
+            continue
+        try:
+            lines = path.read_text(errors="replace").strip().splitlines()
+        except OSError:
+            rows.append(f"<tr><th>{esc(label)}</th><td class='dim'>unreadable</td></tr>")
+            continue
+        # Prefer a summary line (Elo / Nodes/second / GATE) over raw UCI spam.
+        pick = ""
+        for key in ("Nodes/second", "Elo ", "GATE_EPOCHS", "games ", "calibrate", "ml_cycle:", "lab run"):
+            for line in reversed(lines):
+                if key in line and not line.startswith("info depth"):
+                    pick = line.strip()
+                    break
+            if pick:
+                break
+        if not pick:
+            pick = lines[-1].strip() if lines else ""
+        if len(pick) > 140:
+            pick = pick[:137] + "…"
+        rows.append(
+            f"<tr><th>{esc(label)}</th><td><code>{esc(pick)}</code> "
+            f"<span class='dim'>({len(lines)} lines)</span></td></tr>"
+        )
+    return (
+        "<table class='mini' id='tmp-pipeline'>"
+        "<caption class='dim'>Pipeline /tmp logs (stress · smoke · nps · gate)</caption>"
+        + "".join(rows)
+        + "</table>"
+    )
 
 
 def elo_tiles(g: dict | None, need: float) -> str:
@@ -330,6 +378,7 @@ def main() -> None:
     gate_row, gate_panel, gate_bar = gate_section(g, need)
     tiles_html = elo_tiles(g, need)
     hist_html = elo_history_panel()
+    tmp_html = tmp_pipeline_panel()
     health_html = health_panel(snap.get("health"))
     wsum = snap.get("workers_summary") or {}
     counts = wsum.get("counts") or {}
@@ -526,6 +575,11 @@ def main() -> None:
   </section>
 
   <section class="panel" style="margin-top:16px">
+    <div class="label">Pipeline /tmp</div>
+    {tmp_html}
+  </section>
+
+  <section class="panel" style="margin-top:16px">
     <div class="label">Lichess trainer</div>
     <div id="lichess">{lichess_html}</div>
   </section>
@@ -542,11 +596,12 @@ def main() -> None:
     </section>
     <section class="panel cmds">
       <div class="label">Commands</div>
-      <code>scripts/run_all.sh</code>
-      <code>scripts/lab.sh all</code>
-      <code>scripts/prepare_lichess.sh [max]</code>
-      <code>scripts/train_lichess.sh [epochs] [limit]</code>
-      <code>scripts/ml_cycle.sh 35 400 25</code>
+      <code>scripts/pipeline.sh run</code>
+      <code>scripts/pipeline.sh stress</code>
+      <code>scripts/pipeline.sh selfplay-bg</code>
+      <code>scripts/pipeline.sh datagen-bg</code>
+      <code>scripts/ml_cycle.sh 45 400 25</code>
+      <code>scripts/prepare_lichess.sh</code>
     </section>
   </div>
 
