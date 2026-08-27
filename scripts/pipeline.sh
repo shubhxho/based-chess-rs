@@ -28,18 +28,14 @@ if [[ "$MODE" == "3000" || "$MODE" == "push3000" ]]; then
   exec bash scripts/push_3000.sh all
 fi
 
-if [[ "$MODE" == "bg" || "$MODE" == "all" ]]; then
-  echo "background: lab supervisor (datagen daemon + lichess + auto-restart)"
-  nohup bash scripts/lab_supervisor.sh bg >> /tmp/lab_supervisor.log 2>&1 &
-  echo "  supervisor: /tmp/lab_supervisor.log (pid $!)"
-  echo "  UI: bash scripts/lab.sh"
-  exit 0
+if [[ "$MODE" == "bg" ]]; then
+  echo "background: starting the single lab supervisor"
+  exec bash scripts/lab_supervisor.sh start
 fi
 
-echo "=== datagen wave ==="
-run_datagen
-echo "=== lichess resume (2M batch) ==="
-run_prepare
-echo "=== gated SP train ==="
-run_gate
-echo "=== pipeline done — open http://127.0.0.1:8375/daily ==="
+# The supervisor owns every long-running worker and queues the gated attempt.
+# This avoids data preparation and another net writer racing the gate.
+if [[ "$MODE" == "all" ]]; then
+  exec bash scripts/lab_supervisor.sh all --web
+fi
+exec bash scripts/lab_supervisor.sh all

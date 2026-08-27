@@ -41,11 +41,16 @@ case "$MODE" in
   bg)
     refresh
     banner
-    exec bash scripts/lab_supervisor.sh bg
+    exec bash scripts/lab_supervisor.sh start
+    ;;
+  all|train)
+    refresh
+    banner
+    exec bash scripts/lab_supervisor.sh all --web
     ;;
   *)
     refresh
     banner
-    exec bash scripts/lab_supervisor.sh
+    exec bash scripts/lab_supervisor.sh start --web
     ;;
 esac
