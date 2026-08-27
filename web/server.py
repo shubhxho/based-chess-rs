@@ -22,13 +22,23 @@ PORT = 8375
 DAILY_SCRIPT = os.path.join(ROOT, "..", "scripts", "daily_page.py")
 
 
+BLOG_SCRIPT = os.path.join(ROOT, "..", "scripts", "blog_page.py")
+
+
 def refresh_daily_loop():
     while True:
         time.sleep(60)
         try:
+            cwd = os.path.join(ROOT, "..")
             subprocess.run(
                 [sys.executable, DAILY_SCRIPT],
-                cwd=os.path.join(ROOT, ".."),
+                cwd=cwd,
+                check=False,
+                timeout=45,
+            )
+            subprocess.run(
+                [sys.executable, BLOG_SCRIPT],
+                cwd=cwd,
                 check=False,
                 timeout=45,
             )
@@ -134,6 +144,12 @@ class Handler(BaseHTTPRequestHandler):
             path = os.path.join(ROOT, "daily.html")
             if not os.path.isfile(path):
                 return self._send(404, b"generate with scripts/daily_page.py")
+            with open(path, "rb") as f:
+                self._send(200, f.read(), "text/html; charset=utf-8")
+        elif self.path in ("/blog", "/blog.html"):
+            path = os.path.join(ROOT, "blog.html")
+            if not os.path.isfile(path):
+                return self._send(404, b"generate with scripts/blog_page.py")
             with open(path, "rb") as f:
                 self._send(200, f.read(), "text/html; charset=utf-8")
         elif self.path == "/gate_last.json":

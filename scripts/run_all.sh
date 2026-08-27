@@ -14,13 +14,15 @@ banner() {
   echo "  SABLE LAB"
   echo "  play   http://127.0.0.1:8375"
   echo "  daily  http://127.0.0.1:8375/daily"
+  echo "  blog   http://127.0.0.1:8375/blog"
   echo "  status http://127.0.0.1:8375/api/status"
   echo ""
 }
 
 refresh() {
   python3 scripts/daily_page.py
-  python3 -m py_compile prepare_hf.py scripts/lab_status.py scripts/daily_page.py web/server.py
+  python3 scripts/blog_page.py
+  python3 -m py_compile prepare_hf.py scripts/lab_status.py scripts/daily_page.py scripts/blog_page.py web/server.py
 }
 
 case "$MODE" in

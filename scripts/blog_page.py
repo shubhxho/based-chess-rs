@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""Build web/blog.html — lab notebook on Lichess training and the shipping gate."""
+
+from __future__ import annotations
+
+import datetime as dt
+import html
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from lab_status import collect  # noqa: E402
+
+OUT = ROOT / "web" / "blog.html"
+
+
+def esc(s: object) -> str:
+    return html.escape(str(s))
+
+
+def main() -> None:
+    snap = collect()
+    lf = snap.get("lichess") or {}
+    g = snap.get("gate") or {}
+    eng = snap.get("engine") or {}
+    now = dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
+    elo = g.get("elo")
+    elo_txt = f"{elo:+.1f}" if elo is not None else "—"
+    shipped = "SHIPPED" if g.get("shipped") else "REJECTED"
+
+    html_doc = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sable — lab notes</title>
+<style>
+  :root {{
+    --bg: #0f0e0c; --panel: #1a1816; --panel2: #141210;
+    --line: #2e2a26; --ink: #ece4d6;
+    --amber: #ffc933; --gold: #ffe066; --gold-deep: #e6a800;
+    --dim: #9a8f82; --green: #7cb87c;
+    --mono: "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }}
+  @media (prefers-color-scheme: light) {{
+    :root {{ --bg: #f6f2ea; --panel: #fffdf9; --panel2: #f0ebe3;
+      --line: #ddd4c8; --ink: #2a2420; --dim: #6f6459;
+      --amber: #c17f00; --gold: #e6a800; --gold-deep: #a86a1c; }}
+  }}
+  * {{ box-sizing: border-box; margin: 0; }}
+  body {{ background: var(--bg); color: var(--ink); font-family: var(--serif);
+    font-size: 18px; line-height: 1.65; min-height: 100vh; }}
+  .top {{ border-bottom: 1px solid var(--line); padding: 20px 24px;
+    display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px;
+    font-family: var(--mono); font-size: 13px; }}
+  h1.brand {{ font-size: 13px; letter-spacing: .2em; font-weight: 600; font-family: var(--mono); }}
+  h1.brand span {{ color: var(--amber); }}
+  .nav {{ display: flex; gap: 16px; }}
+  .nav a {{ color: var(--amber); text-decoration: none; }}
+  .nav a:hover {{ text-decoration: underline; }}
+  article {{ max-width: 680px; margin: 0 auto; padding: 40px 24px 72px; }}
+  .kicker {{ font-family: var(--mono); font-size: 11px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--dim); margin-bottom: 16px; }}
+  h2 {{ font-size: 2rem; font-weight: 600; line-height: 1.2; margin-bottom: 12px;
+    letter-spacing: -0.02em; }}
+  .lede {{ color: var(--dim); font-size: 1.05rem; margin-bottom: 32px; }}
+  h3 {{ font-family: var(--mono); font-size: 12px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--gold); margin: 36px 0 12px; }}
+  p {{ margin: 0 0 1.1em; }}
+  code {{ font-family: var(--mono); font-size: 0.82em; color: var(--gold); }}
+  pre {{ font-family: var(--mono); font-size: 12px; line-height: 1.55;
+    background: var(--panel2); border: 1px solid var(--line); padding: 14px 16px;
+    overflow-x: auto; margin: 0 0 1.4em; color: var(--ink); }}
+  .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px; margin: 28px 0; font-family: var(--mono); }}
+  .stat {{ background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; }}
+  .stat .n {{ font-size: 22px; font-weight: 600; color: var(--gold);
+    text-shadow: 0 0 20px rgba(255, 201, 51, 0.2); }}
+  .stat .l {{ font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--dim); margin-top: 6px; }}
+  .callout {{ margin: 24px 0; padding: 16px 18px;
+    background: linear-gradient(90deg, rgba(255,201,51,.08), transparent);
+    border-left: 3px solid var(--gold); font-size: 0.95rem; }}
+  .foot {{ margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line);
+    font-family: var(--mono); font-size: 12px; color: var(--dim); }}
+  .foot a {{ color: var(--amber); }}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1 class="brand">SABLE <span>NOTES</span></h1>
+  <nav class="nav">
+    <a href="/">play</a>
+    <a href="/daily">daily</a>
+    <a href="/blog">blog</a>
+  </nav>
+</header>
+<article>
+  <p class="kicker">Lab notebook · {esc(now)}</p>
+  <h2>Lichess labels, dummy draws, and why the gate still says no</h2>
+  <p class="lede">
+    {esc(eng.get("full_name", "Sable"))} ships only when self-play clears +25 Elo.
+    Lichess HF is a score-only teacher — useful, loud, and not a substitute for trust.
+  </p>
+
+  <div class="stats">
+    <div class="stat"><div class="n">{lf.get("lines", 0):,}</div><div class="l">Lichess positions</div></div>
+    <div class="stat"><div class="n">{snap.get("selfplay_lines", 0):,}</div><div class="l">Self-play lines</div></div>
+    <div class="stat"><div class="n">{esc(elo_txt)}</div><div class="l">Last gate Elo</div></div>
+    <div class="stat"><div class="n">{esc(shipped)}</div><div class="l">Shipping status</div></div>
+  </div>
+
+  <h3>What the Lichess stream is</h3>
+  <p>
+    <code>Lichess/chess-position-evaluations</code> is streamed into
+    <code>data/lichess-sf/aug_hf_*.txt</code>. Each kept row is a quiet position
+    with a Stockfish centipawn label. Captures, promotions, mates, and checks are dropped —
+    the same filter philosophy as self-play datagen.
+  </p>
+  <p>
+    The line format matches the engine:
+  </p>
+  <pre>FEN | cp_white | 1</pre>
+  <p>
+    That trailing <code>1</code> is not a game result. No game was played.
+    It is a neutral draw placeholder so <code>train.py</code> maps WDL to 0.5.
+    Train with <code>EVAL_W=1</code> and the result column is inert — only the
+    Stockfish score teaches.
+  </p>
+
+  <div class="callout">
+    Fit on Lichess can look excellent while arena Elo against the shipping net
+    still refuses to clear +25. Loss is not trust. The gate exists because we
+    already shipped nets that lost Elo after a pretty training curve.
+  </div>
+
+  <h3>How to run it</h3>
+  <pre>scripts/prepare_lichess.sh 500000
+scripts/train_lichess.sh 20
+scripts/ml_cycle.sh 35 400 25   # self-play gate — shipping criterion</pre>
+  <p>
+    Prepare always <code>--resume</code>s. Never restart from row 0 with existing
+    shards — that is how duplicate <code>aug_hf_*</code> files appeared.
+    Workers write progress to <code>prepare_status.json</code>; the daily board
+    reads it live.
+  </p>
+
+  <h3>What “measure” means here</h3>
+  <p>
+    Last gate: <b>{esc(elo_txt)}</b> Elo vs shipping (need +25), status
+    <b>{esc(shipped)}</b>. Best so far in this lab loop: <b>+19.1</b> on ~1.34M
+    self-play with <code>EVAL_W=0.9</code>. More Lichess volume does not replace
+    fresh 8k-node self-play for the shipping decision.
+  </p>
+  <p>
+    Lichess pilots write candidates; they do not replace <code>net.bin</code>
+    unless a gated arena says so.
+  </p>
+
+  <p class="foot">
+    <a href="/daily">← lab daily</a> ·
+    <a href="/">play</a> ·
+    <a href="https://github.com/shubhxho/based-chess-rs">source</a> ·
+    generated {esc(now)}
+  </p>
+</article>
+</body>
+</html>
+"""
+    OUT.write_text(html_doc)
+    print(f"wrote {OUT.relative_to(ROOT)}")
+
+
+if __name__ == "__main__":
+    main()

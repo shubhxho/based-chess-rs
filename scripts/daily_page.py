@@ -345,7 +345,8 @@ def main() -> None:
   <nav class="nav">
     <a href="/">play</a>
     <a href="/daily">daily</a>
-    <a href="/api/status">status JSON</a>
+    <a href="/blog">blog</a>
+    <a href="/api/status">status</a>
   </nav>
   <p class="live"><b id="pulse">●</b> live · <span id="api-ts">{esc(snap.get('generated_at', ''))}</span>
     · <span class="tag {'clean' if gt.get('clean') else 'dirty'}" id="git-tag">{'clean' if gt.get('clean') else 'dirty'}</span></p>
@@ -399,7 +400,7 @@ def main() -> None:
     </section>
   </div>
 
-  <p class="foot"><a href="/">← play chess</a> · <a href="/api/status">raw status</a></p>
+  <p class="foot"><a href="/">← play chess</a> · <a href="/blog">lab notes</a> · <a href="/api/status">raw status</a></p>
 </main>
 <script>
 function fmt(n) {{ return n == null ? '—' : Number(n).toLocaleString(); }}

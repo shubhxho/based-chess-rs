@@ -92,14 +92,15 @@
   <nav class="nav">
     <a href="/">play</a>
     <a href="/daily">daily</a>
-    <a href="/api/status">status JSON</a>
+    <a href="/blog">blog</a>
+    <a href="/api/status">status</a>
   </nav>
-  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T05:58:02</span>
+  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T06:19:47</span>
     · <span class="tag dirty" id="git-tag">dirty</span></p>
 </header>
 <main>
   <div class="tiles">
-    <div class="tile"><div class="n" id="t-sp">1,484,732</div><div class="l">Self-play lines</div></div>
+    <div class="tile"><div class="n" id="t-sp">2,365,408</div><div class="l">Self-play lines</div></div>
     <div class="tile"><div class="n" id="t-hf">7,750,531</div><div class="l">Lichess positions</div></div>
     <div class="tile"><div class="n" id="t-gate">+18.3</div><div class="l">Last gate Elo</div></div>
     <div class="tile"><div class="n">+25</div><div class="l">Ship threshold</div></div>
@@ -113,43 +114,45 @@
     </section>
     <section class="panel">
       <div class="label">Repository</div>
-      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>48d1922 Refresh daily lab snapshot.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>5 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>scripts/daily_page.py</code></td></tr><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr><tr><th><code>M</code></th><td><code>web/index.html</code></td></tr><tr><th><code>??</code></th><td><code>scripts/train_lichess.sh</code></td></tr><tr><th><code>?</code></th><td><code>scripts/train_lichess.sh</code></td></tr></table><p class='dim' id='git-diff'>3 files changed, 50 insertions(+), 32 deletions(-)</p><pre class='diff-stat' id='git-stat'>scripts/daily_page.py | 42 ++++++++++++++++++++++++++++--------------
- web/daily.html        | 25 +++++++++++++------------
- web/index.html        | 15 +++++++++------
- 3 files changed, 50 insertions(+), 32 deletions(-)</pre></div>
+      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>5e93cd3 Add Lichess trainer script and boost lab gold accent.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>7 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>scripts/daily_page.py</code></td></tr><tr><th><code>M</code></th><td><code>scripts/run_all.sh</code></td></tr><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr><tr><th><code>M</code></th><td><code>web/index.html</code></td></tr><tr><th><code>M</code></th><td><code>web/server.py</code></td></tr><tr><th><code>??</code></th><td><code>scripts/blog_page.py</code></td></tr><tr><th><code>?</code></th><td><code>scripts/blog_page.py</code></td></tr></table><p class='dim' id='git-diff'>5 files changed, 38 insertions(+), 20 deletions(-)</p><pre class='diff-stat' id='git-stat'>scripts/daily_page.py |  5 +++--
+ scripts/run_all.sh    |  4 +++-
+ web/daily.html        | 30 ++++++++++++++----------------
+ web/index.html        |  1 +
+ web/server.py         | 18 +++++++++++++++++-
+ 5 files changed, 38 insertions(+), 20 deletions(-)</pre></div>
     </section>
     <section class="panel">
       <div class="label">Lab snapshot</div>
-      <table><tr><th>Generated</th><td>2026-08-27 05:58 IST</td></tr>
+      <table><tr><th>Generated</th><td>2026-08-27 06:19 IST</td></tr>
 <tr><th>Engine</th><td>Sable 1.2.0</td></tr>
 <tr><th>Author</th><td>shubh (based-chess-rs, no_std neural eval)</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>48d1922 Refresh daily lab snapshot.</td></tr>
+<tr><th>HEAD</th><td>5e93cd3 Add Lichess trainer script and boost lab gold accent.</td></tr>
 <tr><th>Tree</th><td>dirty</td></tr>
-<tr><th>Self-play</th><td>20 shards · 1,484,732 lines</td></tr>
+<tr><th>Self-play</th><td>20 shards · 2,365,408 lines</td></tr>
 <tr><th>Lichess HF</th><td>34 shards · 7,750,531 lines</td></tr>
-<tr><th>Lichess cursor</th><td>12,669,721</td></tr>
+<tr><th>Lichess cursor</th><td>12,669,722</td></tr>
 <tr><th>Last gate</th><td>REJECTED  Elo +18.3 (need +25) · 2026-08-27T03:43:06+05:30</td></tr></table>
     </section>
   </div>
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Lichess trainer</div>
-    <div id="lichess"><table class='meta'><tr><th>Phase</th><td><b id='lf-phase'>filtering</b></td></tr><tr><th>Corpus</th><td><span id='lf-corpus'>34 shards · 7,750,531 positions</span></td></tr><tr><th>Stream cursor</th><td><span id='lf-cursor'>12,500,000</span></td></tr><tr><th>Elapsed</th><td><span id='lf-elapsed'>246s</span></td></tr></table><div class='bar-row'><span class='bar-label'>batch</span><div class='bar bar-keep'><i style='width:0%'></i></div><span class='bar-num'>0/500,000</span></div><div class='callout callout-gold' id='lf-format'><div class='callout-title'>Lichess trainer</div><code>FEN | cp_white | result</code><p>result=<b>1</b> is a neutral draw placeholder — with <code>EVAL_W=1 — score-only teacher; result column is inert</code> only the Stockfish cp label trains the net. The dummy result cannot pull the target toward win/loss.</p><p class='dim trust'>Arena gate (+25 Elo) applies to <b>self-play</b> only. Lichess pilots measure fit, not shipping trust.</p></div></div>
+    <div id="lichess"><table class='meta'><tr><th>Phase</th><td><b id='lf-phase'>filtering</b></td></tr><tr><th>Corpus</th><td><span id='lf-corpus'>34 shards · 7,750,531 positions</span></td></tr><tr><th>Stream cursor</th><td><span id='lf-cursor'>12,500,000</span></td></tr><tr><th>Elapsed</th><td><span id='lf-elapsed'>344s</span></td></tr></table><div class='bar-row'><span class='bar-label'>batch</span><div class='bar bar-keep'><i style='width:0%'></i></div><span class='bar-num'>0/500,000</span></div><div class='callout callout-gold' id='lf-format'><div class='callout-title'>Lichess trainer</div><code>FEN | cp_white | result</code><p>result=<b>1</b> is a neutral draw placeholder — with <code>EVAL_W=1 — score-only teacher; result column is inert</code> only the Stockfish cp label trains the net. The dummy result cannot pull the target toward win/loss.</p><p class='dim trust'>Arena gate (+25 Elo) applies to <b>self-play</b> only. Lichess pilots measure fit, not shipping trust.</p></div></div>
   </section>
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Self-play datagen</div>
-    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [11,12,13,14] · 200000@8000n · 4 done · 16 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:76%'></i></div><span class='bar-num' id='dg-wave-num'>613,348/800,000</span></div><div class='bar-row' data-shard='aug_sp_00011.txt'><span class='bar-label'>aug_sp_00011.txt</span><div class='bar'><i style='width:76%'></i></div><span class='bar-num'>152,606/200,000 (+152,606 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00012.txt'><span class='bar-label'>aug_sp_00012.txt</span><div class='bar'><i style='width:77%'></i></div><span class='bar-num'>154,289/200,000 (+154,289 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00013.txt'><span class='bar-label'>aug_sp_00013.txt</span><div class='bar'><i style='width:76%'></i></div><span class='bar-num'>153,967/200,000 (+153,967 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00014.txt'><span class='bar-label'>aug_sp_00014.txt</span><div class='bar'><i style='width:76%'></i></div><span class='bar-num'>152,486/200,000 (+152,486 tmp)</span></div></div>
+    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [18,22,20,15] · 200000@8000n · 8 done · 12 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:87%'></i></div><span class='bar-num' id='dg-wave-num'>698,561/800,000</span></div><div class='bar-row' data-shard='aug_sp_00018.txt'><span class='bar-label'>aug_sp_00018.txt</span><div class='bar'><i style='width:86%'></i></div><span class='bar-num'>173,525/200,000 (+173,525 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00022.txt'><span class='bar-label'>aug_sp_00022.txt</span><div class='bar'><i style='width:87%'></i></div><span class='bar-num'>174,946/200,000 (+174,946 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00020.txt'><span class='bar-label'>aug_sp_00020.txt</span><div class='bar'><i style='width:87%'></i></div><span class='bar-num'>174,989/200,000 (+174,989 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00015.txt'><span class='bar-label'>aug_sp_00015.txt</span><div class='bar'><i style='width:87%'></i></div><span class='bar-num'>175,101/200,000 (+175,101 tmp)</span></div></div>
   </section>
 
   <div class="grid grid-2" style="margin-top:16px">
     <section class="panel">
       <div class="label">Workers</div>
-      <ul id='workers'><li><code>48475 bash scripts/datagen_daemon.sh</code></li><li><code>48483 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 500000 --min-depth 18 --resume</code></li><li><code>48489 bash scripts/datagen_parallel.sh 200000 8000 4 auto</code></li><li><code>48529 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>48543 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>48557 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>48571 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li></ul>
+      <ul id='workers'><li><code>48475 bash scripts/datagen_daemon.sh</code></li><li><code>48483 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 500000 --min-depth 18 --resume</code></li><li><code>59665 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 500000 --min-depth 18 --resume</code></li><li><code>62245 bash scripts/datagen_parallel.sh 200000 8000 4 auto</code></li><li><code>62265 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>62276 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>62287 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>62298 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li></ul>
     </section>
     <section class="panel cmds">
       <div class="label">Commands</div>
@@ -161,7 +164,7 @@
     </section>
   </div>
 
-  <p class="foot"><a href="/">← play chess</a> · <a href="/api/status">raw status</a></p>
+  <p class="foot"><a href="/">← play chess</a> · <a href="/blog">lab notes</a> · <a href="/api/status">raw status</a></p>
 </main>
 <script>
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString(); }
