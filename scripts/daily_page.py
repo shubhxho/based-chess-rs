@@ -105,11 +105,14 @@ def lichess_panel(lf: dict) -> str:
     meta_rows = "".join(f"<tr><th>{k}</th><td>{v}</td></tr>" for k, v in meta if v != "—")
 
     format_box = (
-        f"<div class='callout' id='lf-format'>"
-        f"<div class='callout-title'>Row format</div>"
+        f"<div class='callout callout-gold' id='lf-format'>"
+        f"<div class='callout-title'>Lichess trainer</div>"
         f"<code>{esc(row_fmt)}</code>"
-        f"<p class='dim'>result=<b>{result_code}</b> draw placeholder (wdl=0.5) — no game was played. "
-        f"Train with <code>{esc(train_hint)}</code> so the Stockfish cp label is the only teacher.</p>"
+        f"<p>result=<b>{result_code}</b> is a neutral draw placeholder — with "
+        f"<code>{esc(train_hint)}</code> only the Stockfish cp label trains the net. "
+        f"The dummy result cannot pull the target toward win/loss.</p>"
+        f"<p class='dim trust'>Arena gate (+25 Elo) applies to <b>self-play</b> only. "
+        f"Lichess pilots measure fit, not shipping trust.</p>"
         f"</div>"
     )
 
@@ -257,14 +260,16 @@ def main() -> None:
 <style>
   :root {{
     --bg: #0f0e0c; --panel: #1a1816; --panel2: #141210;
-    --line: #2e2a26; --ink: #ece4d6; --amber: #e4a855;
+    --line: #2e2a26; --ink: #ece4d6;
+    --amber: #ffc933; --gold: #ffe066; --gold-deep: #e6a800;
     --green: #7cb87c; --red: #d47272; --dim: #9a8f82;
     --mono: "IBM Plex Mono", "SF Mono", ui-monospace, Menlo, monospace;
     --sans: "IBM Plex Sans", system-ui, sans-serif;
   }}
   @media (prefers-color-scheme: light) {{
     :root {{ --bg: #f6f2ea; --panel: #fffdf9; --panel2: #f0ebe3;
-      --line: #ddd4c8; --ink: #2a2420; --dim: #6f6459; --amber: #a86a1c; }}
+      --line: #ddd4c8; --ink: #2a2420; --dim: #6f6459;
+      --amber: #c17f00; --gold: #e6a800; --gold-deep: #a86a1c; }}
   }}
   * {{ box-sizing: border-box; margin: 0; }}
   body {{ background: var(--bg); color: var(--ink);
@@ -280,7 +285,8 @@ def main() -> None:
   @media (min-width: 720px) {{ .grid-2 {{ grid-template-columns: 1fr 1fr; }} }}
   .tiles {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }}
   .tile {{ background: var(--panel2); border: 1px solid var(--line); padding: 14px 16px; }}
-  .tile .n {{ font-size: 22px; font-weight: 600; color: var(--amber); line-height: 1.1; }}
+  .tile .n {{ font-size: 22px; font-weight: 600; color: var(--gold); line-height: 1.1;
+    text-shadow: 0 0 24px rgba(255, 201, 51, 0.25); }}
   .tile .l {{ font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
     color: var(--dim); margin-top: 6px; }}
   .panel {{ background: var(--panel); border: 1px solid var(--line); padding: 18px 20px; }}
@@ -302,15 +308,23 @@ def main() -> None:
     align-items: center; margin: 10px 0; font-size: 11px; }}
   .bar-label {{ color: var(--dim); }}
   .bar {{ height: 9px; background: var(--line); overflow: hidden; border-radius: 1px; }}
-  .bar i {{ display: block; height: 100%; background: var(--amber); transition: width .4s ease; }}
-  .bar-skip i {{ background: #6a8fad; }}
-  .bar-keep i {{ background: var(--amber); }}
+  .bar i {{ display: block; height: 100%;
+    background: linear-gradient(90deg, var(--gold-deep), var(--gold));
+    box-shadow: 0 0 12px rgba(255, 201, 51, 0.35);
+    transition: width .4s ease; }}
+  .bar-skip i {{ background: linear-gradient(90deg, #4a7a9a, #6a8fad); box-shadow: none; }}
+  .bar-keep i {{ background: linear-gradient(90deg, var(--gold-deep), var(--gold));
+    box-shadow: 0 0 12px rgba(255, 201, 51, 0.35); }}
   .bar-num {{ color: var(--dim); text-align: right; font-size: 10px; }}
   .gate-bar {{ height: 11px; background: var(--line); margin: 12px 0 8px; border-radius: 1px; }}
-  .gate-fill {{ height: 100%; background: linear-gradient(90deg, var(--amber), var(--green));
+  .gate-fill {{ height: 100%;
+    background: linear-gradient(90deg, var(--gold-deep), var(--gold), var(--green));
+    box-shadow: 0 0 16px rgba(255, 201, 51, 0.4);
     max-width: 100%; transition: width .4s ease; }}
   .callout {{ margin-top: 14px; padding: 12px 14px; background: var(--panel2);
     border-left: 3px solid var(--amber); }}
+  .callout-gold {{ border-left-color: var(--gold); background: linear-gradient(90deg, rgba(255,201,51,.08), transparent); }}
+  .callout p.trust {{ margin-top: 10px; font-size: 11px; color: var(--dim); border-top: 1px solid var(--line); padding-top: 8px; }}
   .callout-title {{ font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
     color: var(--dim); margin-bottom: 8px; }}
   .callout code {{ display: block; margin: 6px 0; color: var(--ink); }}
@@ -361,7 +375,7 @@ def main() -> None:
   </div>
 
   <section class="panel" style="margin-top:16px">
-    <div class="label">Lichess HF prepare</div>
+    <div class="label">Lichess trainer</div>
     <div id="lichess">{lichess_html}</div>
   </section>
 
@@ -379,8 +393,8 @@ def main() -> None:
       <div class="label">Commands</div>
       <code>scripts/run_all.sh</code>
       <code>scripts/lab.sh all</code>
-      <code>scripts/datagen_daemon.sh</code>
-      <code>DATA_DIR=data/lichess-sf EVAL_W=1 python train.py …</code>
+      <code>scripts/prepare_lichess.sh [max]</code>
+      <code>scripts/train_lichess.sh [epochs] [limit]</code>
       <code>scripts/ml_cycle.sh 35 400 25</code>
     </section>
   </div>
