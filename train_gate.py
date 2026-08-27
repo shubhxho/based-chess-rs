@@ -287,6 +287,7 @@ def main():
             env["OUT_SCALE"] = str(out)
         env.setdefault("ENGINE", str(ENGINE))
         env.setdefault("MX_FORCE_GPU", "1")
+        env.setdefault("SHARD_DECAY", "1.0")
         run([py, str(ROOT / "train.py"), "0", str(args.epochs)], cwd=ROOT, env=env)
         shutil.copy2(NET, CAND_BAK)
         print(f"candidate saved -> {CAND_BAK}", flush=True)

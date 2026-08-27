@@ -45,7 +45,14 @@ trap 'rm -f "$PIDFILE"' EXIT
 echo "datagen_daemon: ${POS} @ ${NODES}n, ${N} shards, auto index (Ctrl-C to stop)"
 wave=0
 backoff=10
+PAUSE="$ROOT/data/selfplay/.datagen_paused"
 while true; do
+  # Lab gate / stress can block datagen via this flag without killing the daemon.
+  if [[ -f "$PAUSE" ]]; then
+    echo "datagen paused ($PAUSE); sleeping ${backoff}s" >&2
+    sleep "$backoff"
+    continue
+  fi
   wave=$((wave + 1))
   echo "=== datagen wave $wave $(date -Iseconds 2>/dev/null || date) ===" >&2
   if bash scripts/datagen_parallel.sh "$POS" "$NODES" "$N" auto; then

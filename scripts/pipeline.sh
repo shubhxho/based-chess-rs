@@ -77,10 +77,15 @@ case "$MODE" in
       | tee /tmp/sable_sp_arena_smoke.log
     if command -v stockfish >/dev/null 2>&1; then
       echo "=== Stockfish calibrate (movetime 100, 20 games/level) ==="
+      : > /tmp/sable_calibrate.log
       .venv/bin/python tests/calibrate.py "$ENG" "movetime 100" 20 \
         2600 2700 2800 2900 3000 | tee /tmp/sable_calibrate.log
     else
-      echo "stockfish not on PATH — skip calibrate"
+      echo "stockfish not on PATH — skip calibrate" | tee /tmp/sable_calibrate.log
+    fi
+    # Drop empty/aborted calibrate stubs so the lab board does not treat them as live.
+    if [[ ! -s /tmp/sable_calibrate.log ]]; then
+      echo "calibrate aborted (empty log)" | tee /tmp/sable_calibrate.log
     fi
     echo "bench logs: /tmp/sable_engine_bench.log /tmp/sable_sp_arena_smoke.log /tmp/sable_calibrate.log"
     ;;
