@@ -55,10 +55,12 @@ def _mlx_device_banner():
     dev = mx.default_device()
     extra = ""
     try:
-        extra = f", metal={mx.metal.device_info()}"
+        info = mx.device_info() if hasattr(mx, "device_info") else mx.metal.device_info()
+        extra = f", metal={info}"
     except Exception:
         try:
-            extra = f", mem_used_mb={mx.metal.get_active_memory()/1e6:.0f}"
+            get_mem = getattr(mx, "get_active_memory", None) or mx.metal.get_active_memory
+            extra = f", mem_used_mb={get_mem()/1e6:.0f}"
         except Exception:
             pass
     print(f"  mlx device={dev}{extra}", flush=True)
@@ -69,7 +71,10 @@ def _mlx_device_banner():
 def _mlx_clear():
     """Drop Metal temporary buffers between epochs when the runtime exposes it."""
     try:
-        mx.metal.clear_cache()
+        if hasattr(mx, "clear_cache"):
+            mx.clear_cache()
+        else:
+            mx.metal.clear_cache()
     except Exception:
         pass
 

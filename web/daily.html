@@ -103,12 +103,12 @@
     <a href="/blog">blog</a>
     <a href="/api/status">status</a>
   </nav>
-  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T21:21:54</span>
+  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T21:23:06</span>
     · <span class="tag dirty" id="git-tag">dirty</span></p>
 </header>
 <main>
   <div class="tiles">
-    <div class="tile"><div class="n" id="t-sp">18,309,781</div><div class="l">Self-play lines</div></div>
+    <div class="tile"><div class="n" id="t-sp">17,656,379</div><div class="l">Self-play lines</div></div>
     <div class="tile"><div class="n" id="t-hf">12,394,688</div><div class="l">Lichess positions</div></div>
     
     <div class="tile"><div class="n" id="t-elo">+7.8</div><div class="l">Last Elo estimate</div></div>
@@ -128,19 +128,20 @@
     </section>
     <section class="panel">
       <div class="label">Repository</div>
-      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>6f70cf9 Force MLX GPU, per-epoch eval, and a stronger SP gate schedule.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>2 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>web/blog.html</code></td></tr><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr></table><p class='dim' id='git-diff'>2 files changed, 15 insertions(+), 25 deletions(-)</p><pre class='diff-stat' id='git-stat'>web/blog.html  |  2 +-
- web/daily.html | 38 ++++++++++++++------------------------
- 2 files changed, 15 insertions(+), 25 deletions(-)</pre></div>
+      <div id="repo"><table><tr><th>Branch</th><td><code id='git-branch'>## main...origin/main</code></td></tr><tr><th>HEAD</th><td><span id='git-head'>b341d77 Refresh lab board for the GPU SP gate attempt.</span></td></tr><tr><th>Author</th><td>Shubh</td></tr><tr><th>Tree</th><td><span id='git-tree'>3 change(s)</span></td></tr></table><table class='mini' style='margin-top:12px'><caption class='dim'>working tree diff</caption><tr><th><code>M</code></th><td><code>train.py</code></td></tr><tr><th><code>M</code></th><td><code>web/blog.html</code></td></tr><tr><th><code>M</code></th><td><code>web/daily.html</code></td></tr></table><p class='dim' id='git-diff'>3 files changed, 23 insertions(+), 20 deletions(-)</p><pre class='diff-stat' id='git-stat'>train.py       | 11 ++++++++---
+ web/blog.html  |  6 +++---
+ web/daily.html | 26 ++++++++++++--------------
+ 3 files changed, 23 insertions(+), 20 deletions(-)</pre></div>
     </section>
     <section class="panel">
       <div class="label">Lab snapshot</div>
-      <table><tr><th>Generated</th><td>2026-08-27 21:21 IST</td></tr>
+      <table><tr><th>Generated</th><td>2026-08-27 21:22 IST</td></tr>
 <tr><th>Engine</th><td>Sable 1.2.0</td></tr>
 <tr><th>Author</th><td>shubh (based-chess-rs, no_std neural eval)</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>6f70cf9 Force MLX GPU, per-epoch eval, and a stronger SP gate schedule.</td></tr>
+<tr><th>HEAD</th><td>b341d77 Refresh lab board for the GPU SP gate attempt.</td></tr>
 <tr><th>Tree</th><td>dirty</td></tr>
-<tr><th>Self-play</th><td>92 shards · 18,309,781 lines</td></tr>
+<tr><th>Self-play</th><td>92 shards · 17,656,379 lines</td></tr>
 <tr><th>Lichess HF</th><td>53 shards · 12,394,688 lines</td></tr>
 <tr><th>Lichess cursor</th><td>57,850,021</td></tr>
 <tr><th>Last gate</th><td>REJECTED  Elo +7.8 ± 34 · band [-26.3, +41.9] (need +25) · selfplay · pid 41543 · 400/400 games · 2026-08-27T21:02:48+05:30</td></tr></table>
@@ -149,7 +150,7 @@
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Lab health</div>
-    <div id="health"><p class='dim' id='health-score'>health <b>2/5</b></p><table id='health-table'><tr><th>gate</th><td class='bad'>last REJECTED +7.8 ±34.1</td></tr><tr><th>datagen</th><td class='bad'>no datagen workers</td></tr><tr><th>prepare</th><td class='ok'>skipping · kept 0/2000000</td></tr><tr><th>net</th><td class='ok'>net.bin == shipping</td></tr><tr><th>git</th><td class='bad'>2 local change(s) · 6f70cf9 Force MLX GPU, per-epoch eval, and a stronger SP gate schedule.</td></tr></table></div>
+    <div id="health"><p class='dim' id='health-score'>health <b>2/5</b></p><table id='health-table'><tr><th>gate</th><td class='bad'>last REJECTED +7.8 ±34.1</td></tr><tr><th>datagen</th><td class='bad'>no datagen workers</td></tr><tr><th>prepare</th><td class='ok'>skipping · kept 0/2000000</td></tr><tr><th>net</th><td class='ok'>net.bin == shipping</td></tr><tr><th>git</th><td class='bad'>3 local change(s) · b341d77 Refresh lab board for the GPU SP gate attempt.</td></tr></table></div>
   </section>
 
   <section class="panel" style="margin-top:16px">
@@ -164,16 +165,16 @@
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Self-play datagen</div>
-    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [92,93,94,95] · 200000@12000n · 88 done · 4 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:82%'></i></div><span class='bar-num' id='dg-wave-num'>659,718/800,000</span></div><div class='bar-row' data-shard='aug_sp_00092.txt'><span class='bar-label'>aug_sp_00092.txt</span><div class='bar'><i style='width:82%'></i></div><span class='bar-num'>164,365/200,000 (+164,365 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00093.txt'><span class='bar-label'>aug_sp_00093.txt</span><div class='bar'><i style='width:82%'></i></div><span class='bar-num'>165,297/200,000 (+165,297 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00094.txt'><span class='bar-label'>aug_sp_00094.txt</span><div class='bar'><i style='width:82%'></i></div><span class='bar-num'>165,870/200,000 (+165,870 tmp)</span></div>
-<div class='bar-row' data-shard='aug_sp_00095.txt'><span class='bar-label'>aug_sp_00095.txt</span><div class='bar'><i style='width:82%'></i></div><span class='bar-num'>164,186/200,000 (+164,186 tmp)</span></div></div>
+    <div id="datagen"><p class='dim' id='dg-wave'>phase <b>running</b> · shards [92,93,94,95] · 200000@12000n · 88 done · 4 partial</p><div class='bar-row'><span class='bar-label'>wave</span><div class='bar bar-keep'><i id='dg-wave-fill' style='width:0%'></i></div><span class='bar-num' id='dg-wave-num'>6,972/800,000</span></div><div class='bar-row' data-shard='aug_sp_00092.txt'><span class='bar-label'>aug_sp_00092.txt</span><div class='bar'><i style='width:0%'></i></div><span class='bar-num'>1,794/200,000 (+1,794 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00093.txt'><span class='bar-label'>aug_sp_00093.txt</span><div class='bar'><i style='width:0%'></i></div><span class='bar-num'>1,760/200,000 (+1,760 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00094.txt'><span class='bar-label'>aug_sp_00094.txt</span><div class='bar'><i style='width:0%'></i></div><span class='bar-num'>1,764/200,000 (+1,764 tmp)</span></div>
+<div class='bar-row' data-shard='aug_sp_00095.txt'><span class='bar-label'>aug_sp_00095.txt</span><div class='bar'><i style='width:0%'></i></div><span class='bar-num'>1,654/200,000 (+1,654 tmp)</span></div></div>
   </section>
 
   <div class="grid grid-2" style="margin-top:16px">
     <section class="panel">
       <div class="label">Workers</div>
-      <p class='dim' id='worker-counts'>cycle 1 · gate 1 · server 1 · train 1 · total 4</p><ul id='workers'><li><code>19690 /opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python web/server.py</code></li><li><code>46925 bash /Users/shubh/Documents/based-chess-rs/scripts/ml_cycle.sh 55 400 25</code></li><li><code>47286 .venv/bin/python train_gate.py --epochs 55 --games 400 --min-elo 25</code></li><li><code>47287 /Users/shubh/Documents/based-chess-rs/.venv/bin/python /Users/shubh/Documents/based-chess-rs/train.py 0 55</code></li></ul>
+      <p class='dim' id='worker-counts'>cycle 1 · engine 4 · gate 1 · server 1 · train 1 · total 8</p><ul id='workers'><li><code>19690 /opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python web/server.py</code></li><li><code>46925 bash /Users/shubh/Documents/based-chess-rs/scripts/ml_cycle.sh 55 400 25</code></li><li><code>47286 .venv/bin/python train_gate.py --epochs 55 --games 400 --min-elo 25</code></li><li><code>47287 /Users/shubh/Documents/based-chess-rs/.venv/bin/python /Users/shubh/Documents/based-chess-rs/train.py 0 55</code></li><li><code>47657 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>47669 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>47681 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>47693 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li></ul>
     </section>
     <section class="panel cmds">
       <div class="label">Commands</div>
