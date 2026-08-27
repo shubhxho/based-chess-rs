@@ -257,29 +257,27 @@ case "$MODE" in
       exit 1
     fi
     echo "starting background push_3000 → $LOG"
-    # Double-fork + setsid so Cursor/agent shell teardown cannot SIGTERM the train.
+    # New session so Cursor/agent shell teardown cannot SIGTERM the train.
     .venv/bin/python - <<PY
-import os, sys, time
+import subprocess, sys
 from pathlib import Path
 root = Path("$ROOT")
 log = Path("$LOG")
 script = root / "scripts" / "push_3000.sh"
-if os.fork() > 0:
-    time.sleep(0.3)
-    sys.exit(0)
-os.setsid()
-if os.fork() > 0:
-    sys.exit(0)
-os.chdir(root)
-os.closerange(0, 3)
-fd = os.open("/dev/null", os.O_RDONLY)
-os.dup2(fd, 0)
-out = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
-os.dup2(out, 1)
-os.dup2(out, 2)
-os.execv("/bin/bash", ["bash", str(script), "all"])
+log.parent.mkdir(parents=True, exist_ok=True)
+out = open(log, "a", buffering=1)
+subprocess.Popen(
+    ["bash", str(script), "all"],
+    cwd=str(root),
+    stdin=subprocess.DEVNULL,
+    stdout=out,
+    stderr=subprocess.STDOUT,
+    start_new_session=True,
+    close_fds=True,
+)
+print(f"  spawned session → {log}", flush=True)
 PY
-    sleep 2
+    sleep 3
     if is_running; then
       echo "  running pid $(cat "$PIDFILE")"
     else
