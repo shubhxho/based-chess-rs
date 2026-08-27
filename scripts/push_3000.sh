@@ -39,6 +39,26 @@ BATCH=${BATCH:-8192}
 PIDFILE=${PIDFILE:-$ROOT/data/mix/.push_3000.pid}
 LOG=${LOG:-/tmp/push_3000.log}
 TRAIN_LOG=${TRAIN_LOG:-/tmp/mix_train.log}
+PAUSE_PREPARE=${PAUSE_PREPARE:-$ROOT/data/lichess-sf/.prepare_paused}
+
+pause_prepare_for_train() {
+  mkdir -p "$(dirname "$PAUSE_PREPARE")"
+  touch "$PAUSE_PREPARE"
+  if pgrep -f "prepare_hf.py data/lichess-sf" >/dev/null 2>&1; then
+    echo "pausing prepare_hf for mix train RAM (was ~2.5GB) → $PAUSE_PREPARE"
+    pkill -f "prepare_hf.py data/lichess-sf" 2>/dev/null || true
+    sleep 2
+  fi
+}
+
+resume_prepare_after_train() {
+  rm -f "$PAUSE_PREPARE"
+  if ! pgrep -f "prepare_hf.py data/lichess-sf" >/dev/null 2>&1; then
+    echo "resuming Lichess prepare → /tmp/prepare_resume.log"
+    nohup bash scripts/prepare_lichess.sh "${PREPARE_MAX:-2000000}" \
+      >>/tmp/prepare_resume.log 2>&1 &
+  fi
+}
 
 is_running() {
   [[ -f "$PIDFILE" ]] || return 1
@@ -55,10 +75,9 @@ claim_lock() {
     echo "  stop:   scripts/push_3000.sh stop" >&2
     exit 1
   fi
-  # Stale pidfile
   rm -f "$PIDFILE"
   echo $$ >"$PIDFILE"
-  trap 'rm -f "$PIDFILE"' EXIT
+  trap 'resume_prepare_after_train; rm -f "$PIDFILE"' EXIT
 }
 
 show_status() {
@@ -84,13 +103,12 @@ stop_bg() {
   local old
   old=$(cat "$PIDFILE")
   echo "stopping push_3000 pid $old"
-  # Kill process group if we started with setsid; else the pid itself.
   kill -TERM "$old" 2>/dev/null || true
   sleep 2
   kill -KILL "$old" 2>/dev/null || true
-  # Also clear orphaned train.py from this recipe only if pidfile matched.
   pkill -f "train.py ${LIMIT} ${EPOCHS}" 2>/dev/null || true
   rm -f "$PIDFILE"
+  resume_prepare_after_train
   echo "stopped"
 }
 
@@ -189,11 +207,7 @@ run_pipeline() {
   claim_lock
   cargo build --release -q
   sync_mix
-  if [[ "$1" == "all" ]] && ! pgrep -f "prepare_hf.py data/lichess-sf" >/dev/null 2>&1; then
-    echo "starting Lichess prepare in background → /tmp/prepare_resume.log"
-    nohup bash scripts/prepare_lichess.sh "${PREPARE_MAX:-2000000}" \
-      >>/tmp/prepare_resume.log 2>&1 &
-  fi
+  pause_prepare_for_train
   train_mix
   arena_mix
   echo ""

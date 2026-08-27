@@ -10,6 +10,10 @@ MODE=${1:-}
 
 ensure() {
   local name=$1 pattern=$2 cmd=$3 log=$4
+  # Mix train needs the RAM; prepare_hf holds multi-GB FEN digests.
+  if [[ "$name" == "lichess" && -f "$ROOT/data/lichess-sf/.prepare_paused" ]]; then
+    return 0
+  fi
   if pgrep -f "$pattern" >/dev/null 2>&1; then
     return 0
   fi
@@ -66,7 +70,9 @@ echo ""
     sleep 60
     stop_dupes
     pgrep -f "datagen_daemon.sh" >/dev/null || nohup bash scripts/datagen_daemon.sh >>/tmp/datagen_daemon.log 2>&1 &
-    pgrep -f "prepare_hf.py data/lichess-sf" >/dev/null || nohup bash scripts/prepare_lichess.sh >>/tmp/prepare_resume.log 2>&1 &
+    if [[ ! -f "$ROOT/data/lichess-sf/.prepare_paused" ]]; then
+      pgrep -f "prepare_hf.py data/lichess-sf" >/dev/null || nohup bash scripts/prepare_lichess.sh >>/tmp/prepare_resume.log 2>&1 &
+    fi
     python3 scripts/daily_page.py 2>/dev/null || true
   done
 ) &
