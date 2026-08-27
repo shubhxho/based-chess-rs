@@ -68,11 +68,21 @@ def _mlx_mem_mb():
 
 def _mlx_device_banner():
     """One-line GPU confirmation for gate logs."""
+    # Touch the device so active/peak memory are non-zero before the first epoch.
+    try:
+        warm = mx.zeros((1024,))
+        mx.eval(warm)
+        del warm
+    except Exception:
+        pass
     dev = mx.default_device()
     extra = ""
     try:
         info = mx.device_info() if hasattr(mx, "device_info") else mx.metal.device_info()
-        extra = f", metal={info}"
+        if isinstance(info, dict) and info.get("device_name"):
+            extra = f", metal={info.get('device_name')}"
+        else:
+            extra = f", metal={info}"
     except Exception:
         pass
     active, peak = _mlx_mem_mb()
