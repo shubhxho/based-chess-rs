@@ -133,8 +133,11 @@ case "$MODE" in
     rg -N "Nodes/second|Total nodes|Time \(ms\)" /tmp/sable_engine_stress.log \
       | tee /tmp/sable_nps.log || true
     echo "=== stress SP arena smoke ($SMOKE games @ ${NODES}n) → /tmp/sable_sp_arena_stress.log ==="
-    .venv/bin/python arena.py "$ENG" "$ENG" "$SMOKE" "nodes $NODES" 4 \
-      | tee /tmp/sable_sp_arena_stress.log
+    {
+      echo "stress smoke start $(date -Iseconds) games=$SMOKE nodes=$NODES eng=$ENG"
+      .venv/bin/python arena.py "$ENG" "$ENG" "$SMOKE" "nodes $NODES" 4
+      echo "stress smoke done rc=$? $(date -Iseconds)"
+    } 2>&1 | tee /tmp/sable_sp_arena_stress.log
     # Also refresh the short smoke log so the lab board has a current smoke line.
     cp -f /tmp/sable_sp_arena_stress.log /tmp/sable_sp_arena_smoke.log
     if [[ "${STRESS_AB:-0}" == "1" ]]; then
