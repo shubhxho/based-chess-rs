@@ -70,7 +70,7 @@
 <body>
 <header class="top">
   <h1>SABLE <span>LAB</span></h1>
-  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T04:54:36</span></p>
+  <p class="live"><b id="pulse">●</b> live · <span id="api-ts">2026-08-27T05:46:27</span></p>
 </header>
 <main>
   <div class="tiles">
@@ -88,9 +88,9 @@
     </section>
     <section class="panel">
       <div class="label">Snapshot</div>
-      <table><tr><th>Generated</th><td>2026-08-27 04:54 IST</td></tr>
+      <table><tr><th>Generated</th><td>2026-08-27 05:46 IST</td></tr>
 <tr><th>Branch</th><td>main</td></tr>
-<tr><th>HEAD</th><td>b20d94e Refresh daily lab snapshot via python3.</td></tr>
+<tr><th>HEAD</th><td>ecb9731 Add run_all entrypoint and live shard tmp tracking in the lab.</td></tr>
 <tr><th>Tree</th><td>dirty</td></tr>
 <tr><th>Self-play</th><td>20 shards · 1,466,024 lines</td></tr>
 <tr><th>Lichess HF</th><td>34 shards · 7,750,531 lines</td></tr>
@@ -101,7 +101,7 @@
 
   <section class="panel" style="margin-top:16px">
     <div class="label">Lichess HF prepare</div>
-    <div id="lichess"><table class='meta'><tr><th>Phase</th><td><b id='lf-phase'>idle</b></td></tr><tr><th>Corpus</th><td><span id='lf-corpus'>34 shards · 7,750,531 positions</span></td></tr><tr><th>Stream cursor</th><td><span id='lf-cursor'>12,669,721</span></td></tr></table><div class='callout' id='lf-format'><div class='callout-title'>Row format</div><code>FEN | cp_white | result</code><p class='dim'>result=<b>1</b> draw placeholder (wdl=0.5) — no game was played. Train with <code>EVAL_W=1 — score-only teacher; result column is inert</code> so the Stockfish cp label is the only teacher.</p></div></div>
+    <div id="lichess"><table class='meta'><tr><th>Phase</th><td><b id='lf-phase'>skipping</b></td></tr><tr><th>Corpus</th><td><span id='lf-corpus'>34 shards · 7,750,531 positions</span></td></tr><tr><th>Stream cursor</th><td><span id='lf-cursor'>12,669,721</span></td></tr><tr><th>Elapsed</th><td><span id='lf-elapsed'>3s</span></td></tr></table><div class='bar-row'><span class='bar-label'>skip</span><div class='bar bar-skip'><i style='width:0%'></i></div><span class='bar-num'>0/12,669,721</span></div><div class='callout' id='lf-format'><div class='callout-title'>Row format</div><code>FEN | cp_white | result</code><p class='dim'>result=<b>1</b> draw placeholder (wdl=0.5) — no game was played. Train with <code>EVAL_W=1 — score-only teacher; result column is inert</code> so the Stockfish cp label is the only teacher.</p></div></div>
   </section>
 
   <section class="panel" style="margin-top:16px">
@@ -115,7 +115,7 @@
   <div class="grid grid-2" style="margin-top:16px">
     <section class="panel">
       <div class="label">Workers</div>
-      <p class='dim' id='workers'>No workers.</p>
+      <ul id='workers'><li><code>48475 bash scripts/datagen_daemon.sh</code></li><li><code>48483 .venv/bin/python prepare_hf.py data/lichess-sf --max-positions 500000 --min-depth 18 --resume</code></li><li><code>48489 bash scripts/datagen_parallel.sh 200000 8000 4 auto</code></li><li><code>48529 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>48543 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>48557 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>48571 /Users/shubh/Documents/based-chess-rs/target/release/sable</code></li><li><code>48613 /Users/shubh/Documents/based-chess-rs/web/../target/release/sable</code></li></ul>
     </section>
     <section class="panel cmds">
       <div class="label">Commands</div>
