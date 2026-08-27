@@ -6,12 +6,15 @@
 #   scripts/pipeline.sh datagen-bg     # continuous 12k-node daemon
 #   scripts/pipeline.sh selfplay       # SP gate @ +25 (pauses datagen for RAM)
 #   scripts/pipeline.sh selfplay-bg    # durable SP gate
+#   scripts/pipeline.sh bench          # engine bench + SP arena smoke + SF calibrate
+#   scripts/pipeline.sh arena          # candidate vs shipping arena (no retrain)
 #   scripts/pipeline.sh 3000           # Lichess+SP mix candidate path
 #   scripts/pipeline.sh bg|all         # full lab supervisor
 #
 # Env: DATAGEN_NODES (default 12000) DATAGEN_POS DATAGEN_N
 #      GATE_EPOCHS GATE_GAMES GATE_MIN_ELO SP_KEEP
 #      BATCH LR PATIENCE  (MLX train.py)
+#      BENCH_DEPTH ARENA_NODES (bench / arena)
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -21,22 +24,22 @@ MODE=${1:-datagen}
 export DATAGEN_NODES=${DATAGEN_NODES:-12000}
 export DATAGEN_POS=${DATAGEN_POS:-200000}
 export DATAGEN_N=${DATAGEN_N:-4}
-export GATE_EPOCHS=${GATE_EPOCHS:-55}
+export GATE_EPOCHS=${GATE_EPOCHS:-45}
 export GATE_GAMES=${GATE_GAMES:-400}
 export GATE_MIN_ELO=${GATE_MIN_ELO:-25}
 export SP_KEEP=${SP_KEEP:-7}
-# MLX / train.py — GPU-forced SP gate with per-epoch eval + LR floor.
+# MLX / train.py — GPU + mem_used_mb logging; proven SP recipe (SEED=42).
 export BATCH=${BATCH:-16384}
 export LR=${LR:-3e-3}
-export LR_FLOOR=${LR_FLOOR:-0.10}
-export PATIENCE=${PATIENCE:-12}
-export MIN_EPOCHS=${MIN_EPOCHS:-25}
+export LR_FLOOR=${LR_FLOOR:-0.08}
+export PATIENCE=${PATIENCE:-10}
+export MIN_EPOCHS=${MIN_EPOCHS:-20}
 export EVAL_EVERY=${EVAL_EVERY:-1}
 export WARMUP=${WARMUP:-2}
 export EVAL_W=${EVAL_W:-0.9}
 export OUT_SCALE=${OUT_SCALE:-0.70}
-export SEED=${SEED:-43}
-export SHARD_DECAY=${SHARD_DECAY:-0.95}
+export SEED=${SEED:-42}
+export SHARD_DECAY=${SHARD_DECAY:-1.0}
 export MX_FORCE_GPU=${MX_FORCE_GPU:-1}
 
 python3 scripts/daily_page.py >/dev/null 2>&1 || true
@@ -62,6 +65,43 @@ case "$MODE" in
   3000|push3000|mix)
     exec bash scripts/push_3000.sh "${2:-all}"
     ;;
+  bench|engine|benchmark)
+    # Engine throughput + short SP arena smoke + optional Stockfish calibrate.
+    cargo build --release
+    ENG=${ENGINE:-$ROOT/target/release/sable}
+    echo "=== engine bench (depth ${BENCH_DEPTH:-12}) ==="
+    printf 'bench %s\nquit\n' "${BENCH_DEPTH:-12}" | "$ENG" | tee /tmp/sable_engine_bench.log
+    echo "=== SP arena smoke: shipping vs shipping (40 games) ==="
+    .venv/bin/python arena.py "$ENG" "$ENG" 40 "nodes ${ARENA_NODES:-20000}" 4 \
+      | tee /tmp/sable_sp_arena_smoke.log
+    if command -v stockfish >/dev/null 2>&1; then
+      echo "=== Stockfish calibrate (movetime 100, 20 games/level) ==="
+      .venv/bin/python tests/calibrate.py "$ENG" "movetime 100" 20 \
+        2600 2700 2800 2900 3000 | tee /tmp/sable_calibrate.log
+    else
+      echo "stockfish not on PATH — skip calibrate"
+    fi
+    echo "bench logs: /tmp/sable_engine_bench.log /tmp/sable_sp_arena_smoke.log /tmp/sable_calibrate.log"
+    ;;
+  arena|sp-arena)
+    # Arena an existing candidate against shipping (no retrain).
+    cargo build --release
+    ENG=${ENGINE:-$ROOT/target/release/sable}
+    if [[ ! -f net-candidate.bin ]]; then
+      echo "need net-candidate.bin" >&2
+      exit 1
+    fi
+    cp -f net.bin.ship net.bin
+    cargo build --release
+    cp -f "$ENG" /tmp/sable-shipping
+    cp -f net-candidate.bin net.bin
+    cargo build --release
+    cp -f "$ENG" /tmp/sable-candidate
+    cp -f net.bin.ship net.bin
+    cargo build --release
+    exec .venv/bin/python arena.py /tmp/sable-candidate /tmp/sable-shipping \
+      "${GATE_GAMES}" "nodes ${ARENA_NODES:-20000}" 4
+    ;;
   bg)
     echo "background: lab supervisor"
     exec bash scripts/lab_supervisor.sh start
@@ -82,7 +122,7 @@ PY
     pgrep -fl 'datagen|ml_cycle|train_gate|arena|prepare_hf' | head -20 || true
     ;;
   *)
-    echo "usage: $0 [datagen|datagen-bg|selfplay|selfplay-bg|3000|bg|all|status]" >&2
+    echo "usage: $0 [datagen|datagen-bg|selfplay|selfplay-bg|bench|arena|3000|bg|all|status]" >&2
     exit 2
     ;;
 esac

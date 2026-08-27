@@ -50,6 +50,22 @@ if _MX_FORCE:
         pass
 
 
+def _mlx_mem_mb():
+    """Return (active_mb, peak_mb) or (None, None)."""
+    try:
+        get_active = getattr(mx, "get_active_memory", None)
+        get_peak = getattr(mx, "get_peak_memory", None)
+        if get_active is None:
+            get_active = mx.metal.get_active_memory
+        if get_peak is None:
+            get_peak = getattr(mx.metal, "get_peak_memory", None)
+        active = get_active() / 1e6
+        peak = (get_peak() / 1e6) if get_peak else active
+        return active, peak
+    except Exception:
+        return None, None
+
+
 def _mlx_device_banner():
     """One-line GPU confirmation for gate logs."""
     dev = mx.default_device()
@@ -58,11 +74,10 @@ def _mlx_device_banner():
         info = mx.device_info() if hasattr(mx, "device_info") else mx.metal.device_info()
         extra = f", metal={info}"
     except Exception:
-        try:
-            get_mem = getattr(mx, "get_active_memory", None) or mx.metal.get_active_memory
-            extra = f", mem_used_mb={get_mem()/1e6:.0f}"
-        except Exception:
-            pass
+        pass
+    active, peak = _mlx_mem_mb()
+    if active is not None:
+        extra += f", mem_used_mb={active:.0f}, mem_peak_mb={peak:.0f}"
     print(f"  mlx device={dev}{extra}", flush=True)
     if _MX_FORCE and "gpu" not in str(dev).lower():
         raise SystemExit(f"expected mlx gpu device, got {dev}")
@@ -75,6 +90,13 @@ def _mlx_clear():
             mx.clear_cache()
         else:
             mx.metal.clear_cache()
+    except Exception:
+        pass
+    try:
+        if hasattr(mx, "reset_peak_memory"):
+            mx.reset_peak_memory()
+        elif hasattr(mx.metal, "reset_peak_memory"):
+            mx.metal.reset_peak_memory()
     except Exception:
         pass
 
@@ -625,6 +647,9 @@ def main():
         if EVAL_EVERY and ((ep + 1) % EVAL_EVERY == 0 or ep == 0):
             r, mae = _teacher_probe(model, us, them, buckets, sc, val_idx)
             line += f"  eval r={r:.4f} mae={mae:.0f}cp"
+        active, peak = _mlx_mem_mb()
+        if active is not None:
+            line += f"  mem_used_mb={active:.0f} peak={peak:.0f}"
         print(line, flush=True)
         _mlx_clear()
         if PATIENCE and stale >= PATIENCE and (ep + 1) >= MIN_EPOCHS:
