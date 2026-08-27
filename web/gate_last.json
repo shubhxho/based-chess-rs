@@ -1,13 +1,13 @@
 {
-  "when": "2026-08-27T03:43:06+05:30",
-  "elo": 18.3,
-  "min_elo": 25.0,
-  "games": 400,
-  "nodes": 20000,
-  "epochs": 35,
-  "data_dir": "/Users/shubh/Documents/based-chess-rs/data/selfplay",
-  "data_glob": "aug_sp_0*.txt",
-  "eval_w": "0.9",
+  "when": "2026-08-27T06:57:24+05:30",
+  "elo": -0.0,
+  "min_elo": 10.0,
+  "games": 40,
+  "nodes": 10000,
+  "epochs": 20,
+  "data_dir": "data/lichess-sf",
+  "data_glob": "aug_hf_*.txt",
+  "eval_w": "1",
   "out_scale": "0.70",
   "shipped": false
 }
