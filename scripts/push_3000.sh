@@ -32,8 +32,9 @@ EVAL_W=${EVAL_W:-0.9}
 OUT_SCALE=${OUT_SCALE:-0.70}
 PATIENCE=${PATIENCE:-7}
 LR=${LR:-3e-3}
-HF_KEEP=${HF_KEEP:-8}
-SP_KEEP=${SP_KEEP:-12}
+HF_KEEP=${HF_KEEP:-5}
+SP_KEEP=${SP_KEEP:-8}
+BATCH=${BATCH:-8192}
 
 PIDFILE=${PIDFILE:-$ROOT/data/mix/.push_3000.pid}
 LOG=${LOG:-/tmp/push_3000.log}
@@ -101,13 +102,14 @@ train_mix() {
   export DATA_DIR=data/mix
   export DATA_GLOB='aug*.txt'
   export EVAL_W OUT_SCALE SP_BOOST PATIENCE LR
+  export BATCH
   export WEIGHTED=1
   export SHARD_DECAY=1.0
   export ENGINE=${ENGINE:-$ROOT/target/release/sable}
   export REPORT_DATA_DIR=data/mix
   export REPORT_DATA_GLOB='aug*.txt'
 
-  echo "push_3000 train: SP=$SP_KEEP HF=$HF_KEEP limit=${LIMIT:-full} epochs=$EPOCHS EVAL_W=$EVAL_W SP_BOOST=$SP_BOOST"
+  echo "push_3000 train: SP=$SP_KEEP HF=$HF_KEEP limit=${LIMIT:-full} epochs=$EPOCHS BATCH=$BATCH EVAL_W=$EVAL_W SP_BOOST=$SP_BOOST"
   : >"$TRAIN_LOG"
   # 0 = no position cap (train.py treats 0 as falsy).
   .venv/bin/python -u train.py "$LIMIT" "$EPOCHS" 2>&1 | tee "$TRAIN_LOG"
