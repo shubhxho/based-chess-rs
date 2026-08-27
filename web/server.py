@@ -40,7 +40,31 @@ threading.Thread(target=refresh_daily_loop, daemon=True).start()
 
 lock = threading.Lock()
 proc = None
-ident = []
+ident: list[str] = []
+
+
+def parse_ident(lines: list[str]) -> dict:
+    out: dict = {"name": "Sable", "version": "?", "author": "?", "raw": lines}
+    for line in lines:
+        if line.startswith("name "):
+            full = line[5:].strip()
+            out["full_name"] = full
+            parts = full.split(None, 1)
+            out["name"] = parts[0]
+            if len(parts) > 1:
+                out["version"] = parts[1]
+        elif line.startswith("author "):
+            out["author"] = line[7:].strip()
+    return out
+
+
+def engine_info() -> dict:
+    with lock:
+        try:
+            engine()
+            return parse_ident(ident)
+        except Exception:
+            return parse_ident([])
 
 
 def engine():
@@ -119,22 +143,11 @@ class Handler(BaseHTTPRequestHandler):
             with open(path, "rb") as f:
                 self._send(200, f.read(), "application/json")
         elif self.path == "/api/meta":
-            body = {"engine": ident, "lab": collect()}
-            with lock:
-                try:
-                    engine()
-                    body["engine"] = ident
-                except Exception:
-                    pass
+            body = {"engine": engine_info(), "lab": collect()}
             self._send(200, json.dumps(body).encode())
         elif self.path == "/api/status":
             body = collect()
-            with lock:
-                try:
-                    engine()
-                    body["engine"] = ident
-                except Exception:
-                    body["engine"] = []
+            body["engine"] = engine_info()
             self._send(200, json.dumps(body).encode())
         else:
             self._send(404, b"{}")

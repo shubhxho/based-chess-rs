@@ -98,6 +98,48 @@ def workers() -> list[str]:
     return alive
 
 
+def probe_engine() -> dict:
+    """Live UCI ident from the release binary."""
+    bin_path = ROOT / "target" / "release" / "sable"
+    if not bin_path.exists():
+        return {"name": "Sable", "version": "?", "author": "not built", "raw": []}
+    try:
+        p = subprocess.Popen(
+            [str(bin_path)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+            cwd=ROOT,
+        )
+        assert p.stdin and p.stdout
+        p.stdin.write("uci\n")
+        p.stdin.flush()
+        raw: list[str] = []
+        for _ in range(32):
+            line = p.stdout.readline().strip()
+            if not line or "uciok" in line:
+                break
+            if line.startswith("id "):
+                raw.append(line[3:])
+        p.stdin.write("quit\n")
+        p.stdin.flush()
+        p.terminate()
+        info = {"name": "Sable", "version": "?", "author": "?", "raw": raw}
+        for line in raw:
+            if line.startswith("name "):
+                full = line[5:].strip()
+                info["full_name"] = full
+                parts = full.split(None, 1)
+                info["name"] = parts[0]
+                if len(parts) > 1:
+                    info["version"] = parts[1]
+            elif line.startswith("author "):
+                info["author"] = line[7:].strip()
+        return info
+    except (OSError, subprocess.SubprocessError):
+        return {"name": "Sable", "version": "?", "author": "probe failed", "raw": []}
+
+
 def git_tree() -> dict:
     """Working tree snapshot for the daily board and /api/status."""
     status_sb = sh("git", "status", "-sb")
@@ -238,4 +280,5 @@ def collect() -> dict:
         "workers": workers(),
         "datagen": wave,
         "git": git_tree(),
+        "engine": probe_engine(),
     }

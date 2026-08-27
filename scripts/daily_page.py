@@ -206,6 +206,8 @@ def main() -> None:
 
     rows = [
         ("Generated", now),
+        ("Engine", f"{snap.get('engine', {}).get('full_name', snap.get('engine', {}).get('name', 'Sable'))}"),
+        ("Author", snap.get("engine", {}).get("author", "?")),
         ("Branch", branch),
         ("HEAD", commit),
         ("Tree", "dirty" if dirty else "clean / synced"),

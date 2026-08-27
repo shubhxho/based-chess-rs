@@ -302,8 +302,9 @@ pub fn run() -> ! {
 
         match cmd {
             b"uci" => {
-                out.s(b"id name Sable 1.2").nl();
-                out.s(b"id author built with Claude Code").nl();
+                let ver = env!("CARGO_PKG_VERSION");
+                out.s(b"id name Sable ").s(ver.as_bytes()).nl();
+                out.s(b"id author shubh (based-chess-rs, no_std neural eval)").nl();
                 out.s(b"option name Hash type spin default 64 min 1 max 4096").nl();
                 out.s(b"option name Threads type spin default 1 min 1 max 8").nl();
                 out.s(b"option name Move Overhead type spin default 25 min 0 max 5000").nl();

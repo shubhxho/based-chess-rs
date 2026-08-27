@@ -90,8 +90,8 @@
   </div>
   <div class="side">
     <div>
-      <h1>SABLE <span class="v">1.0</span></h1>
-      <div class="sub">no_std &middot; no libc &middot; raw syscalls &middot; 291&thinsp;KB binary<br>
+      <h1>SABLE <span class="v" id="eng-ver">1.2</span></h1>
+      <div class="sub" id="eng-meta">no_std &middot; no libc &middot; raw syscalls &middot; 291&thinsp;KB binary<br>
         60&thinsp;KB neural evaluation &middot; about 2800 Elo<br>drag to move</div>
     </div>
     <div class="panel">
@@ -273,10 +273,17 @@ function newGame(color) {
   if (color === 'b') engineMove();
 }
 fetch('/api/meta').then(r => r.json()).then(j => {
-  const name = (j.engine || []).find(s => s.startsWith('name '));
-  if (name) {
-    const [n, v] = name.slice(5).split(' ');
-    document.querySelector('h1').innerHTML = `${n.toUpperCase()} <span class="v">${v || ''}</span>`;
+  const e = j.engine || {};
+  const name = e.full_name || e.name || 'Sable';
+  const parts = name.split(/\s+/);
+  const ver = e.version && e.version !== '?' ? e.version : parts.slice(1).join(' ');
+  document.querySelector('h1').innerHTML =
+    `${(parts[0] || 'SABLE').toUpperCase()} <span class="v" id="eng-ver">${ver || ''}</span>`;
+  if (e.author) {
+    const d = document.createElement('div');
+    d.textContent = e.author;
+    document.querySelector('#eng-meta').innerHTML =
+      d.innerHTML + '<br>60&thinsp;KB neural evaluation &middot; about 2800 Elo<br>drag to move';
   }
 }).catch(() => {});
 
