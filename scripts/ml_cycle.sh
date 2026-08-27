@@ -123,9 +123,9 @@ if (( ${#ready[@]} < 2 )); then
 fi
 
 n=$(cat "${ready[@]}" | wc -l | tr -d ' ')
-echo "ml_cycle: $n lines in ${#ready[@]} shards → epochs=$EPOCHS games=$GAMES min-elo=$MIN_ELO"
+echo "ml_cycle: $n lines in ${#ready[@]} shards → GATE_EPOCHS=$EPOCHS GATE_GAMES=$GAMES GATE_MIN_ELO=$MIN_ELO"
 echo "  PATIENCE=$PATIENCE MIN_EPOCHS=$MIN_EPOCHS LR=$LR LR_FLOOR=$LR_FLOOR BATCH=$BATCH"
-echo "  EVAL_W=$EVAL_W OUT_SCALE=$OUT_SCALE EVAL_EVERY=$EVAL_EVERY SEED=$SEED SHARD_DECAY=$SHARD_DECAY"
+echo "  EVAL_W=$EVAL_W OUT_SCALE=$OUT_SCALE EVAL_EVERY=$EVAL_EVERY SEED=$SEED SHARD_DECAY=$SHARD_DECAY MX_FORCE_GPU=$MX_FORCE_GPU"
 if (( n < 800000 )); then
   echo "warning: under 800k SP lines; gate will likely reject" >&2
 fi

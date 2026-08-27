@@ -7,6 +7,7 @@
 #   scripts/pipeline.sh selfplay       # SP gate @ +25 (pauses datagen for RAM)
 #   scripts/pipeline.sh selfplay-bg    # durable SP gate
 #   scripts/pipeline.sh bench          # engine bench + SP arena smoke + SF calibrate
+#   scripts/pipeline.sh stress         # deeper bench + longer SP arena smoke
 #   scripts/pipeline.sh arena          # candidate vs shipping arena (no retrain)
 #   scripts/pipeline.sh 3000           # Lichess+SP mix candidate path
 #   scripts/pipeline.sh bg|all         # full lab supervisor
@@ -102,6 +103,25 @@ case "$MODE" in
     exec .venv/bin/python arena.py /tmp/sable-candidate /tmp/sable-shipping \
       "${GATE_GAMES}" "nodes ${ARENA_NODES:-20000}" 4
     ;;
+  stress|stress-test)
+    # Heavier engine stress: deeper UCI bench + longer SP arena smoke.
+    cargo build --release
+    ENG=${ENGINE:-$ROOT/target/release/sable}
+    DEPTH=${BENCH_DEPTH:-14}
+    SMOKE=${STRESS_GAMES:-80}
+    NODES=${ARENA_NODES:-20000}
+    echo "=== stress engine bench (depth $DEPTH) ==="
+    printf 'bench %s\nquit\n' "$DEPTH" | "$ENG" | tee /tmp/sable_engine_stress.log
+    echo "=== stress SP arena smoke ($SMOKE games @ ${NODES}n) ==="
+    .venv/bin/python arena.py "$ENG" "$ENG" "$SMOKE" "nodes $NODES" 4 \
+      | tee /tmp/sable_sp_arena_stress.log
+    if [[ "${STRESS_AB:-0}" == "1" ]]; then
+      echo "=== presearch A/B stress ==="
+      bash tests/presearch_ab.sh "${STRESS_BASE:-60ab7d3}" "${STRESS_AB_GAMES:-100}" "$NODES" 4 \
+        | tee /tmp/sable_presearch_ab.log
+    fi
+    echo "stress logs: /tmp/sable_engine_stress.log /tmp/sable_sp_arena_stress.log"
+    ;;
   bg)
     echo "background: lab supervisor"
     exec bash scripts/lab_supervisor.sh start
@@ -122,7 +142,7 @@ PY
     pgrep -fl 'datagen|ml_cycle|train_gate|arena|prepare_hf' | head -20 || true
     ;;
   *)
-    echo "usage: $0 [datagen|datagen-bg|selfplay|selfplay-bg|bench|arena|3000|bg|all|status]" >&2
+    echo "usage: $0 [datagen|datagen-bg|selfplay|selfplay-bg|bench|stress|arena|3000|bg|all|status]" >&2
     exit 2
     ;;
 esac
