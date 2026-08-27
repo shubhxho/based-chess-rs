@@ -137,6 +137,10 @@ pub struct Searcher {
 /// ceiling is address space rather than binary.
 pub const MAX_THREADS: usize = 8;
 
+// Template for `SEARCHERS`. Kept as `const` so the array init stays a pure
+// value; clippy's large_const_arrays wants `static`, which is the wrong shape
+// for a Copy prototype that is only ever copied into the thread pool.
+#[allow(clippy::large_const_arrays)]
 const NEW_SEARCHER: Searcher = Searcher {
     id: 0,
     threads: 0,
