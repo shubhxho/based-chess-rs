@@ -158,6 +158,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(404, b"{}")
             with open(path, "rb") as f:
                 self._send(200, f.read(), "application/json")
+        elif self.path == "/elo_history.json":
+            path = os.path.join(ROOT, "elo_history.json")
+            if not os.path.isfile(path):
+                return self._send(200, b"[]")
+            with open(path, "rb") as f:
+                self._send(200, f.read(), "application/json")
         elif self.path == "/api/meta":
             body = {"engine": engine_info(), "lab": collect()}
             self._send(200, json.dumps(body).encode())

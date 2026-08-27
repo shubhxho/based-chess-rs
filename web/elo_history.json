@@ -1,0 +1,33 @@
+[
+  {
+    "when": "2026-08-27T03:43:06+05:30",
+    "elo": 18.3,
+    "elo_err": 34.0,
+    "min_elo": 25.0,
+    "games": 400,
+    "nodes": 20000,
+    "epochs": 35,
+    "path": "selfplay",
+    "data_dir": "data/selfplay",
+    "data_glob": "aug_sp_0*.txt",
+    "eval_w": "0.9",
+    "out_scale": "0.70",
+    "shipped": false,
+    "note": "best recent SP gate; all-time lab best +19.1 on 1.34M SP"
+  },
+  {
+    "when": "2026-08-27T07:06:20+05:30",
+    "elo": -1.7,
+    "elo_err": 34.0,
+    "min_elo": 10.0,
+    "games": 400,
+    "nodes": 20000,
+    "epochs": 20,
+    "path": "lichess",
+    "data_dir": "data/lichess-sf",
+    "data_glob": "aug_hf_*.txt",
+    "eval_w": "1",
+    "out_scale": "0.70",
+    "shipped": false
+  }
+]

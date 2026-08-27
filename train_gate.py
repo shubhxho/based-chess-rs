@@ -38,15 +38,23 @@ def run(cmd, **kw):
     return subprocess.run(cmd, check=True, **kw)
 
 
-def parse_arena_elo(text: str) -> float:
-    # Last "Elo +N" / "Elo -N" line from arena.py's summary.
+def parse_arena_elo(text: str) -> tuple[float, float | None]:
+    """Return (elo, ±95% err) from arena.py's final summary line."""
     elo = None
+    err = None
     for line in text.splitlines():
         if line.startswith("Elo "):
-            elo = float(line.split()[1].replace("+", ""))
+            parts = line.split()
+            elo = float(parts[1].replace("+", ""))
+            # "Elo -1.7 +/- 34.0 (95%)"
+            if len(parts) >= 4 and parts[2] == "+/-":
+                try:
+                    err = float(parts[3])
+                except ValueError:
+                    err = None
     if elo is None:
         raise SystemExit("arena produced no Elo line:\n" + text[-500:])
-    return elo
+    return elo, err
 
 
 def main():
@@ -121,17 +129,21 @@ def main():
     sys.stdout.write(arena.stdout)
     if arena.stderr:
         sys.stderr.write(arena.stderr)
-    elo = parse_arena_elo(arena.stdout)
+    elo, elo_err = parse_arena_elo(arena.stdout)
     print(f"\ngate: Elo {elo:+.1f} vs shipping (threshold {args.min_elo:+.1f})", flush=True)
 
+    data_dir = os.environ.get("REPORT_DATA_DIR", os.environ.get("DATA_DIR", "data"))
+    path_tag = "lichess" if "lichess" in str(data_dir).lower() else "selfplay"
     report = {
         "when": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
         "elo": elo,
+        "elo_err": elo_err,
         "min_elo": args.min_elo,
         "games": args.games,
         "nodes": args.nodes,
         "epochs": args.epochs,
-        "data_dir": os.environ.get("REPORT_DATA_DIR", os.environ.get("DATA_DIR", "data")),
+        "path": path_tag,
+        "data_dir": data_dir,
         "data_glob": os.environ.get("REPORT_DATA_GLOB", os.environ.get("DATA_GLOB", "aug*.txt")),
         "eval_w": os.environ.get("EVAL_W", "0.9"),
         "out_scale": os.environ.get("OUT_SCALE", "0.70"),
@@ -140,6 +152,19 @@ def main():
     report_path = ROOT / "web" / "gate_last.json"
     report_path.write_text(json.dumps(report, indent=2) + "\n")
     print(f"wrote {report_path.relative_to(ROOT)}", flush=True)
+    # Keep a short history for the daily Elo board.
+    hist_path = ROOT / "web" / "elo_history.json"
+    hist: list = []
+    if hist_path.exists():
+        try:
+            hist = json.loads(hist_path.read_text())
+            if not isinstance(hist, list):
+                hist = []
+        except (json.JSONDecodeError, OSError):
+            hist = []
+    hist.append(report)
+    hist_path.write_text(json.dumps(hist[-24:], indent=2) + "\n")
+    print(f"wrote {hist_path.relative_to(ROOT)} ({len(hist[-24:])} entries)", flush=True)
 
     if elo >= args.min_elo:
         shutil.copy2(CAND_BAK, NET)

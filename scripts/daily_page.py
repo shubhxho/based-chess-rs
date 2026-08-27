@@ -133,29 +133,55 @@ def gate_section(g: dict | None, need: float) -> tuple[str, str, str]:
         )
     shipped = "SHIPPED" if g.get("shipped") else "REJECTED"
     elo = float(g.get("elo", 0))
-    pct = min(100, max(0, int(100 * elo / need))) if need > 0 and elo > 0 else 0
-    gate_row = f"{shipped}  Elo {elo:+.1f} (need {need:+.0f}) · {g.get('when', '')}"
+    err = g.get("elo_err")
+    path = g.get("path") or ("lichess" if "lichess" in str(g.get("data_dir", "")).lower() else "selfplay")
+    ship_need = 25.0
+    pct = min(100, max(0, int(100 * elo / ship_need))) if ship_need > 0 and elo > 0 else 0
+    err_txt = f" ± {float(err):.0f}" if err is not None else " ± arena"
+    gate_row = f"{shipped}  Elo {elo:+.1f}{err_txt} (need {float(g.get('min_elo', need)):+.0f}) · {path} · {g.get('when', '')}"
     panel = (
         "<table>"
         + "".join(
             f"<tr><th>{k}</th><td>{v}</td></tr>"
             for k, v in [
                 ("Result", f"<span id='gate-result'>{shipped}</span>"),
-                ("Elo", f"<span id='gate-elo'>{elo:+.1f}</span> ± arena"),
-                ("Threshold", f"+{need:.0f}"),
-                ("Best so far", "+19.1 (1.34M SP, EVAL_W=0.9)"),
+                ("Elo estimate", f"<span id='gate-elo'>{elo:+.1f}</span>{err_txt} (95%)"),
+                ("Path", f"<span id='gate-path'>{esc(path)}</span> · EVAL_W={esc(g.get('eval_w', '?'))}"),
+                ("This gate need", f"+{float(g.get('min_elo', need)):.0f}"),
+                ("Ship need (SP)", f"+{ship_need:.0f}"),
+                ("Best SP gate", "+19.1 (1.34M SP) · last SP +18.3"),
+                ("Lichess pilot", "−1.7 ± 34 (400 @ 20k) — fit ≠ Elo"),
                 ("Games / nodes", f"{g.get('games')} / {g.get('nodes')}"),
                 ("Epochs", g.get("epochs")),
                 ("When", g.get("when", "")),
             ]
         )
         + "</table>"
+        + "<p class='dim' style='margin-top:10px'>Shipping trust is self-play only. "
+        "Lichess score-only nets measure teacher fit; arena Elo is the estimate that matters.</p>"
     )
     bar = (
         f"<div class='gate-bar'><div id='gate-fill' class='gate-fill' style='width:{pct}%'></div></div>"
-        f"<p class='dim'>Arena must clear +{need:.0f} Elo before <code>net.bin</code> ships.</p>"
+        f"<p class='dim'>Progress toward <b>+{ship_need:.0f} Elo</b> ship bar "
+        f"(current estimate <span id='gate-elo-inline'>{elo:+.1f}</span>).</p>"
     )
     return gate_row, panel, bar
+
+
+def elo_tiles(g: dict | None, need: float) -> str:
+    elo = float(g.get("elo", 0)) if g else None
+    err = g.get("elo_err") if g else None
+    path = (g or {}).get("path", "—")
+    elo_n = f"{elo:+.1f}" if elo is not None else "—"
+    err_n = f"±{float(err):.0f}" if err is not None else "±?"
+    return f"""
+    <div class="tile"><div class="n" id="t-elo">{elo_n}</div><div class="l">Last Elo estimate</div></div>
+    <div class="tile"><div class="n" id="t-err">{err_n}</div><div class="l">95% CI</div></div>
+    <div class="tile"><div class="n" id="t-path">{esc(path)}</div><div class="l">Gate path</div></div>
+    <div class="tile"><div class="n">+{need:.0f}</div><div class="l">This-gate need</div></div>
+    <div class="tile"><div class="n">+25</div><div class="l">Ship threshold</div></div>
+    <div class="tile"><div class="n">+19.1</div><div class="l">Best SP Elo</div></div>
+    """
 
 
 def repo_panel(gt: dict) -> str:
@@ -205,7 +231,10 @@ def main() -> None:
 
     g = snap.get("gate")
     need = float(snap.get("gate_need", 25))
+    if g and g.get("min_elo") is not None:
+        need = float(g["min_elo"])
     gate_row, gate_panel, gate_bar = gate_section(g, need)
+    tiles_html = elo_tiles(g, need)
 
     rows = [
         ("Generated", now),
@@ -355,8 +384,7 @@ def main() -> None:
   <div class="tiles">
     <div class="tile"><div class="n" id="t-sp">{sp_lines:,}</div><div class="l">Self-play lines</div></div>
     <div class="tile"><div class="n" id="t-hf">{hf_lines:,}</div><div class="l">Lichess positions</div></div>
-    <div class="tile"><div class="n" id="t-gate">{f"{float(g.get('elo', 0)):+.1f}" if g else "—"}</div><div class="l">Last gate Elo</div></div>
-    <div class="tile"><div class="n">+{need:.0f}</div><div class="l">Ship threshold</div></div>
+    {tiles_html}
   </div>
 
   <div class="grid grid-2">
@@ -446,15 +474,24 @@ async function refresh() {{
     document.getElementById('t-sp').textContent = fmt(d.selfplay_lines);
     document.getElementById('t-hf').textContent = fmt(d.lichess?.lines);
     if (d.gate_elo != null) {{
-      document.getElementById('t-gate').textContent = `${{d.gate_elo >= 0 ? '+' : ''}}${{d.gate_elo.toFixed(1)}}`;
-      const need = d.gate_need || 25;
-      const pct = Math.min(100, Math.max(0, Math.round(100 * d.gate_elo / need)));
+      const te = document.getElementById('t-elo');
+      if (te) te.textContent = `${{d.gate_elo >= 0 ? '+' : ''}}${{d.gate_elo.toFixed(1)}}`;
+      const need = (d.gate && d.gate.min_elo) || d.gate_need || 25;
+      const pct = Math.min(100, Math.max(0, Math.round(100 * d.gate_elo / 25)));
       const fill = document.getElementById('gate-fill');
       if (fill) fill.style.width = pct + '%';
       const ge = document.getElementById('gate-elo');
       if (ge) ge.textContent = `${{d.gate_elo >= 0 ? '+' : ''}}${{d.gate_elo.toFixed(1)}}`;
+      const gi = document.getElementById('gate-elo-inline');
+      if (gi) gi.textContent = `${{d.gate_elo >= 0 ? '+' : ''}}${{d.gate_elo.toFixed(1)}}`;
       const gr = document.getElementById('gate-result');
       if (gr && d.gate) gr.textContent = d.gate.shipped ? 'SHIPPED' : 'REJECTED';
+      const terr = document.getElementById('t-err');
+      if (terr && d.gate?.elo_err != null) terr.textContent = '±' + Number(d.gate.elo_err).toFixed(0);
+      const tp = document.getElementById('t-path');
+      if (tp && d.gate?.path) tp.textContent = d.gate.path;
+      const gp = document.getElementById('gate-path');
+      if (gp && d.gate) gp.textContent = `${{d.gate.path || '?'}} · EVAL_W=${{d.gate.eval_w || '?'}}`;
     }}
     const lf = d.lichess;
     if (lf) {{
