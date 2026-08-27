@@ -132,11 +132,30 @@ train_mix() {
 
   echo "push_3000 train: SP=$SP_KEEP HF=$HF_KEEP limit=${LIMIT:-full} epochs=$EPOCHS BATCH=$BATCH EVAL_W=$EVAL_W SP_BOOST=$SP_BOOST"
   : >"$TRAIN_LOG"
-  # Write only to files — `python | tee` dies with SIGPIPE/SIGTERM when the
-  # controlling terminal or a parent agent tears down the pipe mid-epoch.
-  .venv/bin/python -u train.py "$LIMIT" "$EPOCHS" >"$TRAIN_LOG" 2>&1
-  # Mirror into the durable push log for `status`.
-  cat "$TRAIN_LOG" >>"$LOG"
+  # Immune to SIGHUP if the wrapper shell is reaped; log to file only (no tee).
+  trap '' HUP
+  nohup .venv/bin/python -u train.py "$LIMIT" "$EPOCHS" >"$TRAIN_LOG" 2>&1 &
+  local train_pid=$!
+  echo "  train.py pid $train_pid → $TRAIN_LOG"
+  # Stream epochs into the durable log without a pipe that can SIGPIPE us.
+  (
+    trap '' HUP
+    tail -n +1 -F "$TRAIN_LOG" 2>/dev/null | while IFS= read -r line; do
+      echo "$line" >>"$LOG"
+      case "$line" in
+        exporting*|quantised*|wrote\ net.bin*) break ;;
+      esac
+    done
+  ) &
+  local tail_pid=$!
+  wait "$train_pid"
+  local rc=$?
+  kill "$tail_pid" 2>/dev/null || true
+  wait "$tail_pid" 2>/dev/null || true
+  if (( rc != 0 )); then
+    echo "train.py exited $rc — see $TRAIN_LOG" >&2
+    exit "$rc"
+  fi
 
   cp -f net.bin net-candidate.bin
   cp -f net.bin net-lichess-pilot.bin
