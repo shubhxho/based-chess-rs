@@ -132,8 +132,11 @@ train_mix() {
 
   echo "push_3000 train: SP=$SP_KEEP HF=$HF_KEEP limit=${LIMIT:-full} epochs=$EPOCHS BATCH=$BATCH EVAL_W=$EVAL_W SP_BOOST=$SP_BOOST"
   : >"$TRAIN_LOG"
-  # 0 = no position cap (train.py treats 0 as falsy).
-  .venv/bin/python -u train.py "$LIMIT" "$EPOCHS" 2>&1 | tee "$TRAIN_LOG"
+  # Write only to files — `python | tee` dies with SIGPIPE/SIGTERM when the
+  # controlling terminal or a parent agent tears down the pipe mid-epoch.
+  .venv/bin/python -u train.py "$LIMIT" "$EPOCHS" >"$TRAIN_LOG" 2>&1
+  # Mirror into the durable push log for `status`.
+  cat "$TRAIN_LOG" >>"$LOG"
 
   cp -f net.bin net-candidate.bin
   cp -f net.bin net-lichess-pilot.bin
@@ -233,10 +236,17 @@ case "$MODE" in
       exit 1
     fi
     echo "starting background push_3000 → $LOG"
-    # Detach fully so terminal SIGTERM / paste accidents cannot kill training.
-    nohup bash "$ROOT/scripts/push_3000.sh" all >>"$LOG" 2>&1 &
-    echo "  pid $!  (wait ~10–20 min for train, then arena)"
-    echo "  status: scripts/push_3000.sh status"
+    # Fully detach: no controlling TTY, so terminal paste / Ctrl-C cannot SIGTERM it.
+    if command -v setsid >/dev/null 2>&1; then
+      setsid -f bash "$ROOT/scripts/push_3000.sh" all >>"$LOG" 2>&1
+      sleep 1
+      echo "  started via setsid — status: scripts/push_3000.sh status"
+    else
+      nohup bash "$ROOT/scripts/push_3000.sh" all >>"$LOG" 2>&1 </dev/null &
+      disown $! 2>/dev/null || true
+      echo "  pid $!  (wait ~10–20 min for train, then arena)"
+      echo "  status: scripts/push_3000.sh status"
+    fi
     ;;
   prepare)
     echo "growing Lichess corpus (2M batch, depth≥${MIN_DEPTH:-18})"
