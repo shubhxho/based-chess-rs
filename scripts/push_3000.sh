@@ -22,18 +22,20 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 MODE=${1:-all}
 
-EPOCHS=${EPOCHS:-30}
+EPOCHS=${EPOCHS:-50}
 GAMES=${GAMES:-400}
 NODES=${NODES:-20000}
 MIN_ELO=${MIN_ELO:-10}
 LIMIT=${LIMIT:-0}
-SP_BOOST=${SP_BOOST:-2.0}
-EVAL_W=${EVAL_W:-0.9}
+SP_BOOST=${SP_BOOST:-2.5}
+EVAL_W=${EVAL_W:-0.85}
 OUT_SCALE=${OUT_SCALE:-0.70}
-PATIENCE=${PATIENCE:-7}
-LR=${LR:-3e-3}
+# Prior runs flatlined by epoch ~7 and early-stopped at 14; give the cosine
+# tail room to shave val before declaring done.
+PATIENCE=${PATIENCE:-12}
+LR=${LR:-2e-3}
 HF_KEEP=${HF_KEEP:-3}
-SP_KEEP=${SP_KEEP:-5}
+SP_KEEP=${SP_KEEP:-6}
 BATCH=${BATCH:-8192}
 
 PIDFILE=${PIDFILE:-$ROOT/data/mix/.push_3000.pid}

@@ -1,19 +1,20 @@
 {
-  "when": "2026-08-27T07:21:41+05:30",
-  "path": "lichess",
-  "epochs_requested": 25,
-  "epochs_done": 19,
+  "when": "2026-08-27T09:24:08+05:30",
+  "path": "mix",
+  "epochs_requested": 30,
+  "epochs_done": 14,
   "limit": 0,
-  "val": 0.01084,
-  "r": 0.7547,
-  "mae_cp": 117.7,
-  "eval_w": "1",
+  "val": 0.00542,
+  "r": 0.9541,
+  "mae_cp": 142.6,
+  "eval_w": "0.9",
   "out_scale": "0.70",
+  "sp_boost": "2.0",
   "bytes": 60976,
-  "sha16": "a9ee52c48372d5c0",
+  "sha16": "493744895885d3af",
   "files": [
     "net-lichess-pilot.bin",
     "net-candidate.bin"
   ],
-  "note": "from /tmp/lichess_train_full.log early-stop run"
+  "note": "Lichess SF + SP mix toward 3000-Elo candidate"
 }
